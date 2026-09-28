@@ -252,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
                     users = db.execute("SELECT * FROM users ORDER BY created_at DESC,id DESC").fetchall()
                     self.send_json(200, {"users": [public_user(user) for user in users]})
             return
-        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js"}
+        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/favicon.svg": ROOT / "favicon.svg"}
         if re.fullmatch(r"/brand/[1-4]\.png", path):
             assets[path] = ROOT / "public" / path.lstrip("/")
         file = assets.get(path)

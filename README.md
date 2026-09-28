@@ -73,8 +73,10 @@ From the project directory on the AI PC:
 
 ```sh
 git pull
-docker compose up -d --build
+docker compose up -d --build --force-recreate
 ```
+
+`docker compose build` alone only creates an image; it does not replace the running container. The `up` command above starts the new image. After updating, close any already-open Safety Digital tabs and open the site again. The HTML now references versioned CSS and JavaScript URLs so the browser loads matching files. If a tab still looks old, use a hard refresh (`Ctrl+F5`). Check `docker compose ps` to confirm the rebuilt container is running.
 
 To stop the app:
 
@@ -93,6 +95,7 @@ python -m unittest -v test_server.py
 ## Project files
 
 - `index.html`, `styles.css`, `script.js`: sign-in, dashboard, navigation, placeholder pages, and user management UI.
+- `favicon.svg`: a green SHE leaf browser icon, separate from the Sugihara logo.
 - `server.py`: HTTP server, SQLite database, authentication, and user management API.
 - `Dockerfile`, `compose.yaml`: Python image, persistent volume, local port mapping, and health check.
 - `public/brand/`: supplied logo variants.

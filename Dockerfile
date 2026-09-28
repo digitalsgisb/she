@@ -1,7 +1,7 @@
 FROM python:3.13-alpine
 
 WORKDIR /app
-COPY server.py index.html styles.css script.js ./
+COPY server.py index.html styles.css script.js favicon.svg ./
 COPY public ./public
 RUN mkdir -p /data && addgroup -S safety && adduser -S -G safety safety && chown -R safety:safety /data /app
 

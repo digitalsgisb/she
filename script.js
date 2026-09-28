@@ -161,6 +161,7 @@ async function showLogin(message = '') {
   currentUser = null;
   csrfToken = '';
   appShell.hidden = true;
+  appShell.classList.remove('app-shell');
   loginScreen.hidden = false;
   document.title = 'Sign in · Safety Digital';
   loginError.hidden = !message;
@@ -178,6 +179,7 @@ function showApp(session) {
   currentUser = session.user;
   csrfToken = session.csrf_token;
   loginScreen.hidden = true;
+  appShell.classList.add('app-shell');
   appShell.hidden = false;
   loginForm.reset();
   headerUser.textContent = currentUser.display_name;

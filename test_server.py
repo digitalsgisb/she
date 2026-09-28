@@ -29,7 +29,14 @@ class AccountFlowTests(unittest.TestCase):
         self.http.shutdown()
         self.http.server_close()
         self.thread.join(timeout=2)
-        self.temp.cleanup()
+        for attempt in range(5):
+            try:
+                self.temp.cleanup()
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.1)
 
     def request(self, path, method="GET", body=None, cookie=None, csrf=None, origin=None):
         headers = {}
@@ -91,6 +98,18 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(self.request("/api/session", cookie=cookie)[0], 401)
         self.login("admin", "NewAdminPassword123!")
+
+    def test_versioned_assets_and_hidden_shell(self):
+        status, html, headers = self.request("/")
+        self.assertEqual(status, 200)
+        self.assertIn('id="appShell" hidden', html)
+        self.assertIn('/styles.css?v=20260928-sync1', html)
+        self.assertIn('/script.js?v=20260928-sync1', html)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "image/svg+xml")
+        self.assertIn("<svg", icon)
 
 
 if __name__ == "__main__":

@@ -116,19 +116,20 @@
 .form-error.success{color:#296a42;background:#eef8ed;border-color:#d2e8d3}
 
 /* Fixed sidebar frame: brand and footer stay put while the menu scrolls. */
-.sidebar{height:100dvh;max-height:100dvh;min-height:0;overflow:hidden;isolation:isolate;padding:24px 16px 16px;background:linear-gradient(135deg,#073b32 0%,#0e7156 28%,#174f64 55%,#0c614c 77%,#073e35 100%);background-size:380% 380%;animation:sidebarRush 5.5s ease-in-out infinite}
-.sidebar::before{content:'';position:absolute;z-index:0;width:400px;height:400px;right:-240px;bottom:8%;border:1px solid #97f4c056;border-radius:50%;box-shadow:0 0 0 62px #73e7bc16,0 0 0 132px #86e0c010,0 0 95px #5cdbb63b;animation:sidebarOrbit 8s ease-in-out infinite;pointer-events:none}
+.sidebar{height:100dvh;max-height:100dvh;min-height:0;overflow:hidden;isolation:isolate;padding:24px 16px 16px;background:linear-gradient(135deg,#073b2c 0%,#0d6a46 28%,#155a3d 55%,#0b5c3d 77%,#073e2f 100%);background-size:380% 380%;animation:sidebarRush 5.5s ease-in-out infinite}
+.sidebar::before{content:'';position:absolute;z-index:0;width:400px;height:400px;right:-240px;bottom:8%;border:1px solid #97e89556;border-radius:50%;box-shadow:0 0 0 62px #75d77816,0 0 0 132px #85d78210,0 0 95px #5bc46d3b;animation:sidebarOrbit 8s ease-in-out infinite;pointer-events:none}
 .sidebar::after{content:'';position:absolute;z-index:0;inset:-25% -110%;background:linear-gradient(110deg,transparent 43%,#e1ffe019 50%,transparent 57%);transform:translateX(-55%) rotate(-11deg);animation:sidebarSweep 4.8s ease-in-out infinite;pointer-events:none}
 .sidebar>.brand,.sidebar>.nav,.sidebar>.sidebar-bottom{position:relative;z-index:1}
 .sidebar .brand{flex:none;padding:7px 12px 22px}
 .sidebar .brand-mark img{animation:sidebarLogo 3.4s ease-in-out infinite}
-.sidebar .nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:13px 4px 18px 0;scrollbar-width:thin;scrollbar-color:#69c5a573 transparent;overscroll-behavior:contain}
+.sidebar .nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:13px 4px 18px 0;scrollbar-width:thin;scrollbar-color:#86cf8273 transparent;overscroll-behavior:contain}
 .sidebar .nav::-webkit-scrollbar{width:5px}
-.sidebar .nav::-webkit-scrollbar-thumb{background:#69c5a573;border-radius:20px}
+.sidebar .nav::-webkit-scrollbar-thumb{background:#86cf8273;border-radius:20px}
 .sidebar .nav::-webkit-scrollbar-track{background:transparent}
 .sidebar .nav-link:hover,.sidebar .subnav-link:hover{background:#d5ffdc25;box-shadow:0 0 20px #a2fbc62a}
 .sidebar .nav-link.active{animation:sidebarActive 2.7s ease-in-out infinite}
-.sidebar .sidebar-bottom{flex:none;margin-top:0;padding:13px 7px 0;background:linear-gradient(180deg,#08473700,#084737ad 30%,#084737e0);box-shadow:0 -18px 30px #063f321f}
+.sidebar .sidebar-bottom{flex:none;margin-top:0;padding:13px 7px 0;background:#0a4939;box-shadow:0 -12px 22px #063e2e33}
+.sidebar .sidebar-bottom::before{content:'';position:absolute;inset:0 -16px -16px;background:#0a4939;z-index:-1;pointer-events:none}
 .sidebar .sidebar-note{padding:12px 11px;animation:sidebarNote 3.8s ease-in-out infinite}
 .sidebar .sidebar-footer{margin-top:13px}
 @keyframes sidebarRush{0%,100%{background-position:0% 45%}33%{background-position:100% 55%}67%{background-position:42% 100%}}

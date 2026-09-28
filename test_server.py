@@ -103,7 +103,7 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20260928-sidebar2', html)
+        self.assertIn('/styles.css?v=20260928-sidebar3', html)
         self.assertIn('/script.js?v=20260928-sidebar2', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")

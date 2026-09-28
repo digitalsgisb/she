@@ -1,7 +1,11 @@
-FROM nginx:1.27-alpine
+FROM python:3.13-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html styles.css script.js /usr/share/nginx/html/
-COPY public /usr/share/nginx/html/
+WORKDIR /app
+COPY server.py index.html styles.css script.js ./
+COPY public ./public
+RUN mkdir -p /data && addgroup -S safety && adduser -S -G safety safety && chown -R safety:safety /data /app
 
-EXPOSE 80
+USER safety
+ENV PORT=8000 SAFETY_DB_PATH=/data/safety.db PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["python", "server.py"]

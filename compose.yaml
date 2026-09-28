@@ -4,9 +4,14 @@ services:
     container_name: safety-digital
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3600:80"
+      - "127.0.0.1:3600:8000"
+    volumes:
+      - safety_data:/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  safety_data:

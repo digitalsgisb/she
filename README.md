@@ -1,8 +1,10 @@
 # Safety Digital
 
-Safety Digital is Sugihara's SHE workspace. This first release is a responsive placeholder interface with a Dashboard and sections for Safety, Health, and Environmental. The Environmental section contains pages for Red Tag, Hiyari Hatto, Waste, and Environmental Findings. There are no forms, accounts, stored reports, or live metrics yet.
+Safety Digital is Sugihara's SHE workspace. It has a Dashboard and sections for Safety, Health, and Environmental. The Environmental section contains placeholder pages for Red Tag, Hiyari Hatto, Waste, and Environmental Findings. Reporting forms and live metrics are still planned.
 
-The app is a static site served by Nginx in Docker. It requires no database or environment variables. The supplied Sugihara logo is stored in `public/brand/`, and the app uses `1.png`. The layout takes cues from the supplied CMMS screenshot; the green theme represents the SHE department. The Findings page lists issue topics from the supplied environmental reporting poster.
+The app includes a login page and account management. Admins can create users, edit names and roles, activate or deactivate accounts, and reset passwords. Every user can change their own password. Account data and sessions are stored in a persistent SQLite database inside a Docker named volume. The app uses Python's standard library and needs no package installation during the image build.
+
+The supplied Sugihara logo is stored in `public/brand/`, and the app uses `1.png`. The layout takes cues from the supplied CMMS screenshot; the green theme represents the SHE department. The Findings page lists issue topics from the supplied environmental reporting poster.
 
 ## Deploy on the AI PC
 
@@ -22,7 +24,17 @@ git clone https://github.com/digitalsgisb/she.git .
 
 If `/srv/apps/she` is **already a clone** of this repository, run `cd /srv/apps/she && git pull` instead. If it contains other files and is not a Git checkout, move or back up those files before cloning; Git will not clone into a non-empty directory. If the repository is private, authenticate with a GitHub account that has access. Do not put a GitHub token in the clone URL or in this repository.
 
-### 3. Build and start
+### 3. Build and create the first admin
+
+```sh
+cd /srv/apps/she
+docker compose build
+docker compose run --rm -it safety-digital python server.py create-admin
+```
+
+The command prompts for an admin username, display name, and password of at least 12 characters. The password is entered interactively and is not stored in a command, environment file, or Git. Run this only once. Later accounts are created in **User Management** after an admin signs in.
+
+### 4. Start and verify
 
 ```sh
 cd /srv/apps/she
@@ -30,7 +42,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Open `http://localhost:3600` on the AI PC. The dashboard should appear. To check the web server directly, open `http://localhost:3600/healthz`; it should return `ok`. The container is configured to restart unless stopped manually.
+Open `http://localhost:3600` on the AI PC and sign in with the admin account. If the AI PC has no graphical browser, test the server from its terminal with `curl http://localhost:3600/healthz`; it should return `ok`. The container is configured to restart unless stopped manually.
 
 If the page does not open, inspect the logs:
 
@@ -38,7 +50,7 @@ If the page does not open, inspect the logs:
 docker compose logs --tail=100 safety-digital
 ```
 
-### 4. Connect `she.sugidigital.org` when the tunnel is ready
+### 5. Connect `she.sugidigital.org` when the tunnel is ready
 
 This repository does **not** create or configure a Cloudflare Tunnel. If `cloudflared` is installed and running **on the AI PC**, use the following route in the Cloudflare dashboard:
 
@@ -51,11 +63,11 @@ This repository does **not** create or configure a Cloudflare Tunnel. If `cloudf
 
 In Cloudflare, go to **Networking → Tunnels**, choose or create the tunnel, then add a **Published application** route with the values above. Follow Cloudflare's on-screen instructions to install and run `cloudflared` on the AI PC. Verify `http://localhost:3600` works locally first, then visit `https://she.sugidigital.org` after the tunnel connects. Keep tunnel tokens and credentials out of Git.
 
-If `cloudflared` runs in **another Docker container**, `localhost` refers to that container, not the AI PC. Attach it to the same Docker network as this app and route to `http://safety-digital:80`, or run `cloudflared` directly on the AI PC. The current Compose file is designed for the latter setup.
+If `cloudflared` runs in **another Docker container**, `localhost` refers to that container, not the AI PC. Attach it to the same Docker network as this app and route to `http://safety-digital:8000`, or run `cloudflared` directly on the AI PC. The current Compose file is designed for the latter setup.
 
 Cloudflare's [tunnel setup guide](https://developers.cloudflare.com/tunnel/get-started/) has the current dashboard instructions.
 
-### 5. Update or stop
+### 6. Update, back up, or stop
 
 From the project directory on the AI PC:
 
@@ -70,8 +82,17 @@ To stop the app:
 docker compose down
 ```
 
+The `safety_data` Docker volume contains the SQLite database. `docker compose down` keeps it; do not use `docker compose down -v` unless you intend to erase the accounts and sessions. Back up the volume before moving to another PC or making major changes.
+
+To run the account API checks locally where Python is installed:
+
+```sh
+python -m unittest -v test_server.py
+```
+
 ## Project files
 
-- `index.html`, `styles.css`, `script.js`: dashboard and placeholder pages. Navigation uses URL fragments and needs no backend.
-- `Dockerfile`, `nginx.conf`, `compose.yaml`: Nginx image, local port mapping, and health check.
+- `index.html`, `styles.css`, `script.js`: sign-in, dashboard, navigation, placeholder pages, and user management UI.
+- `server.py`: HTTP server, SQLite database, authentication, and user management API.
+- `Dockerfile`, `compose.yaml`: Python image, persistent volume, local port mapping, and health check.
 - `public/brand/`: supplied logo variants.

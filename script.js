@@ -12,6 +12,8 @@ const icon = (name, size = 20) => {
     chevron: '<path d="m9 18 6-6-6-6"/>',
     droplet: '<path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/>',
     recycle: '<path d="m7 4 2-2 2 2M9 2l3 5H6l-2 4m16 2 2 1-1 3m1-3h-6l3-5h-5M5 19l-3-1 1-3m-1 3h7l-3-5 3-1"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   };
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 };
@@ -25,6 +27,8 @@ const routes = {
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
   safety: { title: 'Safety', icon: 'shield' },
   health: { title: 'Health', icon: 'heart' },
+  users: { title: 'User Management', icon: 'users' },
+  account: { title: 'My Account', icon: 'person' },
 };
 
 const envItems = ['red-tag', 'hiyari-hatto', 'waste', 'findings'];
@@ -52,6 +56,21 @@ const breadcrumb = document.getElementById('breadcrumb');
 const sidebar = document.getElementById('sidebar');
 const backdrop = document.getElementById('backdrop');
 const menuButton = document.getElementById('menuButton');
+const appShell = document.getElementById('appShell');
+const loginScreen = document.getElementById('loginScreen');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const setupMessage = document.getElementById('setupMessage');
+const headerUser = document.getElementById('headerUser');
+const modalBackdrop = document.getElementById('modalBackdrop');
+const modalBody = document.getElementById('modalBody');
+const toastBox = document.getElementById('toast');
+let currentUser = null;
+let csrfToken = '';
+let managedUsers = [];
+let envExpanded = localStorage.getItem('safety-env-expanded') !== 'false';
+
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 function routeLink(key, className = '') {
   const item = routes[key];
@@ -63,8 +82,16 @@ function renderNav(active) {
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     ${routeLink('safety', `nav-link ${active === 'safety' ? 'active' : ''}`)}
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
-    ${routeLink('environmental', `nav-link ${active === 'environmental' ? 'active' : ''}`)}
-    <div class="subnav">${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>`;
+    <div class="nav-parent"><a class="nav-link ${active === 'environmental' ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ${envExpanded ? '' : 'hidden'}>${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>
+    <div class="nav-label nav-label-spaced">WORKSPACE</div>
+    ${currentUser?.role === 'admin' ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
+    ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
+  document.getElementById('envToggle').addEventListener('click', () => {
+    envExpanded = !envExpanded;
+    localStorage.setItem('safety-env-expanded', String(envExpanded));
+    renderNav(currentRoute());
+  });
 }
 
 function sectionCard(key, number, description) {
@@ -93,6 +120,124 @@ function renderPlaceholder(key) {
   return `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">${parent.toUpperCase()} / PLANNED SPACE</span><h1>${routes[key].title}</h1><p>${detail}</p></div><div class="placeholder-panel"><div class="placeholder-graphic"><span class="placeholder-ring"></span><span class="placeholder-symbol">${icon(routes[key].icon, 72)}</span></div><span class="placeholder-kicker">COMING IN A FUTURE PHASE</span><h2>A space ready to grow.</h2><p>This section is set up in the navigation. Its forms, records and workflows will be designed when the requirements are ready.</p><span class="placeholder-status"><span></span> Placeholder page</span></div>${key === 'findings' ? `<section class="findings-preview"><div><span class="eyebrow dark-eyebrow">REFERENCE TOPICS</span><h2>Environmental concerns</h2><p>Topics taken from the supplied environmental reporting poster.</p></div><div class="topic-grid">${findings.map(([label, symbol]) => `<div class="topic-chip">${icon(symbol, 18)}<span>${label}</span></div>`).join('')}</div></section>` : ''}<a class="back-link" href="#/${isEnv ? 'environmental' : 'dashboard'}">${icon('arrow', 17)} Back to ${isEnv ? 'Environmental' : 'Dashboard'}</a></div>`;
 }
 
+function renderAccount() {
+  return `<div class="page inner-page narrow-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ACCOUNT</span><h1>My Account</h1><p>Manage your Safety Digital sign-in details.</p></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${currentUser.role === 'admin' ? 'Administrator' : 'User'}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
+}
+
+function renderUserRow(user) {
+  const self = user.id === currentUser.id;
+  return `<div class="user-row"><span class="user-avatar">${escapeHtml(user.display_name.charAt(0).toUpperCase())}</span><div class="user-primary"><strong>${escapeHtml(user.display_name)}${self ? ' <small>(you)</small>' : ''}</strong><span>@${escapeHtml(user.username)}</span></div><span class="role-badge">${user.role === 'admin' ? 'Admin' : 'User'}</span><span class="state-badge ${user.active ? 'enabled' : 'disabled'}"><i></i>${user.active ? 'Active' : 'Inactive'}</span><div class="user-actions"><button type="button" data-edit-user="${user.id}">Edit</button><button type="button" data-reset-user="${user.id}">Reset password</button></div></div>`;
+}
+
+async function renderUsers() {
+  content.innerHTML = `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ADMINISTRATION</span><h1>User Management</h1><p>Manage access to the Safety Digital workspace.</p></div><div class="loading-panel">Loading users…</div></div>`;
+  try {
+    const result = await api('/api/users');
+    if (currentRoute() !== 'users') return;
+    managedUsers = result.users;
+    content.innerHTML = `<div class="page inner-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">WORKSPACE / ADMINISTRATION</span><h1>User Management</h1><p>Create accounts, update roles, and control access.</p></div><button class="primary-button" type="button" data-create-user>+ Add user</button></div><div class="users-summary"><span class="users-summary-icon">${icon('users', 23)}</span><div><strong>${managedUsers.length} ${managedUsers.length === 1 ? 'account' : 'accounts'}</strong><span>${managedUsers.filter(user => user.active).length} active in this workspace</span></div></div><section class="users-list"><div class="users-list-heading"><span>TEAM MEMBERS</span><span>ACCESS & STATUS</span></div>${managedUsers.map(renderUserRow).join('')}</section><p class="users-help">New users sign in with the password you set. Share it with them through your approved internal channel. Password resets sign the user out of all sessions.</p></div>`;
+  } catch (error) {
+    content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div></div>`;
+  }
+}
+
+async function api(path, method = 'GET', body = null) {
+  const options = {method, credentials: 'same-origin', headers: {}};
+  if (body !== null) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+  if (method !== 'GET' && path !== '/api/login') options.headers['X-CSRF-Token'] = csrfToken;
+  const response = await fetch(path, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401 && path !== '/api/login' && path !== '/api/session') showLogin();
+    throw new Error(data.error || `Request failed (${response.status}).`);
+  }
+  return data;
+}
+
+async function showLogin(message = '') {
+  currentUser = null;
+  csrfToken = '';
+  appShell.hidden = true;
+  loginScreen.hidden = false;
+  document.title = 'Sign in · Safety Digital';
+  loginError.hidden = !message;
+  loginError.textContent = message;
+  loginError.classList.toggle('success', message.startsWith('Password updated'));
+  try {
+    const setup = await api('/api/setup-status');
+    setupMessage.hidden = !setup.needs_admin;
+  } catch {
+    setupMessage.hidden = true;
+  }
+}
+
+function showApp(session) {
+  currentUser = session.user;
+  csrfToken = session.csrf_token;
+  loginScreen.hidden = true;
+  appShell.hidden = false;
+  loginForm.reset();
+  headerUser.textContent = currentUser.display_name;
+  render();
+}
+
+function notify(message) {
+  toastBox.textContent = message;
+  toastBox.hidden = false;
+  clearTimeout(notify.timer);
+  notify.timer = setTimeout(() => { toastBox.hidden = true; }, 4000);
+}
+
+function closeModal() {
+  modalBackdrop.hidden = true;
+  modalBody.innerHTML = '';
+}
+
+function openUserModal(kind, user = null) {
+  let title = '';
+  let fields = '';
+  if (kind === 'create') {
+    title = 'Add a user';
+    fields = `<label for="userName">Username</label><input id="userName" name="username" autocomplete="off" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required /><label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user">User</option><option value="admin">Administrator</option></select><label for="userPassword">Initial password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /><p class="field-hint">Use at least 12 characters.</p>`;
+  } else if (kind === 'edit') {
+    title = `Edit ${user.display_name}`;
+    fields = `<label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" value="${escapeHtml(user.display_name)}" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator</option></select><label for="userStatus">Status</label><select id="userStatus" name="active"><option value="true" ${user.active ? 'selected' : ''}>Active</option><option value="false" ${!user.active ? 'selected' : ''}>Inactive</option></select>${user.id === currentUser.id ? '<p class="field-hint">You cannot remove your own admin access.</p>' : ''}`;
+  } else {
+    title = `Reset password`;
+    fields = `<p class="modal-description">Set a new password for ${escapeHtml(user.display_name)}. All current sessions for this user will end.</p><label for="userPassword">New password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />`;
+  }
+  modalBody.innerHTML = `<span class="eyebrow dark-eyebrow">USER MANAGEMENT</span><h2 id="modalTitle">${escapeHtml(title)}</h2><form id="userModalForm" class="stacked-form">${fields}<div class="form-error" id="modalError" role="alert" hidden></div><div class="modal-actions"><button class="secondary-button" type="button" id="cancelModal">Cancel</button><button class="primary-button" type="submit">${kind === 'create' ? 'Create user' : kind === 'edit' ? 'Save changes' : 'Reset password'}</button></div></form>`;
+  modalBackdrop.hidden = false;
+  document.getElementById('cancelModal').addEventListener('click', closeModal);
+  document.getElementById('userModalForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('button[type="submit"]');
+    const data = Object.fromEntries(new FormData(form));
+    if (kind === 'edit') data.active = data.active === 'true';
+    submit.disabled = true;
+    try {
+      if (kind === 'create') await api('/api/users', 'POST', data);
+      if (kind === 'edit') {
+        const result = await api(`/api/users/${user.id}`, 'PATCH', data);
+        if (user.id === currentUser.id) { currentUser = result.user; headerUser.textContent = currentUser.display_name; }
+      }
+      if (kind === 'reset') await api(`/api/users/${user.id}/reset-password`, 'POST', data);
+      closeModal();
+      if (kind === 'reset' && user.id === currentUser.id) { await showLogin('Password updated. Please sign in again.'); return; }
+      notify(kind === 'create' ? 'User created.' : kind === 'edit' ? 'User updated.' : 'Password reset.');
+      await renderUsers();
+    } catch (error) {
+      const output = document.getElementById('modalError');
+      if (output) { output.hidden = false; output.textContent = error.message; }
+    } finally { submit.disabled = false; }
+  });
+  modalBody.querySelector('input,select')?.focus();
+}
+
 function currentRoute() {
   const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'dashboard';
   return routes[key] ? key : 'dashboard';
@@ -105,11 +250,14 @@ function closeMenu() {
 }
 
 function render() {
+  if (!currentUser) return;
   const key = currentRoute();
+  if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
   renderNav(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · Safety Digital`;
-  content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : renderPlaceholder(key);
+  if (key === 'users') renderUsers();
+  else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   window.scrollTo(0, 0);
   closeMenu();
 }
@@ -122,4 +270,63 @@ menuButton.addEventListener('click', () => {
 });
 backdrop.addEventListener('click', closeMenu);
 window.addEventListener('hashchange', render);
-render();
+modalBackdrop.addEventListener('click', event => { if (event.target === modalBackdrop) closeModal(); });
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modalBackdrop.hidden) closeModal(); });
+
+loginForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = loginForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  loginError.hidden = true;
+  try {
+    const session = await api('/api/login', 'POST', {username: loginForm.username.value, password: loginForm.password.value});
+    showApp(session);
+  } catch (error) {
+    loginError.textContent = error.message;
+    loginError.hidden = false;
+  } finally { submit.disabled = false; }
+});
+
+document.getElementById('signOutButton').addEventListener('click', async () => {
+  try { await api('/api/logout', 'POST', {}); } catch { /* Expired sessions still leave the UI. */ }
+  closeModal();
+  showLogin();
+});
+
+content.addEventListener('click', event => {
+  if (event.target.closest('[data-create-user]')) openUserModal('create');
+  const edit = event.target.closest('[data-edit-user]');
+  if (edit) openUserModal('edit', managedUsers.find(user => user.id === Number(edit.dataset.editUser)));
+  const reset = event.target.closest('[data-reset-user]');
+  if (reset) openUserModal('reset', managedUsers.find(user => user.id === Number(reset.dataset.resetUser)));
+});
+
+content.addEventListener('submit', async event => {
+  if (event.target.id !== 'passwordForm') return;
+  event.preventDefault();
+  const form = event.target;
+  const output = document.getElementById('accountError');
+  const data = Object.fromEntries(new FormData(form));
+  output.hidden = true;
+  if (data.new_password !== data.confirm_password) {
+    output.textContent = 'New passwords do not match.';
+    output.hidden = false;
+    return;
+  }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await api('/api/me/password', 'POST', {current_password: data.current_password, new_password: data.new_password});
+    await showLogin('Password updated. Please sign in again.');
+  } catch (error) {
+    output.textContent = error.message;
+    output.hidden = false;
+  } finally { button.disabled = false; }
+});
+
+async function bootstrap() {
+  try { showApp(await api('/api/session')); }
+  catch { await showLogin(); }
+}
+bootstrap();

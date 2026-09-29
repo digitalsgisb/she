@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "Safety Digital · SHE Workspace",
+  "short_name": "Safety Digital",
+  "description": "SHE work orders and safety workspace",
+  "start_url": "/#/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f5",
+  "theme_color": "#0e4e3e",
+  "icons": [{"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

@@ -28,6 +28,7 @@ const routes = {
   safety: { title: 'Safety', icon: 'shield' },
   health: { title: 'Health', icon: 'heart' },
   users: { title: 'User Management', icon: 'users' },
+  'work-orders': { title: 'SHE Work Orders', icon: 'clipboard' },
   account: { title: 'My Account', icon: 'person' },
 };
 
@@ -85,6 +86,7 @@ function renderNav(active) {
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ${envExpanded ? '' : 'hidden'}>${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>
     <div class="nav-label nav-label-spaced">WORKSPACE</div>
+    ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
     ${currentUser?.role === 'admin' ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
     ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
   document.getElementById('envToggle').addEventListener('click', () => {
@@ -158,6 +160,7 @@ async function api(path, method = 'GET', body = null) {
 }
 
 async function showLogin(message = '') {
+  cmmsStop();
   currentUser = null;
   csrfToken = '';
   appShell.hidden = true;
@@ -177,6 +180,7 @@ async function showLogin(message = '') {
 
 function showApp(session) {
   currentUser = session.user;
+  cmmsStart();
   csrfToken = session.csrf_token;
   loginScreen.hidden = true;
   appShell.classList.add('app-shell');
@@ -259,6 +263,7 @@ function render() {
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · Safety Digital`;
   if (key === 'users') renderUsers();
+  else if (key === 'work-orders') renderWorkOrders();
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   window.scrollTo(0, 0);
   closeMenu();
@@ -332,3 +337,4 @@ async function bootstrap() {
   catch { await showLogin(); }
 }
 bootstrap();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

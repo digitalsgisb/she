@@ -5,6 +5,12 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3600:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CMMS_URL: "${CMMS_URL:-}"
+      CMMS_USERNAME: "${CMMS_USERNAME:-}"
+      CMMS_PASSWORD: "${CMMS_PASSWORD:-}"
     volumes:
       - safety_data:/data
     healthcheck:

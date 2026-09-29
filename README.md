@@ -2,6 +2,17 @@
 
 Safety Digital is Sugihara's SHE workspace. It has a Dashboard and sections for Safety, Health, and Environmental. The Environmental section contains placeholder pages for Red Tag, Hiyari Hatto, Waste, and Environmental Findings. Reporting forms and live metrics are still planned.
 
+## CMMS SHE work orders
+
+Safety Digital now has a **SHE Work Orders** page. It reads live CMMS orders whose responsible department is `SHE`, supports issuing an order with an issue photo, shows status, maintenance notes and evidence, allows SHE follow-up notes and photos, and lets users close or return a resolved job. CMMS remains the authoritative work-order database. Safety Digital checks its own login and CSRF token before forwarding each action. A dedicated CMMS requester account represents the SHE department; Safety Digital records the individual Safety user's display name in the reported-by field and follow-up/verification notes. CMMS activity actor IDs therefore identify the integration account, while the text records the Safety user.
+
+1. Deploy the accompanying CMMS changes in the `cmms` checkout. They notify SHE requester accounts about newly issued SHE orders and allow department requesters to add notes and evidence to their department's jobs.
+2. In CMMS **Users → People**, create a dedicated active user with role **Requester**, department exactly **SHE**, and plant access for the plant(s) Safety Digital should show. Use a strong unique password. Configure CMMS Web Push VAPID keys if phone notifications are required.
+3. In the Safety Digital deployment directory, copy `.env.example` to `.env` and set `CMMS_URL`, `CMMS_USERNAME`, and `CMMS_PASSWORD`. `CMMS_URL` must be reachable by the Safety Digital container. When both apps run on the same Docker host and CMMS publishes port 3300, `http://host.docker.internal:3300` works with the supplied Compose file. Keep `.env` private; it is ignored by Git.
+4. Rebuild and restart both applications. Sign in to Safety Digital and open **SHE Work Orders**. Select a plant, issue a test order, attach a photo, and confirm the order appears in CMMS. After maintenance resolves it, review its summary and completion photo, then close or return it from Safety Digital.
+
+Safety Digital refreshes the work-order list every 30 seconds while open and shows an in-app alert for newly seen orders. On the work-order page, choose **Enable alerts** to register that device for Web Push through CMMS. Push requires the CMMS VAPID configuration and HTTPS for phone access. On iPhone and iPad, install Safety Digital to the Home Screen first. The PWA shell can open offline, but work-order data and actions need a CMMS connection.
+
 The app includes a login page and account management. Admins can create users, edit names and roles, activate or deactivate accounts, and reset passwords. Every user can change their own password. Account data and sessions are stored in a persistent SQLite database inside a Docker named volume. The app uses Python's standard library and needs no package installation during the image build.
 
 The supplied Sugihara logo is stored in `public/brand/`, and the app uses `1.png`. The layout takes cues from the supplied CMMS screenshot; the green theme represents the SHE department. The Findings page lists issue topics from the supplied environmental reporting poster.

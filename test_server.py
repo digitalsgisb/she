@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
@@ -103,13 +104,66 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20260928-sidebar4', html)
-        self.assertIn('/script.js?v=20260928-sidebar2', html)
+        self.assertIn('/styles.css?v=20260929-she1', html)
+        self.assertIn('/script.js?v=20260929-she1', html)
+        self.assertIn('/cmms-ui.js?v=20260929-she1', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "image/svg+xml")
         self.assertIn("<svg", icon)
+        status, manifest, headers = self.request("/manifest.webmanifest")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/manifest+json")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(self.request("/sw.js")[0], 200)
+
+    def test_she_work_orders_are_scoped_and_verification_requires_a_resolved_job(self):
+        class FakeCmms:
+            configured = True
+            def __init__(self):
+                self.calls = []
+            def plants(self):
+                return ["port-klang"]
+            def identity(self):
+                return {"id": "she-requester", "role": "requester", "department": "SHE"}
+            def call(self, path, method="GET", body=None, plant="port-klang", binary=False):
+                self.calls.append((path, method, body, plant))
+                if path == "/api/push/config":
+                    return {"enabled": False, "publicKey": None}
+                if path == "/api/work-orders" and method == "GET":
+                    return [{"id": "she-1", "responsibleDepartment": "SHE"}, {"id": "prod-1", "responsibleDepartment": "Production"}]
+                if path == "/api/work-orders/she-1":
+                    return {"id": "she-1", "responsibleDepartment": "SHE", "status": "resolved"}
+                if path == "/api/work-orders/prod-1":
+                    return {"id": "prod-1", "responsibleDepartment": "Production", "status": "resolved"}
+                return {"id": "new-she", "responsibleDepartment": "SHE"}
+            def she_order(self, order_id, plant):
+                order = self.call("/api/work-orders/" + order_id, plant=plant)
+                if order["responsibleDepartment"] != "SHE":
+                    raise server.CmmsError(404, "SHE work order not found.")
+                return order
+
+        self.first_admin()
+        cookie, csrf = self.login("admin", "AdminPassword123!")
+        fake = FakeCmms()
+        with patch.object(server, "bridge", fake):
+            self.assertEqual(self.request("/api/cmms/work-orders")[0], 401)
+            self.assertEqual(self.request("/api/cmms/work-orders", cookie=cookie)[1], [{"id": "she-1", "responsibleDepartment": "SHE"}])
+            self.assertEqual(self.request("/api/cmms/work-orders/prod-1", cookie=cookie)[0], 404)
+            self.assertEqual(self.request("/api/cmms/work-orders", "POST", {"issueDescription": "Broken exhaust fan"}, cookie=cookie)[0], 403)
+            status, created, _ = self.request("/api/cmms/work-orders", "POST", {"issueDescription": "Broken exhaust fan", "machineName": "Fan", "plant": "port-klang"}, cookie, csrf)
+            self.assertEqual(status, 201)
+            self.assertEqual(created["id"], "new-she")
+            create = [call for call in fake.calls if call[0] == "/api/work-orders" and call[1] == "POST"][-1]
+            self.assertEqual(create[2]["responsibleDepartment"], "SHE")
+            self.assertEqual(create[2]["requesterId"], "she-requester")
+            self.assertEqual(self.request("/api/cmms/work-orders/she-1/verification", "PATCH", {"plant": "port-klang", "status": "returned", "note": ""}, cookie, csrf)[0], 400)
+            status, _, _ = self.request("/api/cmms/work-orders/she-1/verification", "PATCH", {"plant": "port-klang", "status": "closed", "note": "Looks good"}, cookie, csrf)
+            self.assertEqual(status, 200)
+            verification = [call for call in fake.calls if call[0].endswith("/status")][-1]
+            self.assertEqual(verification[2]["status"], "closed")
+            self.assertIn("Admin User", verification[2]["note"])
 
 
 if __name__ == "__main__":

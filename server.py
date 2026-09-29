@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import getpass
+import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -19,7 +21,9 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
+
+from cmms_bridge import CmmsError, bridge
 
 
 ROOT = Path(__file__).resolve().parent
@@ -158,7 +162,8 @@ class Handler(BaseHTTPRequestHandler):
             return None
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 2 or length > 16_384:
+            limit = 7_000_000 if re.fullmatch(r"/api/cmms/work-orders/[a-zA-Z0-9-]+/attachments", urlsplit(self.path).path) else 16_384
+            if length < 2 or length > limit:
                 raise ValueError
             value = json.loads(self.rfile.read(length))
             if not isinstance(value, dict):
@@ -252,7 +257,12 @@ class Handler(BaseHTTPRequestHandler):
                     users = db.execute("SELECT * FROM users ORDER BY created_at DESC,id DESC").fetchall()
                     self.send_json(200, {"users": [public_user(user) for user in users]})
             return
-        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/favicon.svg": ROOT / "favicon.svg"}
+        if path.startswith("/api/cmms/"):
+            with database() as db:
+                if self.authorize(db):
+                    self.cmms_get(path)
+            return
+        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         if re.fullmatch(r"/brand/[1-4]\.png", path):
             assets[path] = ROOT / "public" / path.lstrip("/")
         file = assets.get(path)
@@ -267,6 +277,60 @@ class Handler(BaseHTTPRequestHandler):
         self.security_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def cmms_plant(self) -> str:
+        return parse_qs(urlsplit(self.path).query).get("plant", ["port-klang"])[0]
+
+    def cmms_get(self, path: str) -> None:
+        try:
+            if path == "/api/cmms/config":
+                if not bridge.configured:
+                    self.send_json(200, {"configured": False, "plants": []})
+                else:
+                    plants = bridge.plants()
+                    push = bridge.call("/api/push/config", plant=plants[0])
+                    self.send_json(200, {"configured": True, "plants": plants, "push": push})
+                return
+            plant = self.cmms_plant()
+            if path == "/api/cmms/master-data":
+                data = bridge.call("/api/master-data", plant=plant)
+                self.send_json(200, {key: [row for row in data.get(key, []) if row.get("department") == "SHE"] for key in ("sections", "machines", "issueCategories")})
+                return
+            if path == "/api/cmms/work-orders":
+                orders = bridge.call("/api/work-orders", plant=plant)
+                self.send_json(200, [order for order in orders if order.get("responsibleDepartment") == "SHE"])
+                return
+            if path == "/api/cmms/notifications":
+                user_id = bridge.identity()["id"]
+                orders = bridge.call("/api/work-orders", plant=plant)
+                ids = {order["id"] for order in orders if order.get("responsibleDepartment") == "SHE"}
+                notices = bridge.call(f"/api/notifications?userId={quote(user_id)}", plant=plant)
+                self.send_json(200, [notice for notice in notices if notice.get("workOrderId") in ids])
+                return
+            match = re.fullmatch(r"/api/cmms/work-orders/([a-zA-Z0-9-]+)", path)
+            if match:
+                self.send_json(200, bridge.she_order(match.group(1), plant))
+                return
+            media = re.fullmatch(r"/api/cmms/media/([a-zA-Z0-9-]+)/([a-zA-Z0-9._-]+)", path)
+            if media:
+                detail = bridge.she_order(media.group(1), plant)
+                expected = f"/uploads/work-orders/{media.group(1)}/{media.group(2)}"
+                if not any(attachment.get("url", "").split("?", 1)[0] == expected for attachment in detail.get("attachments", [])):
+                    raise CmmsError(404, "Image not found.")
+                data, mime = bridge.call(f"/uploads/work-orders/{media.group(1)}/{media.group(2)}", plant=plant, binary=True)
+                if not mime.startswith("image/"):
+                    raise CmmsError(404, "Image not found.")
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.security_headers()
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self.error_json(404, "Not found.")
+        except CmmsError as error:
+            self.error_json(error.status, str(error))
 
     def do_POST(self) -> None:
         self.change_request("POST")
@@ -290,6 +354,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path.startswith("/api/cmms/"):
+                self.cmms_change(path, method, data, user)
+                return
             if method == "POST" and path == "/api/logout":
                 db.execute("DELETE FROM sessions WHERE token_hash=?", (details["token_hash"],))
                 self.send_json(200, {"ok": True}, {"Set-Cookie": self.cookie_header("", clear=True)})
@@ -312,6 +379,77 @@ class Handler(BaseHTTPRequestHandler):
                 self.reset_password(db, user["id"], int(match.group(1)), data)
                 return
             self.error_json(404, "Not found.")
+
+    def cmms_change(self, path: str, method: str, data: dict, user: sqlite3.Row) -> None:
+        plant = str(data.get("plant", "port-klang"))
+        try:
+            actor = bridge.identity()
+            if method == "POST" and path == "/api/cmms/work-orders":
+                description = str(data.get("issueDescription", "")).strip()
+                if not 5 <= len(description) <= 5000:
+                    raise CmmsError(400, "Describe the issue in at least 5 characters.")
+                category = str(data.get("issueCategoryName", "Other")).strip()[:100]
+                machine = str(data.get("machineName", "Others")).strip()[:100]
+                payload = {
+                    "requesterId": actor["id"], "type": str(data.get("type", "maintenance")),
+                    "priority": str(data.get("priority", "medium")),
+                    "responsibleDepartment": "SHE", "reportedByDepartment": "SHE",
+                    "reportedByName": user["display_name"], "issueDescription": description,
+                    "title": f"{machine} - {category}", "machineName": machine,
+                    "area": str(data.get("area", "General")).strip()[:100],
+                    "location": str(data.get("location", "General")).strip()[:100],
+                    "issueCategoryName": category,
+                }
+                if payload["type"] not in ("office", "maintenance", "project", "kaizen") or payload["priority"] not in ("low", "medium", "high", "critical"):
+                    raise CmmsError(400, "Invalid work order type or priority.")
+                for key in ("sectionId", "machineId", "issueCategoryId"):
+                    if data.get(key):
+                        payload[key] = str(data[key])
+                result = bridge.call("/api/work-orders", "POST", payload, plant)
+                self.send_json(201, result)
+                return
+            order = re.fullmatch(r"/api/cmms/work-orders/([a-zA-Z0-9-]+)/(verification|comments|attachments)", path)
+            if order:
+                order_id, action = order.groups()
+                current = bridge.she_order(order_id, plant)
+                endpoint = f"/api/work-orders/{quote(order_id)}"
+                if method == "PATCH" and action == "verification":
+                    if current["status"] != "resolved" or data.get("status") not in ("closed", "returned"):
+                        raise CmmsError(400, "Only resolved jobs can be closed or returned.")
+                    note = str(data.get("note", "")).strip()
+                    if data["status"] == "returned" and len(note) < 5:
+                        raise CmmsError(400, "Explain why the job is being returned.")
+                    payload = {"actorId": actor["id"], "status": data["status"], "note": f"{user['display_name']} (Safety Digital): {note}".strip()}
+                    self.send_json(200, bridge.call(endpoint + "/status", "PATCH", payload, plant))
+                    return
+                if method == "POST" and action == "comments":
+                    note = str(data.get("message", "")).strip()
+                    if not 1 <= len(note) <= 2000:
+                        raise CmmsError(400, "Enter a note of up to 2,000 characters.")
+                    self.send_json(201, bridge.call(endpoint + "/comments", "POST", {"actorId": actor["id"], "message": f"{user['display_name']} (Safety Digital): {note}"}, plant))
+                    return
+                if method == "POST" and action == "attachments":
+                    if data.get("kind") not in ("issue", "return_evidence"):
+                        raise CmmsError(400, "Invalid photo type.")
+                    try:
+                        content = base64.b64decode(str(data.get("content", "")), validate=True)
+                    except (ValueError, binascii.Error) as error:
+                        raise CmmsError(400, "Invalid photo.") from error
+                    mime = str(data.get("mimeType", ""))
+                    if mime not in ("image/jpeg", "image/png", "image/webp") or not 1 <= len(content) <= 5_000_000:
+                        raise CmmsError(400, "Use a JPEG, PNG, or WebP photo smaller than 5 MB.")
+                    name = str(data.get("filename", "photo"))
+                    self.send_json(201, bridge.upload_photo(order_id, plant, name, mime, content, actor["id"], data["kind"]))
+                    return
+            if method == "POST" and path == "/api/cmms/push/subscriptions":
+                subscription = data.get("subscription")
+                if not isinstance(subscription, dict):
+                    raise CmmsError(400, "Invalid push subscription.")
+                self.send_json(201, bridge.call("/api/push/subscriptions", "POST", subscription, plant))
+                return
+            self.error_json(404, "Not found.")
+        except CmmsError as error:
+            self.error_json(error.status, str(error))
 
     def login(self, db: sqlite3.Connection, data: dict) -> None:
         username = str(data.get("username", "")).strip().lower()
@@ -410,6 +548,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(replacement), user["id"]))
         db.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
+        db.commit()
         self.send_json(200, {"ok": True}, {"Set-Cookie": self.cookie_header("", clear=True)})
 
 

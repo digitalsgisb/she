@@ -74,7 +74,7 @@ def init_db() -> None:
                 username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 display_name TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+                role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user')),
                 active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
                 created_at INTEGER NOT NULL
             );
@@ -106,6 +106,28 @@ def init_db() -> None:
             );
             """
         )
+        schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
+        if "'executive'" not in schema:
+            # Existing installations used a two-role CHECK. Rebuild only that table,
+            # keeping IDs so sessions and patrols continue to refer to the same users.
+            db.execute("PRAGMA foreign_keys=OFF")
+            try:
+                db.execute("BEGIN IMMEDIATE")
+                db.execute("CREATE TABLE users_new (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE, "
+                           "display_name TEXT NOT NULL, password_hash TEXT NOT NULL, "
+                           "role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user')), "
+                           "active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), created_at INTEGER NOT NULL)")
+                db.execute("INSERT INTO users_new SELECT * FROM users")
+                db.execute("DROP TABLE users")
+                db.execute("ALTER TABLE users_new RENAME TO users")
+                if db.execute("PRAGMA foreign_key_check").fetchone():
+                    raise sqlite3.IntegrityError("Account migration failed foreign key check")
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.execute("PRAGMA foreign_keys=ON")
 
 
 def hash_password(password: str) -> str:
@@ -288,8 +310,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/patrols" or re.fullmatch(r"/api/patrols/\d+(?:/attachments/[0-9a-f]{32})?", path):
             with database() as db:
-                if self.authorize(db):
-                    self.patrol_get(db, path)
+                session = self.authorize(db)
+                if session:
+                    self.patrol_get(db, path, session[0])
             return
         if path.startswith("/api/cmms/"):
             with database() as db:
@@ -297,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.cmms_get(path)
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
-        if re.fullmatch(r"/brand/[1-4]\.png", path):
+        if re.fullmatch(r"/brand/[1-4]\.png|/icons/(?:icon-192|icon-512|maskable-512|apple-touch-icon)\.png", path):
             assets[path] = ROOT / "public" / path.lstrip("/")
         file = assets.get(path)
         if not file or not file.is_file():
@@ -373,8 +396,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.error_json(403, "Origin verification failed.")
                 return
             with database() as db:
-                if self.authorize(db, csrf=True):
-                    self.patrol_upload(db, path)
+                session = self.authorize(db, csrf=True)
+                if session:
+                    self.patrol_upload(db, path, session[0])
             return
         self.change_request("POST")
 
@@ -426,15 +450,44 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.error_json(404, "Not found.")
 
-    def patrol_get(self, db: sqlite3.Connection, path: str) -> None:
+    def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         if path == "/api/patrols":
-            rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,u.display_name AS submitted_by "
-                              "FROM patrols p JOIN users u ON u.id=p.user_id ORDER BY p.created_at DESC,p.id DESC LIMIT 100").fetchall()
-            self.send_json(200, {"patrols": [dict(row) for row in rows]})
+            query = parse_qs(urlsplit(self.path).query)
+            owner_clause = " AND p.user_id=?" if user["role"] == "user" else ""
+            owner_params = (user["id"],) if user["role"] == "user" else ()
+            if "start" in query or "end" in query:
+                try:
+                    start = int(query["start"][0])
+                    end = int(query["end"][0])
+                    if not 0 <= start < end <= 4_102_444_800 or end - start > 32 * 86_400:
+                        raise ValueError
+                except (KeyError, ValueError, IndexError):
+                    self.error_json(400, "Choose a valid week or month.")
+                    return
+                rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,p.answers_json,u.display_name AS submitted_by "
+                                  "FROM patrols p JOIN users u ON u.id=p.user_id "
+                                  f"WHERE p.created_at>=? AND p.created_at<?{owner_clause} ORDER BY p.created_at DESC,p.id DESC",
+                                  (start, end, *owner_params)).fetchall()
+            else:
+                rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,p.answers_json,u.display_name AS submitted_by "
+                                  f"FROM patrols p JOIN users u ON u.id=p.user_id WHERE 1=1{owner_clause} "
+                                  "ORDER BY p.created_at DESC,p.id DESC LIMIT 100", owner_params).fetchall()
+            patrols = []
+            for row in rows:
+                answers = json.loads(row["answers_json"])
+                counts = {status: sum(value == status for value in answers.values()) for status in PATROL_STATUSES}
+                sections = {group: sum(answers.get(f"{group}_{index}") == "not_ok" for index in range(size))
+                            for group, size in PATROL_GROUPS.items()}
+                patrols.append({"id": row["id"], "inspector_name": row["inspector_name"], "rating": row["rating"],
+                                "created_at": row["created_at"], "submitted_by": row["submitted_by"],
+                                "counts": counts, "not_ok_by_section": sections})
+            self.send_json(200, {"patrols": patrols})
             return
         match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)
         patrol_id, attachment_id = int(match.group(1)), match.group(2)
-        row = db.execute("SELECT p.*,u.display_name AS submitted_by FROM patrols p JOIN users u ON u.id=p.user_id WHERE p.id=?", (patrol_id,)).fetchone()
+        row = db.execute("SELECT p.*,u.display_name AS submitted_by FROM patrols p JOIN users u ON u.id=p.user_id "
+                         "WHERE p.id=? AND (p.user_id=? OR ? IN ('executive','admin'))",
+                         (patrol_id, user["id"], user["role"])).fetchone()
         if not row:
             self.error_json(404, "Patrol not found.")
             return
@@ -483,9 +536,10 @@ class Handler(BaseHTTPRequestHandler):
                             (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time())))
         self.send_json(201, {"id": cursor.lastrowid})
 
-    def patrol_upload(self, db: sqlite3.Connection, path: str) -> None:
+    def patrol_upload(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         patrol_id = int(re.fullmatch(r"/api/patrols/(\d+)/attachments", path).group(1))
-        if not db.execute("SELECT 1 FROM patrols WHERE id=?", (patrol_id,)).fetchone():
+        if not db.execute("SELECT 1 FROM patrols WHERE id=? AND (user_id=? OR ? IN ('executive','admin'))",
+                          (patrol_id, user["id"], user["role"])).fetchone():
             self.error_json(404, "Patrol not found.")
             return
         count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?", (patrol_id,)).fetchone()[0]
@@ -633,7 +687,7 @@ class Handler(BaseHTTPRequestHandler):
         name = str(data.get("display_name", "")).strip()
         role = data.get("role", "user")
         password = data.get("password")
-        if not USERNAME_RE.fullmatch(username) or not 1 <= len(name) <= 80 or role not in ("admin", "user") or not valid_password(password):
+        if not USERNAME_RE.fullmatch(username) or not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user") or not valid_password(password):
             self.error_json(400, "Enter a valid username, display name, role and password of at least 12 characters.")
             return
         try:
@@ -656,7 +710,7 @@ class Handler(BaseHTTPRequestHandler):
         name = str(data.get("display_name", target["display_name"])).strip()
         role = data.get("role", target["role"])
         active = data.get("active", bool(target["active"]))
-        if not 1 <= len(name) <= 80 or role not in ("admin", "user") or not isinstance(active, bool):
+        if not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user") or not isinstance(active, bool):
             self.error_json(400, "Invalid user details.")
             return
         if user_id == actor["id"] and (role != "admin" or not active):

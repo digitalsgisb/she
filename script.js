@@ -70,10 +70,49 @@ const toastBox = document.getElementById('toast');
 let currentUser = null;
 let csrfToken = '';
 let managedUsers = [];
-let envExpanded = localStorage.getItem('safety-env-expanded') !== 'false';
-let safetyExpanded = localStorage.getItem('safety-section-expanded') !== 'false';
+let envExpanded = false;
+let safetyExpanded = false;
+let installPrompt = null;
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+function addPasswordToggles(root) {
+  root.querySelectorAll('input[type="password"]').forEach(input => {
+    if (input.parentElement.classList.contains('password-field')) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'password-field';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'password-toggle';
+    button.textContent = 'Show';
+    button.setAttribute('aria-label', `Show ${input.id ? document.querySelector(`label[for="${input.id}"]`)?.textContent.toLowerCase() || 'password' : 'password'}`);
+    button.addEventListener('click', () => {
+      const visible = input.type === 'password';
+      input.type = visible ? 'text' : 'password';
+      button.textContent = visible ? 'Hide' : 'Show';
+      button.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} password`);
+    });
+    wrapper.appendChild(button);
+  });
+}
+
+function installHelpCard() {
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return '';
+  return `<section class="settings-card install-card"><h2>Use SHE Digital on your phone</h2><p>Install it to your Home Screen for quick access to the Daily Safety Patrol Checklist. An internet connection is needed to sign in and submit patrols; draft answers are saved on this device while you fill the form.</p><button class="primary-button" type="button" data-install-app ${installPrompt ? '' : 'hidden'}>Install app</button><div class="install-instructions"><strong>iPhone or iPad</strong><span>Open this site in Safari, tap Share, then Add to Home Screen.</span><strong>Android</strong><span>Open this site in Chrome and use Install app or Add to Home screen from the browser menu.</span></div></section>`;
+}
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  installPrompt = event;
+  const button = document.querySelector('[data-install-app]');
+  if (button) button.hidden = false;
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  document.querySelector('.install-card')?.remove();
+});
 
 function routeLink(key, className = '') {
   const item = routes[key];
@@ -94,12 +133,10 @@ function renderNav(active) {
     ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
   document.getElementById('envToggle').addEventListener('click', () => {
     envExpanded = !envExpanded;
-    localStorage.setItem('safety-env-expanded', String(envExpanded));
     renderNav(currentRoute());
   });
   document.getElementById('safetyToggle').addEventListener('click', () => {
     safetyExpanded = !safetyExpanded;
-    localStorage.setItem('safety-section-expanded', String(safetyExpanded));
     renderNav(currentRoute());
   });
 }
@@ -130,13 +167,15 @@ function renderPlaceholder(key) {
   return `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">${parent.toUpperCase()} / PLANNED SPACE</span><h1>${routes[key].title}</h1><p>${detail}</p></div><div class="placeholder-panel"><div class="placeholder-graphic"><span class="placeholder-ring"></span><span class="placeholder-symbol">${icon(routes[key].icon, 72)}</span></div><span class="placeholder-kicker">COMING IN A FUTURE PHASE</span><h2>A space ready to grow.</h2><p>This section is set up in the navigation. Its forms, records and workflows will be designed when the requirements are ready.</p><span class="placeholder-status"><span></span> Placeholder page</span></div>${key === 'findings' ? `<section class="findings-preview"><div><span class="eyebrow dark-eyebrow">REFERENCE TOPICS</span><h2>Environmental concerns</h2><p>Topics taken from the supplied environmental reporting poster.</p></div><div class="topic-grid">${findings.map(([label, symbol]) => `<div class="topic-chip">${icon(symbol, 18)}<span>${label}</span></div>`).join('')}</div></section>` : ''}<a class="back-link" href="#/${isEnv ? 'environmental' : 'dashboard'}">${icon('arrow', 17)} Back to ${isEnv ? 'Environmental' : 'Dashboard'}</a></div>`;
 }
 
+function roleLabel(role) { return role === 'admin' ? 'Administrator' : role === 'executive' ? 'Executive' : 'User'; }
+
 function renderAccount() {
-  return `<div class="page inner-page narrow-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ACCOUNT</span><h1>My Account</h1><p>Manage your SHE Digital sign-in details.</p></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${currentUser.role === 'admin' ? 'Administrator' : 'User'}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
+  return `<div class="page inner-page narrow-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ACCOUNT</span><h1>My Account</h1><p>Manage your SHE Digital sign-in details.</p></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${roleLabel(currentUser.role)}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
 }
 
 function renderUserRow(user) {
   const self = user.id === currentUser.id;
-  return `<div class="user-row"><span class="user-avatar">${escapeHtml(user.display_name.charAt(0).toUpperCase())}</span><div class="user-primary"><strong>${escapeHtml(user.display_name)}${self ? ' <small>(you)</small>' : ''}</strong><span>@${escapeHtml(user.username)}</span></div><span class="role-badge">${user.role === 'admin' ? 'Admin' : 'User'}</span><span class="state-badge ${user.active ? 'enabled' : 'disabled'}"><i></i>${user.active ? 'Active' : 'Inactive'}</span><div class="user-actions"><button type="button" data-edit-user="${user.id}">Edit</button><button type="button" data-reset-user="${user.id}">Reset password</button></div></div>`;
+  return `<div class="user-row"><span class="user-avatar">${escapeHtml(user.display_name.charAt(0).toUpperCase())}</span><div class="user-primary"><strong>${escapeHtml(user.display_name)}${self ? ' <small>(you)</small>' : ''}</strong><span>@${escapeHtml(user.username)}</span></div><span class="role-badge">${roleLabel(user.role)}</span><span class="state-badge ${user.active ? 'enabled' : 'disabled'}"><i></i>${user.active ? 'Active' : 'Inactive'}</span><div class="user-actions"><button type="button" data-edit-user="${user.id}">Edit</button><button type="button" data-reset-user="${user.id}">Reset password</button></div></div>`;
 }
 
 async function renderUsers() {
@@ -215,15 +254,16 @@ function openUserModal(kind, user = null) {
   let fields = '';
   if (kind === 'create') {
     title = 'Add a user';
-    fields = `<label for="userName">Username</label><input id="userName" name="username" autocomplete="off" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required /><label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user">User</option><option value="admin">Administrator</option></select><label for="userPassword">Initial password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /><p class="field-hint">Use at least 12 characters.</p>`;
+    fields = `<label for="userName">Username</label><input id="userName" name="username" autocomplete="off" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required /><label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user">User — own patrols</option><option value="executive">Executive — all patrols</option><option value="admin">Administrator — all access</option></select><label for="userPassword">Initial password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /><p class="field-hint">Use at least 12 characters.</p>`;
   } else if (kind === 'edit') {
     title = `Edit ${user.display_name}`;
-    fields = `<label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" value="${escapeHtml(user.display_name)}" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator</option></select><label for="userStatus">Status</label><select id="userStatus" name="active"><option value="true" ${user.active ? 'selected' : ''}>Active</option><option value="false" ${!user.active ? 'selected' : ''}>Inactive</option></select>${user.id === currentUser.id ? '<p class="field-hint">You cannot remove your own admin access.</p>' : ''}`;
+    fields = `<label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80" value="${escapeHtml(user.display_name)}" required /><label for="userRole">Role</label><select id="userRole" name="role"><option value="user" ${user.role === 'user' ? 'selected' : ''}>User — own patrols</option><option value="executive" ${user.role === 'executive' ? 'selected' : ''}>Executive — all patrols</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator — all access</option></select><label for="userStatus">Status</label><select id="userStatus" name="active"><option value="true" ${user.active ? 'selected' : ''}>Active</option><option value="false" ${!user.active ? 'selected' : ''}>Inactive</option></select>${user.id === currentUser.id ? '<p class="field-hint">You cannot remove your own admin access.</p>' : ''}`;
   } else {
     title = `Reset password`;
     fields = `<p class="modal-description">Set a new password for ${escapeHtml(user.display_name)}. All current sessions for this user will end.</p><label for="userPassword">New password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />`;
   }
   modalBody.innerHTML = `<span class="eyebrow dark-eyebrow">USER MANAGEMENT</span><h2 id="modalTitle">${escapeHtml(title)}</h2><form id="userModalForm" class="stacked-form">${fields}<div class="form-error" id="modalError" role="alert" hidden></div><div class="modal-actions"><button class="secondary-button" type="button" id="cancelModal">Cancel</button><button class="primary-button" type="submit">${kind === 'create' ? 'Create user' : kind === 'edit' ? 'Save changes' : 'Reset password'}</button></div></form>`;
+  addPasswordToggles(modalBody);
   modalBackdrop.hidden = false;
   document.getElementById('cancelModal').addEventListener('click', closeModal);
   document.getElementById('userModalForm').addEventListener('submit', async event => {
@@ -279,6 +319,10 @@ function render() {
     else renderPatrolForm();
   }
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
+  if (key === 'account') {
+    addPasswordToggles(content);
+    content.querySelector('.narrow-page').insertAdjacentHTML('beforeend', installHelpCard());
+  }
   window.scrollTo(0, 0);
   closeMenu();
 }
@@ -316,6 +360,11 @@ document.getElementById('signOutButton').addEventListener('click', async () => {
 });
 
 content.addEventListener('click', event => {
+  if (event.target.closest('[data-install-app]') && installPrompt) {
+    installPrompt.prompt();
+    installPrompt = null;
+    event.target.closest('[data-install-app]').hidden = true;
+  }
   if (event.target.closest('[data-create-user]')) openUserModal('create');
   const edit = event.target.closest('[data-edit-user]');
   if (edit) openUserModal('edit', managedUsers.find(user => user.id === Number(edit.dataset.editUser)));
@@ -351,5 +400,6 @@ async function bootstrap() {
   catch { await showLogin(); }
 }
 bootstrap();
+addPasswordToggles(loginForm);
 initPatrolEvents();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

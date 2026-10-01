@@ -15,6 +15,48 @@ from urllib.request import Request, urlopen
 import server
 
 
+class RoleMigrationTests(unittest.TestCase):
+    def test_old_user_roles_migrate_without_losing_accounts_or_sessions(self):
+        original_path = server.DB_PATH
+        temp = tempfile.TemporaryDirectory()
+        try:
+            server.DB_PATH = Path(temp.name) / "old.db"
+            with sqlite3.connect(server.DB_PATH) as db:
+                db.executescript("""
+                        CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                            display_name TEXT NOT NULL, password_hash TEXT NOT NULL,
+                            role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+                            active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), created_at INTEGER NOT NULL);
+                        CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
+                        CREATE TABLE patrols (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id),
+                            inspector_name TEXT NOT NULL, answers_json TEXT NOT NULL, rating INTEGER NOT NULL,
+                            remarks TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+                        INSERT INTO users(id,username,display_name,password_hash,role,active,created_at)
+                            VALUES(1,'olduser','Old User','hash','user',1,1);
+                        INSERT INTO sessions VALUES('token',1,'csrf',9999999999,1);
+                        INSERT INTO patrols VALUES(1,1,'Old User','{}',3,'',1);
+                """)
+            db.close()
+            server.init_db()
+            with server.database() as db:
+                self.assertEqual(db.execute("SELECT username FROM users WHERE id=1").fetchone()[0], "olduser")
+                self.assertEqual(db.execute("SELECT user_id FROM sessions").fetchone()[0], 1)
+                self.assertEqual(db.execute("SELECT user_id FROM patrols").fetchone()[0], 1)
+                db.execute("UPDATE users SET role='executive' WHERE id=1")
+                self.assertFalse(db.execute("PRAGMA foreign_key_check").fetchall())
+        finally:
+            server.DB_PATH = original_path
+            for attempt in range(5):
+                try:
+                    temp.cleanup()
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.1)
+
+
 class AccountFlowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -104,10 +146,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261001-patrol1', html)
-        self.assertIn('/script.js?v=20261001-patrol1', html)
-        self.assertIn('/patrol.js?v=20261001-patrol1', html)
-        self.assertIn('/cmms-ui.js?v=20261001-patrol1', html)
+        self.assertIn('/styles.css?v=20261001-mobile1', html)
+        self.assertIn('/script.js?v=20261001-mobile1', html)
+        self.assertIn('/patrol.js?v=20261001-mobile1', html)
+        self.assertIn('/cmms-ui.js?v=20261001-mobile1', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
         self.assertEqual(status, 200)
@@ -117,6 +159,10 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "application/manifest+json")
         self.assertEqual(manifest["display"], "standalone")
+        self.assertTrue(any(icon["sizes"] == "512x512" for icon in manifest["icons"]))
+        with urlopen(self.base + "/icons/icon-192.png") as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers["Content-Type"], "image/png")
         self.assertEqual(self.request("/sw.js")[0], 200)
 
     def test_patrol_submission_and_attachment_access(self):
@@ -142,6 +188,30 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request(f"/api/patrols/{patrol_id}", cookie=cookie)[1]["patrol"]["attachments"][0]["filename"], "inspection.pdf")
         self.assertEqual(self.request(f"/api/patrols/{patrol_id}/attachments/{attachment_id}")[0], 401)
         self.assertEqual(self.request(f"/api/patrols/{patrol_id}/attachments/{attachment_id}", cookie=cookie)[1], "%PDF-1.4\n")
+
+    def test_patrol_period_and_role_visibility(self):
+        self.first_admin()
+        admin_cookie, admin_csrf = self.login("admin", "AdminPassword123!")
+        for username, role in (("operator", "user"), ("manager", "executive")):
+            status, _, _ = self.request("/api/users", "POST", {"username": username, "display_name": username.title(),
+                "password": "TestPassword123!", "role": role}, admin_cookie, admin_csrf)
+            self.assertEqual(status, 201)
+        user_cookie, user_csrf = self.login("operator", "TestPassword123!")
+        executive_cookie, _ = self.login("manager", "TestPassword123!")
+        answers = {f"{group}_{index}": "ok" for group, count in server.PATROL_GROUPS.items() for index in range(count)}
+        answers["hazards_0"] = "not_ok"
+        payload = {"inspector_name": "Aman", "answers": answers, "rating": 2}
+        admin_id = self.request("/api/patrols", "POST", payload, admin_cookie, admin_csrf)[1]["id"]
+        user_id = self.request("/api/patrols", "POST", payload, user_cookie, user_csrf)[1]["id"]
+        start, end = int(time.time()) - 3600, int(time.time()) + 3600
+        query = f"/api/patrols?start={start}&end={end}"
+        self.assertEqual(self.request(query, cookie=user_cookie)[1]["patrols"][0]["id"], user_id)
+        self.assertEqual(len(self.request(query, cookie=user_cookie)[1]["patrols"]), 1)
+        self.assertEqual(len(self.request(query, cookie=executive_cookie)[1]["patrols"]), 2)
+        self.assertEqual(self.request(query, cookie=executive_cookie)[1]["patrols"][0]["counts"]["not_ok"], 1)
+        self.assertEqual(self.request(f"/api/patrols/{admin_id}", cookie=user_cookie)[0], 404)
+        self.assertEqual(self.request(f"/api/patrols/{admin_id}", cookie=executive_cookie)[0], 200)
+        self.assertEqual(self.request("/api/patrols?start=1&end=999999999", cookie=admin_cookie)[0], 400)
 
     def test_she_work_orders_are_scoped_and_verification_requires_a_resolved_job(self):
         class FakeCmms:

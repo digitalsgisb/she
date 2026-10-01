@@ -1,5 +1,5 @@
-const CACHE = 'she-shell-patrol-v1';
-const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE = 'she-shell-mobile-v1';
+const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

@@ -1,5 +1,5 @@
-const CACHE = 'safety-shell-v1';
-const ASSETS = ['/', '/styles.css', '/script.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE = 'she-shell-patrol-v1';
+const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -24,7 +24,7 @@ self.addEventListener('push', event => {
   try { payload = event.data ? event.data.json() : {}; } catch { payload = {body: event.data?.text()}; }
   const id = String(payload.tag || '').match(/^work-order-([a-zA-Z0-9-]+)$/)?.[1];
   const url = id ? `/#/work-orders/${id}` : '/#/work-orders';
-  event.waitUntil(self.registration.showNotification(payload.title || 'Safety Digital', {
+  event.waitUntil(self.registration.showNotification(payload.title || 'SHE Digital', {
     body: payload.body || 'A SHE work order has been updated.', icon: '/favicon.svg', badge: '/favicon.svg',
     tag: payload.tag || 'safety-work-orders', data: {url}
   }));

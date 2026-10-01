@@ -1,4 +1,4 @@
-"""Safety Digital web server and small SQLite-backed account service."""
+"""SHE Digital web server and small SQLite-backed account service."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import secrets
 import sqlite3
 import sys
 import time
+import uuid
 from contextlib import contextmanager
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -28,6 +29,16 @@ from cmms_bridge import CmmsError, bridge
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("SAFETY_DB_PATH", str(ROOT / "data" / "safety.db")))
+def patrol_files() -> Path:
+    return DB_PATH.parent / "patrol-attachments"
+PATROL_GROUPS = {
+    "general": 5, "machinery": 4, "ppe": 2, "hazards": 9, "others": 3,
+}
+PATROL_STATUSES = {"ok", "not_ok", "na"}
+PATROL_EXTENSIONS = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf",
+                     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic",
+                     ".mp4", ".mov", ".webm", ".mp3", ".wav", ".m4a"}
+MAX_PATROL_FILE = 1_000_000_000
 PORT = int(os.environ.get("PORT", "8000"))
 SESSION_SECONDS = 12 * 60 * 60
 HASH_ITERATIONS = 600_000
@@ -75,6 +86,24 @@ def init_db() -> None:
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id);
+            CREATE TABLE IF NOT EXISTS patrols (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                inspector_name TEXT NOT NULL,
+                answers_json TEXT NOT NULL,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 3),
+                remarks TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS patrols_created_at ON patrols(created_at DESC);
+            CREATE TABLE IF NOT EXISTS patrol_attachments (
+                id TEXT PRIMARY KEY,
+                patrol_id INTEGER NOT NULL REFERENCES patrols(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            );
             """
         )
 
@@ -133,7 +162,7 @@ def create_first_admin() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SafetyDigital/1.0"
+    server_version = "SHEDigital/1.0"
 
     def security_headers(self) -> None:
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -257,12 +286,17 @@ class Handler(BaseHTTPRequestHandler):
                     users = db.execute("SELECT * FROM users ORDER BY created_at DESC,id DESC").fetchall()
                     self.send_json(200, {"users": [public_user(user) for user in users]})
             return
+        if path == "/api/patrols" or re.fullmatch(r"/api/patrols/\d+(?:/attachments/[0-9a-f]{32})?", path):
+            with database() as db:
+                if self.authorize(db):
+                    self.patrol_get(db, path)
+            return
         if path.startswith("/api/cmms/"):
             with database() as db:
                 if self.authorize(db):
                     self.cmms_get(path)
             return
-        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
+        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         if re.fullmatch(r"/brand/[1-4]\.png", path):
             assets[path] = ROOT / "public" / path.lstrip("/")
         file = assets.get(path)
@@ -333,6 +367,15 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(error.status, str(error))
 
     def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        if re.fullmatch(r"/api/patrols/\d+/attachments", path):
+            if not self.same_origin():
+                self.error_json(403, "Origin verification failed.")
+                return
+            with database() as db:
+                if self.authorize(db, csrf=True):
+                    self.patrol_upload(db, path)
+            return
         self.change_request("POST")
 
     def do_PATCH(self) -> None:
@@ -354,6 +397,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if method == "POST" and path == "/api/patrols":
+                self.create_patrol(db, data, user)
+                return
             if path.startswith("/api/cmms/"):
                 self.cmms_change(path, method, data, user)
                 return
@@ -379,6 +425,109 @@ class Handler(BaseHTTPRequestHandler):
                 self.reset_password(db, user["id"], int(match.group(1)), data)
                 return
             self.error_json(404, "Not found.")
+
+    def patrol_get(self, db: sqlite3.Connection, path: str) -> None:
+        if path == "/api/patrols":
+            rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,u.display_name AS submitted_by "
+                              "FROM patrols p JOIN users u ON u.id=p.user_id ORDER BY p.created_at DESC,p.id DESC LIMIT 100").fetchall()
+            self.send_json(200, {"patrols": [dict(row) for row in rows]})
+            return
+        match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)
+        patrol_id, attachment_id = int(match.group(1)), match.group(2)
+        row = db.execute("SELECT p.*,u.display_name AS submitted_by FROM patrols p JOIN users u ON u.id=p.user_id WHERE p.id=?", (patrol_id,)).fetchone()
+        if not row:
+            self.error_json(404, "Patrol not found.")
+            return
+        if attachment_id:
+            attachment = db.execute("SELECT * FROM patrol_attachments WHERE id=? AND patrol_id=?", (attachment_id, patrol_id)).fetchone()
+            file = patrol_files() / attachment_id
+            if not attachment or not file.is_file():
+                self.error_json(404, "Attachment not found.")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", attachment["mime_type"])
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(attachment['filename'])}")
+            self.send_header("Content-Length", str(attachment["size"]))
+            self.send_header("Cache-Control", "no-store")
+            self.security_headers()
+            self.end_headers()
+            with file.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    self.wfile.write(chunk)
+            return
+        attachments = db.execute("SELECT id,filename,size,created_at FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id", (patrol_id,)).fetchall()
+        self.send_json(200, {"patrol": {"id": row["id"], "inspector_name": row["inspector_name"],
+                                      "answers": json.loads(row["answers_json"]), "rating": row["rating"],
+                                      "remarks": row["remarks"], "created_at": row["created_at"],
+                                      "submitted_by": row["submitted_by"],
+                                      "attachments": [dict(item) for item in attachments]}})
+
+    def create_patrol(self, db: sqlite3.Connection, data: dict, user: sqlite3.Row) -> None:
+        name = data.get("inspector_name")
+        if name not in ("Sara", "Aman"):
+            if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+                self.error_json(400, "Choose an inspector or enter their name.")
+                return
+            name = name.strip()
+        answers = data.get("answers")
+        expected = {f"{group}_{index}" for group, count in PATROL_GROUPS.items() for index in range(count)}
+        if not isinstance(answers, dict) or set(answers) != expected or any(value not in PATROL_STATUSES for value in answers.values()):
+            self.error_json(400, "Answer every checklist item with OK, NOT OK, or N/A.")
+            return
+        rating = data.get("rating")
+        remarks = data.get("remarks", "")
+        if type(rating) is not int or rating not in (1, 2, 3) or not isinstance(remarks, str) or len(remarks) > 5000:
+            self.error_json(400, "Choose a 1–3 star rating and keep remarks below 5,000 characters.")
+            return
+        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at) VALUES(?,?,?,?,?,?)",
+                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time())))
+        self.send_json(201, {"id": cursor.lastrowid})
+
+    def patrol_upload(self, db: sqlite3.Connection, path: str) -> None:
+        patrol_id = int(re.fullmatch(r"/api/patrols/(\d+)/attachments", path).group(1))
+        if not db.execute("SELECT 1 FROM patrols WHERE id=?", (patrol_id,)).fetchone():
+            self.error_json(404, "Patrol not found.")
+            return
+        count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?", (patrol_id,)).fetchone()[0]
+        if count >= 10:
+            self.error_json(400, "A patrol can have up to 10 attachments.")
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            size = 0
+        if not 1 <= size <= MAX_PATROL_FILE:
+            self.error_json(400, "Each attachment must be 1 GB or smaller.")
+            return
+        name = self.headers.get("X-File-Name", "")
+        try:
+            from urllib.parse import unquote
+            name = unquote(name)
+        except ValueError:
+            name = ""
+        name = Path(name.replace("\\", "/")).name
+        if not 1 <= len(name) <= 180 or Path(name).suffix.lower() not in PATROL_EXTENSIONS:
+            self.error_json(400, "Use a Word, Excel, PowerPoint, PDF, image, video, or audio file.")
+            return
+        mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        attachment_id = uuid.uuid4().hex
+        patrol_files().mkdir(parents=True, exist_ok=True)
+        target = patrol_files() / attachment_id
+        remaining = size
+        try:
+            with target.open("xb") as output:
+                while remaining:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise ConnectionError("Incomplete upload")
+                    output.write(chunk)
+                    remaining -= len(chunk)
+            db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at) VALUES(?,?,?,?,?,?)",
+                       (attachment_id, patrol_id, name, mime, size, int(time.time())))
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        self.send_json(201, {"id": attachment_id, "filename": name, "size": size})
 
     def cmms_change(self, path: str, method: str, data: dict, user: sqlite3.Row) -> None:
         plant = str(data.get("plant", "port-klang"))
@@ -419,14 +568,14 @@ class Handler(BaseHTTPRequestHandler):
                     note = str(data.get("note", "")).strip()
                     if data["status"] == "returned" and len(note) < 5:
                         raise CmmsError(400, "Explain why the job is being returned.")
-                    payload = {"actorId": actor["id"], "status": data["status"], "note": f"{user['display_name']} (Safety Digital): {note}".strip()}
+                    payload = {"actorId": actor["id"], "status": data["status"], "note": f"{user['display_name']} (SHE Digital): {note}".strip()}
                     self.send_json(200, bridge.call(endpoint + "/status", "PATCH", payload, plant))
                     return
                 if method == "POST" and action == "comments":
                     note = str(data.get("message", "")).strip()
                     if not 1 <= len(note) <= 2000:
                         raise CmmsError(400, "Enter a note of up to 2,000 characters.")
-                    self.send_json(201, bridge.call(endpoint + "/comments", "POST", {"actorId": actor["id"], "message": f"{user['display_name']} (Safety Digital): {note}"}, plant))
+                    self.send_json(201, bridge.call(endpoint + "/comments", "POST", {"actorId": actor["id"], "message": f"{user['display_name']} (SHE Digital): {note}"}, plant))
                     return
                 if method == "POST" and action == "attachments":
                     if data.get("kind") not in ("issue", "return_evidence"):
@@ -558,7 +707,7 @@ def main() -> None:
         return
     init_db()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Safety Digital listening on port {PORT}", flush=True)
+    print(f"SHE Digital listening on port {PORT}", flush=True)
     server.serve_forever()
 
 

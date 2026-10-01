@@ -26,6 +26,7 @@ const routes = {
   waste: { title: 'Waste', icon: 'waste' },
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
   safety: { title: 'Safety', icon: 'shield' },
+  'daily-safety-patrol': { title: 'Daily Safety Patrol Checklist', icon: 'clipboard' },
   health: { title: 'Health', icon: 'heart' },
   users: { title: 'User Management', icon: 'users' },
   'work-orders': { title: 'SHE Work Orders', icon: 'clipboard' },
@@ -70,6 +71,7 @@ let currentUser = null;
 let csrfToken = '';
 let managedUsers = [];
 let envExpanded = localStorage.getItem('safety-env-expanded') !== 'false';
+let safetyExpanded = localStorage.getItem('safety-section-expanded') !== 'false';
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -81,7 +83,8 @@ function routeLink(key, className = '') {
 function renderNav(active) {
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('dashboard', `nav-link ${active === 'dashboard' ? 'active' : ''}`)}
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    ${routeLink('safety', `nav-link ${active === 'safety' ? 'active' : ''}`)}
+    <div class="nav-parent"><a class="nav-link ${active === 'safety' ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ${safetyExpanded ? '' : 'hidden'}><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ${envExpanded ? '' : 'hidden'}>${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>
@@ -94,10 +97,15 @@ function renderNav(active) {
     localStorage.setItem('safety-env-expanded', String(envExpanded));
     renderNav(currentRoute());
   });
+  document.getElementById('safetyToggle').addEventListener('click', () => {
+    safetyExpanded = !safetyExpanded;
+    localStorage.setItem('safety-section-expanded', String(safetyExpanded));
+    renderNav(currentRoute());
+  });
 }
 
 function sectionCard(key, number, description) {
-  return `<a class="section-card" href="#/${key}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>${key === 'environmental' ? 'Explore section' : 'View placeholder'}</span>${icon('arrow', 18)}</span></a>`;
+  return `<a class="section-card" href="#/${key}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>${key === 'health' ? 'View placeholder' : 'Explore section'}</span>${icon('arrow', 18)}</span></a>`;
 }
 
 function moduleCard(key, index) {
@@ -106,8 +114,8 @@ function moduleCard(key, index) {
 
 function renderDashboard() {
   return `<div class="page dashboard-page"><section class="hero"><div class="hero-text"><div class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span>SUGIHARA · SHE WORKSPACE</div><h1>Good day.<br /><em>Let's make every day safer.</em></h1><p>A single home for Safety, Health and Environmental work. Your SHE journey starts here.</p><a class="hero-action" href="#/environmental">Explore Environmental ${icon('arrow', 19)}</a></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-leaf">${icon('leaf', 104)}</div><span class="art-caption">SAFETY&nbsp; · &nbsp;HEALTH&nbsp; · &nbsp;ENVIRONMENT</span></div></section>
-    <div class="intro-row"><div><span class="eyebrow dark-eyebrow">THE WORKSPACE</span><h2>Three pillars. One direction.</h2><p>Choose an area to see its planned home in Safety Digital.</p></div><span class="phase-pill"><span></span> Initial setup</span></div>
-    <div class="section-grid">${sectionCard('safety', 1, 'A dedicated space for safety initiatives and reporting.')}${sectionCard('health', 2, 'A dedicated space for health and wellbeing.')}${sectionCard('environmental', 3, 'The first area planned for environmental reporting and action.')}</div>
+    <div class="intro-row"><div><span class="eyebrow dark-eyebrow">THE WORKSPACE</span><h2>Three pillars. One direction.</h2><p>Choose an area to get started in SHE Digital.</p></div></div>
+    <div class="section-grid">${sectionCard('safety', 1, 'Complete the Daily Safety Patrol Checklist and review past patrols.')}${sectionCard('health', 2, 'A dedicated space for health and wellbeing.')}${sectionCard('environmental', 3, 'Explore environmental reporting and action areas.')}</div>
     <section class="dashboard-strip"><span class="strip-icon">${icon('leaf', 24)}</span><div><strong>Environmental comes first</strong><p>Explore the planned Red Tag, Hiyari Hatto, Waste and Environmental Findings areas.</p></div><a href="#/environmental">View modules ${icon('arrow', 17)}</a></section></div>`;
 }
 
@@ -123,7 +131,7 @@ function renderPlaceholder(key) {
 }
 
 function renderAccount() {
-  return `<div class="page inner-page narrow-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ACCOUNT</span><h1>My Account</h1><p>Manage your Safety Digital sign-in details.</p></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${currentUser.role === 'admin' ? 'Administrator' : 'User'}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
+  return `<div class="page inner-page narrow-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ACCOUNT</span><h1>My Account</h1><p>Manage your SHE Digital sign-in details.</p></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${currentUser.role === 'admin' ? 'Administrator' : 'User'}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
 }
 
 function renderUserRow(user) {
@@ -132,7 +140,7 @@ function renderUserRow(user) {
 }
 
 async function renderUsers() {
-  content.innerHTML = `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ADMINISTRATION</span><h1>User Management</h1><p>Manage access to the Safety Digital workspace.</p></div><div class="loading-panel">Loading users…</div></div>`;
+  content.innerHTML = `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">WORKSPACE / ADMINISTRATION</span><h1>User Management</h1><p>Manage access to the SHE Digital workspace.</p></div><div class="loading-panel">Loading users…</div></div>`;
   try {
     const result = await api('/api/users');
     if (currentRoute() !== 'users') return;
@@ -166,7 +174,7 @@ async function showLogin(message = '') {
   appShell.hidden = true;
   appShell.classList.remove('app-shell');
   loginScreen.hidden = false;
-  document.title = 'Sign in · Safety Digital';
+  document.title = 'Sign in · SHE Digital';
   loginError.hidden = !message;
   loginError.textContent = message;
   loginError.classList.toggle('success', message.startsWith('Password updated'));
@@ -261,9 +269,15 @@ function render() {
   if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
   renderNav(key);
   breadcrumb.textContent = routes[key].title;
-  document.title = `${routes[key].title} · Safety Digital`;
+  document.title = `${routes[key].title} · SHE Digital`;
   if (key === 'users') renderUsers();
   else if (key === 'work-orders') renderWorkOrders();
+  else if (key === 'safety') renderSafety();
+  else if (key === 'daily-safety-patrol') {
+    const id = location.hash.split('/')[2];
+    if (id && /^\d+$/.test(id)) renderPatrolDetail(id);
+    else renderPatrolForm();
+  }
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   window.scrollTo(0, 0);
   closeMenu();
@@ -337,4 +351,5 @@ async function bootstrap() {
   catch { await showLogin(); }
 }
 bootstrap();
+initPatrolEvents();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

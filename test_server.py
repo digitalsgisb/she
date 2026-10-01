@@ -1,4 +1,4 @@
-"""Focused integration checks for Safety Digital accounts and authorization."""
+"""Focused integration checks for SHE Digital accounts and authorization."""
 
 import json
 import sqlite3
@@ -104,9 +104,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20260929-she1', html)
-        self.assertIn('/script.js?v=20260929-she1', html)
-        self.assertIn('/cmms-ui.js?v=20260929-she1', html)
+        self.assertIn('/styles.css?v=20261001-patrol1', html)
+        self.assertIn('/script.js?v=20261001-patrol1', html)
+        self.assertIn('/patrol.js?v=20261001-patrol1', html)
+        self.assertIn('/cmms-ui.js?v=20261001-patrol1', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
         self.assertEqual(status, 200)
@@ -117,6 +118,30 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(headers["Content-Type"], "application/manifest+json")
         self.assertEqual(manifest["display"], "standalone")
         self.assertEqual(self.request("/sw.js")[0], 200)
+
+    def test_patrol_submission_and_attachment_access(self):
+        self.first_admin()
+        cookie, csrf = self.login("admin", "AdminPassword123!")
+        answers = {f"{group}_{index}": "ok" for group, count in server.PATROL_GROUPS.items() for index in range(count)}
+        payload = {"inspector_name": "Sara", "answers": answers, "rating": 3, "remarks": "All clear"}
+        self.assertEqual(self.request("/api/patrols")[0], 401)
+        self.assertEqual(self.request("/api/patrols", "POST", payload, cookie)[0], 403)
+        bad = dict(payload, answers={"general_0": "ok"})
+        self.assertEqual(self.request("/api/patrols", "POST", bad, cookie, csrf)[0], 400)
+        status, result, _ = self.request("/api/patrols", "POST", payload, cookie, csrf)
+        self.assertEqual(status, 201)
+        patrol_id = result["id"]
+        self.assertEqual(self.request("/api/patrols", cookie=cookie)[1]["patrols"][0]["id"], patrol_id)
+        self.assertEqual(self.request(f"/api/patrols/{patrol_id}", cookie=cookie)[1]["patrol"]["answers"], answers)
+        request = Request(self.base + f"/api/patrols/{patrol_id}/attachments", data=b"%PDF-1.4\n",
+                          headers={"Cookie": cookie, "X-CSRF-Token": csrf, "X-File-Name": "inspection.pdf",
+                                   "Content-Type": "application/octet-stream"}, method="POST")
+        with urlopen(request) as response:
+            self.assertEqual(response.status, 201)
+            attachment_id = json.load(response)["id"]
+        self.assertEqual(self.request(f"/api/patrols/{patrol_id}", cookie=cookie)[1]["patrol"]["attachments"][0]["filename"], "inspection.pdf")
+        self.assertEqual(self.request(f"/api/patrols/{patrol_id}/attachments/{attachment_id}")[0], 401)
+        self.assertEqual(self.request(f"/api/patrols/{patrol_id}/attachments/{attachment_id}", cookie=cookie)[1], "%PDF-1.4\n")
 
     def test_she_work_orders_are_scoped_and_verification_requires_a_resolved_job(self):
         class FakeCmms:

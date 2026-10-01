@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Safety Digital · SHE Workspace",
-  "short_name": "Safety Digital",
+  "name": "SHE Digital · SHE Workspace",
+  "short_name": "SHE Digital",
   "description": "SHE work orders and safety workspace",
   "start_url": "/#/dashboard",
   "scope": "/",

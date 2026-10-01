@@ -1,4 +1,4 @@
-/* SHE work orders, backed by the CMMS through Safety Digital's authenticated API. */
+/* SHE work orders, backed by the CMMS through SHE Digital's authenticated API. */
 const cmmsState = {config: null, plant: 'port-klang', orders: [], master: null, timer: null, known: null};
 let cmmsInstallEvent = null;
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); cmmsInstallEvent = event; });
@@ -38,7 +38,7 @@ async function renderWorkOrders() {
     const config = await cmmsEnsureConfig();
     if (!config.configured) {
       document.querySelector('.cmms-actions').innerHTML = '';
-      document.getElementById('cmmsBody').innerHTML = '<div class="cmms-empty">CMMS connection is not configured yet. An administrator needs to set the connection details on the Safety Digital server.</div>';
+      document.getElementById('cmmsBody').innerHTML = '<div class="cmms-empty">CMMS connection is not configured yet. An administrator needs to set the connection details on the SHE Digital server.</div>';
       return;
     }
     document.querySelector('.cmms-actions').innerHTML = `${cmmsPlantControl()} <button class="secondary-button cmms-install-button" type="button">Install app</button> <button class="secondary-button cmms-push-button" type="button">Enable alerts</button> <a class="primary-button" href="#/work-orders/new">Issue work order</a>`;
@@ -161,7 +161,7 @@ async function cmmsEnablePush() {
   try {
     if (!window.isSecureContext || !('PushManager' in window) || !('serviceWorker' in navigator)) throw new Error('Push alerts require HTTPS and a supported browser.');
     if (!cmmsState.config?.push?.enabled) throw new Error('CMMS push alerts are not configured yet.');
-    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !matchMedia('(display-mode: standalone)').matches) throw new Error('On iPhone, add Safety Digital to the Home Screen first.');
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !matchMedia('(display-mode: standalone)').matches) throw new Error('On iPhone, add SHE Digital to the Home Screen first.');
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('Notification permission was not granted.');
     const key = cmmsState.config.push.publicKey;
@@ -189,7 +189,7 @@ async function cmmsInstall() {
   } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
     notify('In Safari, tap Share, then Add to Home Screen.');
   } else {
-    notify('Use your browser menu to install Safety Digital.');
+    notify('Use your browser menu to install SHE Digital.');
   }
 }
 

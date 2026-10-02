@@ -8,7 +8,7 @@ Open **Safety → Daily Safety Patrol Checklist** to submit an inspection. The f
 
 The **Safety → Patrol Overview & History** page shows weekly and monthly monitoring, including completed patrols, patrols with findings, NOT OK answers, OK rate excluding N/A, activity, and findings by section. Its history can be searched or filtered to patrols with findings, and each record opens its full answers and attachments. The **Safety** landing page links to both patrol features and summarizes the current month. Users see their own patrols and monitoring; Executives and Admins see all patrols. Only Admins manage accounts. Existing user databases migrate automatically to support the Executive role. Patrols and attachment files are stored beside the SQLite database, so the existing Docker volume persists them. All patrol endpoints require a signed-in session; submissions and uploads also require the CSRF token.
 
-On phones and in the installed PWA, a SHE-green bottom bar provides quick links to Home, Patrol, History, and Orders. **More** opens Safety, Health, Environmental, My Account, and User Management for admins. The bar stays out of the way of the patrol form's submit controls and respects phone safe areas.
+On phones and in the installed PWA, a SHE-green bottom bar provides quick links to Home, Patrol, History, and Orders. **More** opens the full sidebar with Safety, Health, Environmental, My Account, and User Management for admins. The bar stays out of the way of the patrol form's submit controls and respects phone safe areas.
 
 ## CMMS SHE work orders
 

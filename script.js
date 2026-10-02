@@ -62,6 +62,7 @@ const breadcrumb = document.getElementById('breadcrumb');
 const sidebar = document.getElementById('sidebar');
 const backdrop = document.getElementById('backdrop');
 const menuButton = document.getElementById('menuButton');
+const sidebarClose = document.getElementById('sidebarClose');
 const appShell = document.getElementById('appShell');
 const loginScreen = document.getElementById('loginScreen');
 const loginForm = document.getElementById('loginForm');
@@ -72,8 +73,6 @@ const modalBackdrop = document.getElementById('modalBackdrop');
 const modalBody = document.getElementById('modalBody');
 const toastBox = document.getElementById('toast');
 const mobileTabbar = document.getElementById('mobileTabbar');
-const mobileMoreSheet = document.getElementById('mobileMoreSheet');
-const mobileMoreBackdrop = document.getElementById('mobileMoreBackdrop');
 let currentUser = null;
 let csrfToken = '';
 let managedUsers = [];
@@ -132,27 +131,7 @@ function mobileTab(key, label, symbol, active) {
 
 function renderMobileNavigation(active) {
   const tab = active === 'dashboard' ? 'dashboard' : active === 'daily-safety-patrol' ? 'daily-safety-patrol' : active === 'patrol-overview' ? 'patrol-overview' : active === 'work-orders' ? 'work-orders' : 'more';
-  mobileTabbar.innerHTML = `${mobileTab('dashboard', 'Home', 'grid', tab === 'dashboard')}${mobileTab('daily-safety-patrol', 'Patrol', 'clipboard', tab === 'daily-safety-patrol')}${mobileTab('patrol-overview', 'History', 'clock', tab === 'patrol-overview')}${mobileTab('work-orders', 'Orders', 'briefcase', tab === 'work-orders')}<button class="mobile-tab ${tab === 'more' ? 'active' : ''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="More sections" aria-expanded="false" aria-controls="mobileMoreSheet">${icon('menu', 20)}<span>More</span></button>`;
-  mobileMoreSheet.innerHTML = `<div class="mobile-more-heading"><div><span class="eyebrow dark-eyebrow">SHE DIGITAL</span><h2 id="mobileMoreTitle">More sections</h2></div><button type="button" class="mobile-more-close" data-mobile-more-close aria-label="Close more sections">×</button></div><div class="mobile-more-group"><small>SHE SECTIONS</small><a href="#/safety">${icon('shield', 20)}<span>Safety</span>${icon('chevron', 16)}</a><a href="#/health">${icon('heart', 20)}<span>Health</span>${icon('chevron', 16)}</a><a href="#/environmental">${icon('leaf', 20)}<span>Environmental</span>${icon('chevron', 16)}</a></div><div class="mobile-more-group"><small>WORKSPACE</small><a href="#/account">${icon('person', 20)}<span>My Account</span>${icon('chevron', 16)}</a>${currentUser?.role === 'admin' ? `<a href="#/users">${icon('users', 20)}<span>User Management</span>${icon('chevron', 16)}</a>` : ''}</div>`;
-}
-
-function closeMobileMore(restoreFocus = false) {
-  const wasOpen = !mobileMoreSheet.hidden;
-  mobileMoreSheet.hidden = true;
-  mobileMoreBackdrop.hidden = true;
-  document.body.classList.remove('mobile-more-open');
-  const button = document.getElementById('mobileMoreButton');
-  if (button) button.setAttribute('aria-expanded', 'false');
-  if (restoreFocus && wasOpen) button?.focus();
-}
-
-function toggleMobileMore() {
-  if (!mobileMoreSheet.hidden) { closeMobileMore(true); return; }
-  mobileMoreBackdrop.hidden = false;
-  mobileMoreSheet.hidden = false;
-  document.body.classList.add('mobile-more-open');
-  document.getElementById('mobileMoreButton')?.setAttribute('aria-expanded', 'true');
-  mobileMoreSheet.querySelector('a')?.focus();
+  mobileTabbar.innerHTML = `${mobileTab('dashboard', 'Home', 'grid', tab === 'dashboard')}${mobileTab('daily-safety-patrol', 'Patrol', 'clipboard', tab === 'daily-safety-patrol')}${mobileTab('patrol-overview', 'History', 'clock', tab === 'patrol-overview')}${mobileTab('work-orders', 'Orders', 'briefcase', tab === 'work-orders')}<button class="mobile-tab ${tab === 'more' ? 'active' : ''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu', 20)}<span>More</span></button>`;
 }
 
 function renderNav(active) {
@@ -267,7 +246,7 @@ async function api(path, method = 'GET', body = null) {
 
 async function showLogin(message = '') {
   cmmsStop();
-  closeMobileMore();
+  closeMenu();
   currentUser = null;
   csrfToken = '';
   appShell.hidden = true;
@@ -360,14 +339,25 @@ function currentRoute() {
 function closeMenu() {
   sidebar.classList.remove('mobile-open');
   backdrop.classList.remove('visible');
+  document.body.classList.remove('mobile-sidebar-open');
   menuButton.setAttribute('aria-expanded', 'false');
+  document.getElementById('mobileMoreButton')?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleMenu() {
+  const open = !sidebar.classList.contains('mobile-open');
+  sidebar.classList.toggle('mobile-open', open);
+  backdrop.classList.toggle('visible', open);
+  document.body.classList.toggle('mobile-sidebar-open', open);
+  menuButton.setAttribute('aria-expanded', String(open));
+  document.getElementById('mobileMoreButton')?.setAttribute('aria-expanded', String(open));
+  if (open) sidebarClose.focus();
 }
 
 function render() {
   if (!currentUser) return;
   const key = currentRoute();
   if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
-  closeMobileMore();
   renderNav(key);
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
@@ -391,28 +381,19 @@ function render() {
   closeMenu();
 }
 
-menuButton.addEventListener('click', () => {
-  const open = !sidebar.classList.contains('mobile-open');
-  sidebar.classList.toggle('mobile-open', open);
-  backdrop.classList.toggle('visible', open);
-  menuButton.setAttribute('aria-expanded', String(open));
-});
+menuButton.addEventListener('click', toggleMenu);
+sidebarClose.addEventListener('click', () => { closeMenu(); document.getElementById('mobileMoreButton')?.focus(); });
 backdrop.addEventListener('click', closeMenu);
 mobileTabbar.addEventListener('click', event => {
-  if (event.target.closest('[data-mobile-more]')) toggleMobileMore();
-  else if (event.target.closest('a')) closeMobileMore();
+  if (event.target.closest('[data-mobile-more]')) toggleMenu();
 });
-mobileMoreBackdrop.addEventListener('click', () => closeMobileMore(true));
-mobileMoreSheet.addEventListener('click', event => {
-  if (event.target.closest('[data-mobile-more-close]')) closeMobileMore(true);
-  else if (event.target.closest('a')) closeMobileMore();
-});
-window.addEventListener('resize', () => { if (window.innerWidth > 760) closeMobileMore(); });
+nav.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
+window.addEventListener('resize', () => { if (window.innerWidth > 760) closeMenu(); });
 document.addEventListener('keydown', event => {
-  if (mobileMoreSheet.hidden) return;
-  if (event.key === 'Escape') { event.preventDefault(); closeMobileMore(true); }
+  if (!sidebar.classList.contains('mobile-open')) return;
+  if (event.key === 'Escape') { event.preventDefault(); closeMenu(); document.getElementById('mobileMoreButton')?.focus(); }
   if (event.key !== 'Tab') return;
-  const focusable = [...mobileMoreSheet.querySelectorAll('a,button')];
+  const focusable = [...sidebar.querySelectorAll('a,button')].filter(item => !item.closest('[hidden]') && item.getClientRects().length);
   const first = focusable[0], last = focusable[focusable.length - 1];
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }

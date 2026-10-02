@@ -12,7 +12,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20260928-sync1" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/styles.css?v=20261002-mobile-nav1" />
+    <link rel="stylesheet" href="/styles.css?v=20261002-favicon-sidebar1" />
   </head>
   <body>
     <section class="login-screen" id="loginScreen" hidden>
@@ -27,6 +27,7 @@
         <div class="brand">
           <span class="brand-mark"><img src="/brand/1.png" alt="Sugihara logo" /></span>
           <span class="brand-copy"><strong>SHE Digital</strong><small>SHE workspace</small></span>
+          <button class="sidebar-close" id="sidebarClose" type="button" aria-label="Close navigation">×</button>
         </div>
         <nav class="nav" id="nav"></nav>
         <div class="sidebar-bottom">
@@ -45,15 +46,13 @@
         </header>
         <main id="content" tabindex="-1"></main>
       </div>
-      <div class="mobile-more-backdrop" id="mobileMoreBackdrop" hidden></div>
-      <section class="mobile-more-sheet" id="mobileMoreSheet" role="dialog" aria-modal="true" aria-labelledby="mobileMoreTitle" hidden></section>
       <nav class="mobile-tabbar" id="mobileTabbar" aria-label="Mobile navigation"></nav>
     </div>
     <div class="mobile-backdrop" id="backdrop"></div>
     <div class="modal-backdrop" id="modalBackdrop" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><button class="modal-close" id="modalClose" type="button" aria-label="Close dialog">×</button><div id="modalBody"></div></div></div>
     <div class="toast" id="toast" role="status" hidden></div>
-    <script src="/cmms-ui.js?v=20261002-mobile-nav1"></script>
-    <script src="/patrol.js?v=20261002-mobile-nav1"></script>
-    <script src="/script.js?v=20261002-mobile-nav1"></script>
+    <script src="/cmms-ui.js?v=20261002-favicon-sidebar1"></script>
+    <script src="/patrol.js?v=20261002-favicon-sidebar1"></script>
+    <script src="/script.js?v=20261002-favicon-sidebar1"></script>
   </body>
 </html>

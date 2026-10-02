@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-mobile-v1';
+const CACHE = 'she-shell-sections-v1';
 const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

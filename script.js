@@ -27,6 +27,7 @@ const routes = {
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
   safety: { title: 'Safety', icon: 'shield' },
   'daily-safety-patrol': { title: 'Daily Safety Patrol Checklist', icon: 'clipboard' },
+  'patrol-overview': { title: 'Patrol Overview & History', icon: 'grid' },
   health: { title: 'Health', icon: 'heart' },
   users: { title: 'User Management', icon: 'users' },
   'work-orders': { title: 'SHE Work Orders', icon: 'clipboard' },
@@ -122,10 +123,10 @@ function routeLink(key, className = '') {
 function renderNav(active) {
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('dashboard', `nav-link ${active === 'dashboard' ? 'active' : ''}`)}
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${active === 'safety' ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ${safetyExpanded ? '' : 'hidden'}><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a></div>
+    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ${safetyExpanded ? '' : 'hidden'}><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
-    <div class="nav-parent"><a class="nav-link ${active === 'environmental' ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
+    <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ${envExpanded ? '' : 'hidden'}>${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>
     <div class="nav-label nav-label-spaced">WORKSPACE</div>
     ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
@@ -142,7 +143,7 @@ function renderNav(active) {
 }
 
 function sectionCard(key, number, description) {
-  return `<a class="section-card" href="#/${key}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>${key === 'health' ? 'View placeholder' : 'Explore section'}</span>${icon('arrow', 18)}</span></a>`;
+  return `<a class="section-card" href="#/${key}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>Open ${routes[key].title} overview</span>${icon('arrow', 18)}</span></a>`;
 }
 
 function moduleCard(key, index) {
@@ -150,14 +151,37 @@ function moduleCard(key, index) {
 }
 
 function renderDashboard() {
-  return `<div class="page dashboard-page"><section class="hero"><div class="hero-text"><div class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span>SUGIHARA · SHE WORKSPACE</div><h1>Good day.<br /><em>Let's make every day safer.</em></h1><p>A single home for Safety, Health and Environmental work. Your SHE journey starts here.</p><a class="hero-action" href="#/environmental">Explore Environmental ${icon('arrow', 19)}</a></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-leaf">${icon('leaf', 104)}</div><span class="art-caption">SAFETY&nbsp; · &nbsp;HEALTH&nbsp; · &nbsp;ENVIRONMENT</span></div></section>
-    <div class="intro-row"><div><span class="eyebrow dark-eyebrow">THE WORKSPACE</span><h2>Three pillars. One direction.</h2><p>Choose an area to get started in SHE Digital.</p></div></div>
-    <div class="section-grid">${sectionCard('safety', 1, 'Complete the Daily Safety Patrol Checklist and review past patrols.')}${sectionCard('health', 2, 'A dedicated space for health and wellbeing.')}${sectionCard('environmental', 3, 'Explore environmental reporting and action areas.')}</div>
-    <section class="dashboard-strip"><span class="strip-icon">${icon('leaf', 24)}</span><div><strong>Environmental comes first</strong><p>Explore the planned Red Tag, Hiyari Hatto, Waste and Environmental Findings areas.</p></div><a href="#/environmental">View modules ${icon('arrow', 17)}</a></section></div>`;
+  return `<div class="page dashboard-page"><section class="hero"><div class="hero-text"><div class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span>SUGIHARA · SHE WORKSPACE</div><h1>Good day.<br /><em>Let's make every day safer.</em></h1><p>Your shared view of Safety, Health and Environmental work. Open a section to see its features and activity.</p><a class="hero-action" href="#/safety">Explore Safety ${icon('arrow', 19)}</a></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-leaf">${icon('leaf', 104)}</div><span class="art-caption">SAFETY&nbsp; · &nbsp;HEALTH&nbsp; · &nbsp;ENVIRONMENT</span></div></section>
+    <div class="intro-row"><div><span class="eyebrow dark-eyebrow">ALL SHE AREAS</span><h2>One dashboard. Three areas.</h2><p>Start with an area, then open the feature you need.</p></div></div>
+    <div class="section-grid">${sectionCard('safety', 1, 'Patrol checklists, monitoring and future safety tools.')}${sectionCard('health', 2, 'The home for health and wellbeing features.')}${sectionCard('environmental', 3, 'Environmental reporting areas and future tools.')}</div>
+    <div class="content-heading"><div><span class="eyebrow dark-eyebrow">AT A GLANCE</span><h2>Across the workspace</h2></div></div><div class="workspace-overview-grid"><a class="workspace-overview-tile" href="#/safety"><span class="workspace-overview-icon">${icon('shield', 23)}</span><strong>Safety</strong><p id="dashboardSafetyPulse">Loading this month's patrol activity…</p><span>Open Safety ${icon('arrow', 16)}</span></a><a class="workspace-overview-tile" href="#/health"><span class="workspace-overview-icon">${icon('heart', 23)}</span><strong>Health</strong><p>Health modules are ready to be added.</p><span>Open Health ${icon('arrow', 16)}</span></a><a class="workspace-overview-tile" href="#/environmental"><span class="workspace-overview-icon">${icon('leaf', 23)}</span><strong>Environmental</strong><p>Four planned reporting areas.</p><span>Open Environmental ${icon('arrow', 16)}</span></a></div></div>`;
+}
+
+function renderSafetyHome() {
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">02 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Complete and submit the 23-item safety patrol.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol Overview &amp; History</strong><span>Review weekly or monthly activity, findings, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a></div></div>`;
+}
+
+function renderHealth() {
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / HEALTH</span><h1>Health</h1><p>A dedicated home for health and wellbeing work.</p></div><section class="category-banner health-banner"><div><span class="banner-kicker">HEALTH OVERVIEW</span><h2>Care for people.<br />Build healthy days.</h2><p>Health features and their activity will appear here as they are added.</p></div><span class="category-banner-icon" aria-hidden="true">${icon('heart', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">HEALTH FEATURES</span><h2>Health modules</h2></div></div><div class="category-empty">No health modules have been added yet.</div></div>`;
+}
+
+async function loadSafetyPulse(targetId) {
+  const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  try {
+    const {patrols} = await api(`/api/patrols?start=${Math.floor(start.getTime() / 1000)}&end=${Math.floor(end.getTime() / 1000)}`);
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const findings = patrols.reduce((sum, row) => sum + row.counts.not_ok, 0);
+    target.textContent = `${patrols.length} ${patrols.length === 1 ? 'patrol' : 'patrols'} this month · ${findings} NOT OK ${findings === 1 ? 'item' : 'items'}`;
+  } catch {
+    const target = document.getElementById(targetId);
+    if (target) target.textContent = 'Patrol activity is unavailable right now.';
+  }
 }
 
 function renderEnvironmental() {
-  return `<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / ENVIRONMENTAL</span><h1>Environmental</h1><p>A central place for environmental awareness, reporting and follow-up.</p></div><section class="environment-banner"><div><span class="banner-kicker">OUR FIRST FOCUS AREA</span><h2>See it. Report it.<br />Improve it.</h2><p>Employees will be able to raise environmental concerns directly to the SHE team as this workspace develops.</p></div><span class="banner-icon" aria-hidden="true">${icon('leaf', 88)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">PLANNED AREAS</span><h2>Environmental modules</h2></div><span class="count-pill">04 spaces</span></div><div class="module-grid">${envItems.map((key, index) => moduleCard(key, index + 1)).join('')}</div><div class="quiet-note">These pages are placeholders. Reporting forms, workflows and live data will be added in a later phase.</div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / ENVIRONMENTAL</span><h1>Environmental</h1><p>A central place for environmental awareness, reporting and follow-up.</p></div><section class="environment-banner"><div><span class="banner-kicker">ENVIRONMENTAL OVERVIEW</span><h2>See it. Report it.<br />Improve it.</h2><p>Environmental features and their activity will appear here as they are added.</p></div><span class="banner-icon" aria-hidden="true">${icon('leaf', 88)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">PLANNED AREAS</span><h2>Environmental modules</h2></div><span class="count-pill">04 spaces</span></div><div class="module-grid">${envItems.map((key, index) => moduleCard(key, index + 1)).join('')}</div><div class="quiet-note">These pages are placeholders. Reporting forms, workflows and live data will be added in a later phase.</div></div>`;
 }
 
 function renderPlaceholder(key) {
@@ -312,13 +336,15 @@ function render() {
   document.title = `${routes[key].title} · SHE Digital`;
   if (key === 'users') renderUsers();
   else if (key === 'work-orders') renderWorkOrders();
-  else if (key === 'safety') renderSafety();
+  else if (key === 'patrol-overview') renderPatrolOverview();
   else if (key === 'daily-safety-patrol') {
     const id = location.hash.split('/')[2];
     if (id && /^\d+$/.test(id)) renderPatrolDetail(id);
     else renderPatrolForm();
   }
-  else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
+  else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'environmental' ? renderEnvironmental() : key === 'account' ? renderAccount() : renderPlaceholder(key);
+  if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');
+  if (key === 'safety') loadSafetyPulse('safetyHomePulse');
   if (key === 'account') {
     addPasswordToggles(content);
     content.querySelector('.narrow-page').insertAdjacentHTML('beforeend', installHelpCard());

@@ -1,12 +1,12 @@
 # SHE Digital
 
-SHE Digital is Sugihara's SHE workspace. It has a Dashboard and sections for Safety, Health, and Environmental. The Safety section includes a Daily Safety Patrol Checklist; Environmental contains placeholder pages for Red Tag, Hiyari Hatto, Waste, and Environmental Findings.
+SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Each top-level section opens its own landing page so more features can be added without replacing the section overview. Safety currently has the Daily Safety Patrol Checklist and a separate Patrol Overview & History page. Health has a landing page ready for future modules; Environmental lists planned Red Tag, Hiyari Hatto, Waste, and Environmental Findings pages.
 
 ## Daily Safety Patrol Checklist
 
 Open **Safety → Daily Safety Patrol Checklist** to submit an inspection. The form includes the inspector (Sara, Aman, or another name), all 23 items from the supplied checklist with OK / NOT OK / N/A choices, a required 1–3 star overall rating, remarks, and up to 10 attachments of 1 GB each. Answers and remarks are saved as a local draft on the current device while the form is open; attachments must be selected again after a reload. Submission requires a connection.
 
-The **Safety** page shows weekly and monthly monitoring, including completed patrols, patrols with findings, NOT OK answers, OK rate excluding N/A, activity, and findings by section. Its history can be searched or filtered to patrols with findings, and each record opens its full answers and attachments. Users see their own patrols and monitoring; Executives and Admins see all patrols. Only Admins manage accounts. Existing user databases migrate automatically to support the Executive role. Patrols and attachment files are stored beside the SQLite database, so the existing Docker volume persists them. All patrol endpoints require a signed-in session; submissions and uploads also require the CSRF token.
+The **Safety → Patrol Overview & History** page shows weekly and monthly monitoring, including completed patrols, patrols with findings, NOT OK answers, OK rate excluding N/A, activity, and findings by section. Its history can be searched or filtered to patrols with findings, and each record opens its full answers and attachments. The **Safety** landing page links to both patrol features and summarizes the current month. Users see their own patrols and monitoring; Executives and Admins see all patrols. Only Admins manage accounts. Existing user databases migrate automatically to support the Executive role. Patrols and attachment files are stored beside the SQLite database, so the existing Docker volume persists them. All patrol endpoints require a signed-in session; submissions and uploads also require the CSRF token.
 
 ## CMMS SHE work orders
 

@@ -429,6 +429,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if method == "POST" and path == "/api/logout":
                 db.execute("DELETE FROM sessions WHERE token_hash=?", (details["token_hash"],))
+                db.commit()
                 self.send_json(200, {"ok": True}, {"Set-Cookie": self.cookie_header("", clear=True)})
                 return
             if method == "POST" and path == "/api/me/password":
@@ -534,6 +535,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at) VALUES(?,?,?,?,?,?)",
                             (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time())))
+        db.commit()
         self.send_json(201, {"id": cursor.lastrowid})
 
     def patrol_upload(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
@@ -578,6 +580,7 @@ class Handler(BaseHTTPRequestHandler):
                     remaining -= len(chunk)
             db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at) VALUES(?,?,?,?,?,?)",
                        (attachment_id, patrol_id, name, mime, size, int(time.time())))
+            db.commit()
         except Exception:
             target.unlink(missing_ok=True)
             raise
@@ -680,6 +683,7 @@ class Handler(BaseHTTPRequestHandler):
         csrf = secrets.token_hex(32)
         db.execute("DELETE FROM sessions WHERE expires_at<=?", (int(now),))
         db.execute("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) VALUES(?,?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), user["id"], csrf, int(now) + SESSION_SECONDS, int(now)))
+        db.commit()
         self.send_json(200, {"user": public_user(user), "csrf_token": csrf}, {"Set-Cookie": self.cookie_header(token)})
 
     def create_user(self, db: sqlite3.Connection, data: dict) -> None:
@@ -696,6 +700,7 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(409, "That username is already in use.")
             return
         created = db.execute("SELECT * FROM users WHERE id=?", (cursor.lastrowid,)).fetchone()
+        db.commit()
         self.send_json(201, {"user": public_user(created)})
 
     def update_user(self, db: sqlite3.Connection, actor: sqlite3.Row, user_id: int, data: dict) -> None:
@@ -725,6 +730,7 @@ class Handler(BaseHTTPRequestHandler):
         if not active:
             db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
         updated = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        db.commit()
         self.send_json(200, {"user": public_user(updated)})
 
     def reset_password(self, db: sqlite3.Connection, actor_id: int, user_id: int, data: dict) -> None:
@@ -737,6 +743,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), user_id))
         db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        db.commit()
         headers = {"Set-Cookie": self.cookie_header("", clear=True)} if actor_id == user_id else None
         self.send_json(200, {"ok": True}, headers)
 

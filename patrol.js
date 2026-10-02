@@ -92,7 +92,7 @@ function patrolTrendMarkup(rows, start, end) {
   return `<div class="patrol-trend">${buckets.map(bucket => `<div class="patrol-trend-row"><span>${bucket.label}</span><progress class="patrol-trend-track" max="${max}" value="${bucket.count}" aria-label="${bucket.count} patrols"></progress><strong>${bucket.count}</strong><small>${bucket.findings ? `${bucket.findings} NOT OK` : ''}</small></div>`).join('')}</div><p class="patrol-chart-note">Bars show completed patrols; counts at right show NOT OK checklist answers.</p>`;
 }
 
-function renderSafetyPage() {
+function renderPatrolOverviewPage() {
   const {start, end} = patrolRange();
   const rows = patrolView.rows;
   const patrolCount = rows.length;
@@ -104,7 +104,7 @@ function renderSafetyPage() {
   const groups = patrolSections.map(([key, title]) => ({title, count: rows.reduce((sum, row) => sum + row.not_ok_by_section[key], 0)}));
   const maxGroup = Math.max(1, ...groups.map(group => group.count));
   const currentStart = patrolView.mode === 'week' ? (() => { const day = new Date(); day.setHours(0,0,0,0); day.setDate(day.getDate() - (day.getDay() + 6) % 7); return day; })() : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety patrol overview</h1><p>${currentUser.role === 'user' ? 'Review your inspection activity, findings, and past Daily Safety Patrol Checklists.' : 'Review inspection activity across the team, monitor findings, and open past Daily Safety Patrol Checklists.'}</p></div><a class="primary-button" href="#/daily-safety-patrol">+ New patrol</a></div>
+  content.innerHTML = `<div class="page inner-page patrol-page"><a class="category-back" href="#/safety">${icon('arrow', 16)} Safety overview</a><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / SAFETY / MONITORING</span><h1>Patrol Overview &amp; History</h1><p>${currentUser.role === 'user' ? 'Review your inspection activity, findings, and past Daily Safety Patrol Checklists.' : 'Review inspection activity across the team, monitor findings, and open past Daily Safety Patrol Checklists.'}</p></div><a class="primary-button" href="#/daily-safety-patrol">+ New patrol</a></div>
     <div class="patrol-period-bar"><div class="patrol-period-modes" role="group" aria-label="View by period"><button type="button" data-patrol-mode="week" class="${patrolView.mode === 'week' ? 'active' : ''}" aria-pressed="${patrolView.mode === 'week'}">Week</button><button type="button" data-patrol-mode="month" class="${patrolView.mode === 'month' ? 'active' : ''}" aria-pressed="${patrolView.mode === 'month'}">Month</button></div><div class="patrol-period-nav"><button type="button" data-patrol-shift="-1" aria-label="Previous ${patrolView.mode}">‹</button><strong>${escapeHtml(patrolPeriodLabel(start, end))}</strong><button type="button" data-patrol-shift="1" aria-label="Next ${patrolView.mode}" ${start >= currentStart ? 'disabled' : ''}>›</button></div></div>
     <div class="patrol-metrics"><div><small>PATROLS COMPLETED</small><strong>${patrolCount}</strong><span>in this ${patrolView.mode}</span></div><div><small>WITH FINDINGS</small><strong>${withFindings}</strong><span>patrols with NOT OK answers</span></div><div><small>NOT OK ITEMS</small><strong>${notOk}</strong><span>across all checklist sections</span></div><div><small>OK RATE</small><strong>${compliance === null ? '—' : `${compliance}%`}</strong><span>${ok} OK · ${na} N/A excluded</span></div></div>
     <div class="patrol-overview-grid"><section class="patrol-card"><h2>Patrol activity</h2>${patrolTrendMarkup(rows, start, end)}</section><section class="patrol-card"><h2>Findings by section</h2><div class="patrol-section-bars">${groups.map(group => `<div><span>${escapeHtml(group.title)}</span><progress class="patrol-trend-track" max="${maxGroup}" value="${group.count}" aria-label="${group.count} NOT OK answers"></progress><strong>${group.count}</strong></div>`).join('')}</div><p class="patrol-chart-note">Based on NOT OK answers. Review the patrol record for remarks and attachments.</p></section></div>
@@ -163,7 +163,7 @@ function restorePatrolDraft() {
 }
 
 function renderPatrolForm() {
-  content.innerHTML = `<div class="page inner-page patrol-page">${patrolHeading('<a class="secondary-button" href="#/safety">Past patrols</a>')}<form id="patrolForm" class="patrol-card">
+  content.innerHTML = `<div class="page inner-page patrol-page">${patrolHeading('<a class="secondary-button" href="#/patrol-overview">Patrol history</a>')}<form id="patrolForm" class="patrol-card">
     <fieldset class="patrol-section patrol-inspector"><legend>Inspector's Name <span class="required">*</span></legend><div class="patrol-inspector-options"><label><input type="radio" name="inspector" value="Sara" required /> Sara</label><label><input type="radio" name="inspector" value="Aman" /> Aman</label><label><input type="radio" name="inspector" value="Other" /> Other</label><input id="patrolOtherName" name="other_name" type="text" maxlength="80" placeholder="Enter inspector name" disabled /></div></fieldset>
     ${patrolSections.map(([group, title, items]) => patrolGrid(group, title, items)).join('')}
     <fieldset class="patrol-section"><legend>Overall Rating <span class="required">*</span></legend><div class="patrol-stars" role="radiogroup" aria-label="Overall rating">${[1, 2, 3].map(value => `<label><input type="radio" name="rating" value="${value}" required /><span aria-hidden="true">☆</span><span class="sr-only">${value} ${value === 1 ? 'star' : 'stars'}</span></label>`).join('')}</div></fieldset>
@@ -174,16 +174,17 @@ function renderPatrolForm() {
   restorePatrolDraft();
 }
 
-async function renderSafety() {
+async function renderPatrolOverview() {
   content.innerHTML = `<div class="page inner-page patrol-page"><div class="loading-panel">Loading patrol overview…</div></div>`;
   try {
     const {start, end} = patrolRange();
     const mode = patrolView.mode;
     const {patrols} = await api(`/api/patrols?start=${Math.floor(start.getTime() / 1000)}&end=${Math.floor(end.getTime() / 1000)}`);
-    if (currentRoute() !== 'safety' || mode !== patrolView.mode || start.getTime() !== patrolRange().start.getTime()) return;
+    if (currentRoute() !== 'patrol-overview' || mode !== patrolView.mode || start.getTime() !== patrolRange().start.getTime()) return;
     patrolView.rows = patrols;
-    renderSafetyPage();
+    renderPatrolOverviewPage();
   } catch (error) {
+    if (currentRoute() !== 'patrol-overview') return;
     content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div></div>`;
   }
 }
@@ -193,9 +194,9 @@ async function renderPatrolDetail(id) {
   try {
     const {patrol} = await api(`/api/patrols/${id}`);
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== String(id)) return;
-    content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY / PATROL #${patrol.id}</span><h1>Daily Safety Patrol Checklist</h1><p>Submitted ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers)).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrol.attachments.length ? patrol.attachments.map(file => `<a href="/api/patrols/${id}/attachments/${file.id}">${escapeHtml(file.filename)} <small>(${(file.size / 1024 / 1024).toFixed(1)} MB)</small></a>`).join('') : '<span>No attachments</span>'}</div><label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/safety">${icon('arrow', 17)} Back to Safety</a></div></div>`;
+    content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY / PATROL #${patrol.id}</span><h1>Daily Safety Patrol Checklist</h1><p>Submitted ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers)).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrol.attachments.length ? patrol.attachments.map(file => `<a href="/api/patrols/${id}/attachments/${file.id}">${escapeHtml(file.filename)} <small>(${(file.size / 1024 / 1024).toFixed(1)} MB)</small></a>`).join('') : '<span>No attachments</span>'}</div><label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`;
   } catch (error) {
-    content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div><a class="back-link" href="#/safety">Back to Safety</a></div>`;
+    content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div><a class="back-link" href="#/patrol-overview">Back to Patrol Overview</a></div>`;
   }
 }
 
@@ -227,7 +228,7 @@ function initPatrolEvents() {
       patrolView.anchor = new Date();
       patrolView.search = '';
       patrolView.findingsOnly = false;
-      renderSafety();
+      renderPatrolOverview();
     }
     const shift = event.target.closest('[data-patrol-shift]');
     if (shift) {
@@ -236,7 +237,7 @@ function initPatrolEvents() {
       patrolView.anchor = patrolView.mode === 'week'
         ? new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + amount * 7)
         : new Date(anchor.getFullYear(), anchor.getMonth() + amount, 1);
-      renderSafety();
+      renderPatrolOverview();
     }
   });
   content.addEventListener('input', event => {

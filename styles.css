@@ -158,3 +158,18 @@
 @media(max-width:900px){.workspace-overview-grid{grid-template-columns:1fr}.workspace-overview-tile{min-height:135px}}@media(max-width:760px){.category-banner{min-height:205px;padding:25px}.category-banner-icon{display:none}.category-banner h2{font-size:27px}.category-page .module-card{min-height:115px}}
 @keyframes sidebarActive{0%,100%{box-shadow:inset 3px 0 #b7da76,0 0 0 #91edb000}50%{box-shadow:inset 3px 0 #d1f29a,0 0 24px #a7f3c64d}}
 @keyframes sidebarNote{0%,100%{border-color:#ffffff1f;box-shadow:0 0 0 #97eab600}50%{border-color:#b5f5d06b;box-shadow:0 0 20px #97eab629}}
+
+/* Phone navigation for the SHE PWA */
+.mobile-tabbar,.mobile-more-sheet,.mobile-more-backdrop{display:none}
+@media(max-width:760px){
+  .menu-button{display:none}
+  .main-column{padding-bottom:calc(94px + env(safe-area-inset-bottom))}
+  .mobile-tabbar{position:fixed;z-index:32;left:10px;right:10px;bottom:max(8px,env(safe-area-inset-bottom));width:min(520px,calc(100% - 20px));height:70px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:5px;border:1px solid #b7e5c350;border-radius:19px;background:linear-gradient(115deg,#0b4939 0%,#17664e 58%,#073b32 100%);box-shadow:0 12px 26px #092d26a3;color:#e8f5e9}
+  .mobile-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:58px;border:0;border-radius:13px;background:transparent;color:#c6dfcf;font:800 10px 'DM Sans',Arial,sans-serif;letter-spacing:.01em;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .mobile-tab svg{width:20px;height:20px}.mobile-tab span{white-space:nowrap}.mobile-tab:hover,.mobile-tab:focus-visible{background:#ffffff1b;color:#fff}.mobile-tab.active{background:#d6f0c827;color:#e0f5b8;box-shadow:inset 0 2px #bce6a0}
+  .mobile-more-backdrop{position:fixed;z-index:30;inset:0;display:block;background:#061d17a6}
+  .mobile-more-sheet{position:fixed;z-index:31;left:10px;right:10px;bottom:calc(86px + env(safe-area-inset-bottom));width:min(520px,calc(100% - 20px));max-height:calc(100dvh - 112px - env(safe-area-inset-bottom));margin:0 auto;overflow-y:auto;display:block;padding:19px;border:1px solid #dbe9dd;border-radius:20px;background:#fff;box-shadow:0 22px 55px #07251d73}
+  .mobile-more-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 0 11px}.mobile-more-heading h2{margin:6px 0 0;color:#174b35;font:800 21px Manrope,sans-serif}.mobile-more-close{width:40px;height:40px;border:1px solid #dce8dd;border-radius:10px;background:#f5faf5;color:#315e43;font-size:26px;line-height:1;cursor:pointer}
+  .mobile-more-group{display:grid;padding:11px 0;border-top:1px solid #e7eee8}.mobile-more-group small{padding:0 9px 6px;color:#73977d;font-size:9px;font-weight:800;letter-spacing:.14em}.mobile-more-group a{display:flex;align-items:center;gap:11px;min-height:48px;padding:10px;border-radius:10px;color:#285a3e;font-size:13px;font-weight:700}.mobile-more-group a:hover,.mobile-more-group a:focus-visible{background:#edf6ed}.mobile-more-group a svg:last-child{margin-left:auto;color:#8aad91}
+  .mobile-more-open{overflow:hidden}.patrol-actions{bottom:calc(87px + env(safe-area-inset-bottom))}.toast{left:15px;right:15px;bottom:calc(94px + env(safe-area-inset-bottom));text-align:center}
+}

@@ -146,10 +146,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261002-favicon-sidebar1', html)
-        self.assertIn('/script.js?v=20261002-favicon-sidebar1', html)
-        self.assertIn('/patrol.js?v=20261002-favicon-sidebar1', html)
-        self.assertIn('/cmms-ui.js?v=20261002-favicon-sidebar1', html)
+        self.assertIn('/styles.css?v=20261006-patrol-flex1', html)
+        self.assertIn('/script.js?v=20261006-patrol-flex1', html)
+        self.assertIn('/patrol.js?v=20261006-patrol-flex1', html)
+        self.assertIn('/cmms-ui.js?v=20261006-patrol-flex1', html)
         self.assertIn('id="mobileTabbar"', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
@@ -165,6 +165,42 @@ class AccountFlowTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertEqual(response.headers["Content-Type"], "image/png")
         self.assertEqual(self.request("/sw.js")[0], 200)
+
+    def test_custom_checklist_revision_photos_and_shared_devices(self):
+        self.first_admin()
+        cookie, csrf = self.login('admin', 'AdminPassword123!')
+        other_cookie, _ = self.login('admin', 'AdminPassword123!')
+        definition = {'title': 'Warehouse patrol', 'description': 'Daily inspection', 'questions': [
+            {'id': 'q_check', 'label': 'Walkways clear?', 'type': 'status', 'required': True},
+            {'id': 'q_note', 'label': 'Finding', 'type': 'text', 'required': False},
+            {'id': 'q_area', 'label': 'Area', 'type': 'choice', 'required': True, 'options': ['A', 'B']},
+            {'id': 'q_photo', 'label': 'Finding photo', 'type': 'photo', 'required': True},
+        ]}
+        self.assertEqual(self.request('/api/patrol-templates')[0], 401)
+        self.assertEqual(self.request('/api/patrol-templates', 'POST', definition, cookie)[0], 403)
+        template_id = self.request('/api/patrol-templates', 'POST', definition, cookie, csrf)[1]['id']
+        self.assertEqual(self.request('/api/patrol-templates', cookie=other_cookie)[1]['templates'][0]['title'], definition['title'])
+        payload = {'template_id': template_id, 'template_revision': 1, 'inspector_name': 'Tester', 'answers': {'q_check': 'not_ok', 'q_note': 'Spill', 'q_area': 'A'}, 'rating': 2}
+        self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, template_id=[]), cookie, csrf)[0], 400)
+        self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, answers=dict(payload['answers'], q_area='C')), cookie, csrf)[0], 400)
+        patrol_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        self.assertEqual(self.request('/api/patrols', cookie=other_cookie)[1]['patrols'], [])
+        self.assertEqual(self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)[0], 400)
+        request = Request(self.base + f'/api/patrols/{patrol_id}/attachments', data=b'\x89PNG\r\n\x1a\n', headers={'Cookie': cookie, 'X-CSRF-Token': csrf, 'X-File-Name': 'finding.png', 'X-Question-Id': 'q_photo', 'Content-Type': 'application/octet-stream'}, method='POST')
+        attachment_id = json.loads(urlopen(request).read())['id']
+        self.assertEqual(self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)[0], 200)
+        row = self.request('/api/patrols', cookie=other_cookie)[1]['patrols'][0]
+        self.assertEqual(row['counts']['not_ok'], 1)
+        self.assertEqual(row['attachments'][0]['question_id'], 'q_photo')
+        photo = urlopen(Request(self.base + f'/api/patrols/{patrol_id}/attachments/{attachment_id}', headers={'Cookie': other_cookie}))
+        self.assertTrue(photo.headers['Content-Disposition'].startswith('inline;'))
+        photo.close()
+        edited = dict(definition, title='Updated checklist', revision=1)
+        self.assertEqual(self.request(f'/api/patrol-templates/{template_id}', 'PATCH', edited, cookie, csrf)[0], 200)
+        self.assertEqual(self.request(f'/api/patrol-templates/{template_id}', 'PATCH', edited, cookie, csrf)[0], 409)
+        self.assertEqual(self.request('/api/patrols', 'POST', payload, cookie, csrf)[0], 409)
+        snapshot = self.request(f'/api/patrols/{patrol_id}', cookie=other_cookie)[1]['patrol']['template']
+        self.assertEqual(snapshot['title'], 'Warehouse patrol')
 
     def test_patrol_submission_and_attachment_access(self):
         self.first_admin()

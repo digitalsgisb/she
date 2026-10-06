@@ -96,6 +96,12 @@ def init_db() -> None:
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS patrols_created_at ON patrols(created_at DESC);
+            CREATE TABLE IF NOT EXISTS patrol_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                definition_json TEXT NOT NULL,
+                revision INTEGER NOT NULL DEFAULT 1
+            );
             CREATE TABLE IF NOT EXISTS patrol_attachments (
                 id TEXT PRIMARY KEY,
                 patrol_id INTEGER NOT NULL REFERENCES patrols(id) ON DELETE CASCADE,
@@ -106,6 +112,14 @@ def init_db() -> None:
             );
             """
         )
+        for table, column, definition in [
+            ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
+            ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
+            ('patrol_attachments', 'question_id', "TEXT NOT NULL DEFAULT ''"),
+        ]:
+            if column not in {row['name'] for row in db.execute(f'PRAGMA table_info({table})')}:
+                db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
+        db.commit()
         schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
         if "'executive'" not in schema:
             # Existing installations used a two-role CHECK. Rebuild only that table,
@@ -214,6 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             limit = 7_000_000 if re.fullmatch(r"/api/cmms/work-orders/[a-zA-Z0-9-]+/attachments", urlsplit(self.path).path) else 16_384
+            if urlsplit(self.path).path.startswith(('/api/patrol-templates', '/api/patrols')):
+                limit = 600_000
             if length < 2 or length > limit:
                 raise ValueError
             value = json.loads(self.rfile.read(length))
@@ -307,6 +323,11 @@ class Handler(BaseHTTPRequestHandler):
                 if self.authorize(db, admin=True):
                     users = db.execute("SELECT * FROM users ORDER BY created_at DESC,id DESC").fetchall()
                     self.send_json(200, {"users": [public_user(user) for user in users]})
+            return
+        if path == '/api/patrol-templates':
+            with database() as db:
+                if self.authorize(db):
+                    self.send_json(200, {'templates': [dict(id=row['id'], user_id=row['user_id'], revision=row['revision'], **json.loads(row['definition_json'])) for row in db.execute('SELECT * FROM patrol_templates ORDER BY id DESC')]})
             return
         if path == "/api/patrols" or re.fullmatch(r"/api/patrols/\d+(?:/attachments/[0-9a-f]{32})?", path):
             with database() as db:
@@ -421,6 +442,12 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path == '/api/patrol-templates' or re.fullmatch(r'/api/patrol-templates/\d+', path):
+                self.save_patrol_template(db, path, method, data, user)
+                return
+            if method == 'POST' and re.fullmatch(r'/api/patrols/\d+/complete', path):
+                self.complete_patrol(db, int(path.split('/')[3]), user)
+                return
             if method == "POST" and path == "/api/patrols":
                 self.create_patrol(db, data, user)
                 return
@@ -451,6 +478,63 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.error_json(404, "Not found.")
 
+    def save_patrol_template(self, db, path, method, data, user):
+        title, description, questions = data.get('title'), data.get('description', ''), data.get('questions')
+        if not isinstance(title, str) or not 1 <= len(title.strip()) <= 120 or not isinstance(description, str) or len(description) > 2000 or not isinstance(questions, list) or not 1 <= len(questions) <= 100:
+            self.error_json(400, 'Add a title and 1–100 questions.')
+            return
+        clean, ids = [], set()
+        for q in questions:
+            if not isinstance(q, dict) or not isinstance(q.get('id'), str) or not re.fullmatch(r'q_[a-zA-Z0-9_]{1,50}', q['id']) or q['id'] in ids or q.get('type') not in ('status', 'text', 'choice', 'photo') or not isinstance(q.get('label'), str) or not 1 <= len(q['label'].strip()) <= 500 or type(q.get('required')) is not bool:
+                self.error_json(400, 'Each question needs a unique ID, label, type, and required setting.')
+                return
+            options = q.get('options', [])
+            if q['type'] == 'choice' and (not isinstance(options, list) or not 2 <= len(options) <= 30 or any(not isinstance(o, str) or not 1 <= len(o.strip()) <= 200 for o in options) or len(set(options)) != len(options)):
+                self.error_json(400, 'Multiple choice questions need 2–30 unique options.')
+                return
+            ids.add(q['id'])
+            clean.append(dict(id=q['id'], label=q['label'].strip(), type=q['type'], required=q['required'], options=options if q['type'] == 'choice' else []))
+        if sum(q['type'] == 'photo' and q['required'] for q in clean) > 10:
+            self.error_json(400, 'Use at most 10 required photo questions per checklist.')
+            return
+        definition = json.dumps(dict(title=title.strip(), description=description.strip(), questions=clean))
+        if method == 'POST' and path == '/api/patrol-templates':
+            cursor = db.execute('INSERT INTO patrol_templates(user_id,definition_json) VALUES(?,?)', (user['id'], definition))
+            template_id = cursor.lastrowid
+        elif method == 'PATCH' and re.fullmatch(r'/api/patrol-templates/\d+', path):
+            if type(data.get('revision')) is not int:
+                self.error_json(400, 'Provide the checklist revision.')
+                return
+            template_id = int(path.split('/')[-1])
+            row = db.execute('SELECT * FROM patrol_templates WHERE id=?', (template_id,)).fetchone()
+            if not row or (row['user_id'] != user['id'] and user['role'] not in ('executive', 'admin')):
+                self.error_json(403, 'You can edit your own checklists. Executives and admins can edit all checklists.')
+                return
+            cursor = db.execute('UPDATE patrol_templates SET definition_json=?,revision=revision+1 WHERE id=? AND revision=?', (definition, template_id, data.get('revision')))
+            if cursor.rowcount != 1:
+                self.error_json(409, 'Another device updated this checklist. Reload before editing.')
+                return
+        else:
+            self.error_json(404, 'Not found.')
+            return
+        db.commit()
+        self.send_json(200, {'id': template_id})
+
+    def complete_patrol(self, db, patrol_id, user):
+        row = db.execute("SELECT * FROM patrols WHERE id=? AND (user_id=? OR ? IN ('executive','admin'))", (patrol_id, user['id'], user['role'])).fetchone()
+        if not row:
+            self.error_json(404, 'Patrol not found.')
+            return
+        template = json.loads(row['template_json'])
+        if template:
+            for q in template['questions']:
+                if q['type'] == 'photo' and q['required'] and not db.execute('SELECT 1 FROM patrol_attachments WHERE patrol_id=? AND question_id=?', (patrol_id, q['id'])).fetchone():
+                    self.error_json(400, f"Upload a photo for: {q['label']}")
+                    return
+        db.execute('UPDATE patrols SET completed=1 WHERE id=?', (patrol_id,))
+        db.commit()
+        self.send_json(200, {'ok': True})
+
     def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         if path == "/api/patrols":
             query = parse_qs(urlsplit(self.path).query)
@@ -465,23 +549,28 @@ class Handler(BaseHTTPRequestHandler):
                 except (KeyError, ValueError, IndexError):
                     self.error_json(400, "Choose a valid week or month.")
                     return
-                rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,p.answers_json,u.display_name AS submitted_by "
+                rows = db.execute("SELECT p.*,u.display_name AS submitted_by "
                                   "FROM patrols p JOIN users u ON u.id=p.user_id "
-                                  f"WHERE p.created_at>=? AND p.created_at<?{owner_clause} ORDER BY p.created_at DESC,p.id DESC",
+                                  f"WHERE p.completed=1 AND p.created_at>=? AND p.created_at<?{owner_clause} ORDER BY p.created_at DESC,p.id DESC",
                                   (start, end, *owner_params)).fetchall()
             else:
-                rows = db.execute("SELECT p.id,p.inspector_name,p.rating,p.created_at,p.answers_json,u.display_name AS submitted_by "
-                                  f"FROM patrols p JOIN users u ON u.id=p.user_id WHERE 1=1{owner_clause} "
+                rows = db.execute("SELECT p.*,u.display_name AS submitted_by "
+                                  f"FROM patrols p JOIN users u ON u.id=p.user_id WHERE p.completed=1{owner_clause} "
                                   "ORDER BY p.created_at DESC,p.id DESC LIMIT 100", owner_params).fetchall()
             patrols = []
             for row in rows:
                 answers = json.loads(row["answers_json"])
-                counts = {status: sum(value == status for value in answers.values()) for status in PATROL_STATUSES}
+                template = json.loads(row['template_json'])
+                status_answers = [answers.get(q['id']) for q in template['questions'] if q['type'] == 'status'] if template else list(answers.values())
+                counts = {status: sum(value == status for value in status_answers) for status in PATROL_STATUSES}
                 sections = {group: sum(answers.get(f"{group}_{index}") == "not_ok" for index in range(size))
                             for group, size in PATROL_GROUPS.items()}
                 patrols.append({"id": row["id"], "inspector_name": row["inspector_name"], "rating": row["rating"],
                                 "created_at": row["created_at"], "submitted_by": row["submitted_by"],
-                                "counts": counts, "not_ok_by_section": sections})
+                                "counts": counts, "not_ok_by_section": sections,
+                                'title': template['title'] if template else 'Daily Safety Patrol Checklist',
+                                'remarks': row['remarks'],
+                                'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id', (row['id'],))]})
             self.send_json(200, {"patrols": patrols})
             return
         match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)
@@ -500,7 +589,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_response(200)
             self.send_header("Content-Type", attachment["mime_type"])
-            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(attachment['filename'])}")
+            disposition = 'inline' if attachment['mime_type'] in {'image/jpeg', 'image/png', 'image/gif', 'image/webp'} else 'attachment'
+            self.send_header("Content-Disposition", f"{disposition}; filename*=UTF-8''{quote(attachment['filename'])}")
             self.send_header("Content-Length", str(attachment["size"]))
             self.send_header("Cache-Control", "no-store")
             self.security_headers()
@@ -509,11 +599,12 @@ class Handler(BaseHTTPRequestHandler):
                 while chunk := source.read(1024 * 1024):
                     self.wfile.write(chunk)
             return
-        attachments = db.execute("SELECT id,filename,size,created_at FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id", (patrol_id,)).fetchall()
+        attachments = db.execute("SELECT id,filename,mime_type,size,created_at,question_id FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id", (patrol_id,)).fetchall()
         self.send_json(200, {"patrol": {"id": row["id"], "inspector_name": row["inspector_name"],
                                       "answers": json.loads(row["answers_json"]), "rating": row["rating"],
                                       "remarks": row["remarks"], "created_at": row["created_at"],
                                       "submitted_by": row["submitted_by"],
+                                      'template': json.loads(row['template_json']), 'completed': bool(row['completed']),
                                       "attachments": [dict(item) for item in attachments]}})
 
     def create_patrol(self, db: sqlite3.Connection, data: dict, user: sqlite3.Row) -> None:
@@ -524,8 +615,39 @@ class Handler(BaseHTTPRequestHandler):
                 return
             name = name.strip()
         answers = data.get("answers")
+        template = None
+        if data.get('template_id') is not None:
+            if type(data['template_id']) is not int:
+                self.error_json(400, 'Choose a valid checklist.')
+                return
+            row = db.execute('SELECT * FROM patrol_templates WHERE id=?', (data['template_id'],)).fetchone()
+            if not row:
+                self.error_json(404, 'Checklist not found.')
+                return
+            if data.get('template_revision') != row['revision']:
+                self.error_json(409, 'This checklist changed. Reload the form before submitting.')
+                return
+            template = json.loads(row['definition_json'])
+            expected = {q['id'] for q in template['questions'] if q['type'] != 'photo'}
+            if not isinstance(answers, dict) or set(answers) != expected:
+                self.error_json(400, 'Answer the checklist questions.')
+                return
+            for question in template['questions']:
+                if question['type'] == 'photo':
+                    continue
+                value = answers[question['id']]
+                valid = isinstance(value, str) and len(value) <= 5000
+                if question['required'] and not value:
+                    valid = False
+                if value and question['type'] == 'status' and value not in PATROL_STATUSES:
+                    valid = False
+                if value and question['type'] == 'choice' and value not in question['options']:
+                    valid = False
+                if not valid:
+                    self.error_json(400, f"Invalid answer: {question['label']}")
+                    return
         expected = {f"{group}_{index}" for group, count in PATROL_GROUPS.items() for index in range(count)}
-        if not isinstance(answers, dict) or set(answers) != expected or any(value not in PATROL_STATUSES for value in answers.values()):
+        if template is None and (not isinstance(answers, dict) or set(answers) != expected or any(not isinstance(value, str) or value not in PATROL_STATUSES for value in answers.values())):
             self.error_json(400, "Answer every checklist item with OK, NOT OK, or N/A.")
             return
         rating = data.get("rating")
@@ -533,15 +655,15 @@ class Handler(BaseHTTPRequestHandler):
         if type(rating) is not int or rating not in (1, 2, 3) or not isinstance(remarks, str) or len(remarks) > 5000:
             self.error_json(400, "Choose a 1–3 star rating and keep remarks below 5,000 characters.")
             return
-        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at) VALUES(?,?,?,?,?,?)",
-                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time())))
+        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,completed) VALUES(?,?,?,?,?,?,?,?)",
+                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time()), json.dumps(template), 0 if template else 1))
         db.commit()
         self.send_json(201, {"id": cursor.lastrowid})
 
     def patrol_upload(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         patrol_id = int(re.fullmatch(r"/api/patrols/(\d+)/attachments", path).group(1))
-        if not db.execute("SELECT 1 FROM patrols WHERE id=? AND (user_id=? OR ? IN ('executive','admin'))",
-                          (patrol_id, user["id"], user["role"])).fetchone():
+        patrol = db.execute("SELECT * FROM patrols WHERE id=? AND (user_id=? OR ? IN ('executive','admin'))", (patrol_id, user['id'], user['role'])).fetchone()
+        if not patrol:
             self.error_json(404, "Patrol not found.")
             return
         count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?", (patrol_id,)).fetchone()[0]
@@ -566,6 +688,13 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(400, "Use a Word, Excel, PowerPoint, PDF, image, video, or audio file.")
             return
         mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        question_id = self.headers.get('X-Question-Id', '')
+        if question_id:
+            template = json.loads(patrol['template_json'])
+            question = next((q for q in template['questions'] if q['id'] == question_id and q['type'] == 'photo'), None) if template else None
+            if not question or Path(name).suffix.lower() not in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic'}:
+                self.error_json(400, 'Choose a photo for a valid photo question.')
+                return
         attachment_id = uuid.uuid4().hex
         patrol_files().mkdir(parents=True, exist_ok=True)
         target = patrol_files() / attachment_id
@@ -578,8 +707,13 @@ class Handler(BaseHTTPRequestHandler):
                         raise ConnectionError("Incomplete upload")
                     output.write(chunk)
                     remaining -= len(chunk)
-            db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at) VALUES(?,?,?,?,?,?)",
-                       (attachment_id, patrol_id, name, mime, size, int(time.time())))
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?', (patrol_id,)).fetchone()[0] >= 10:
+                target.unlink(missing_ok=True)
+                self.error_json(400, 'A patrol can have up to 10 attachments.')
+                return
+            db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at,question_id) VALUES(?,?,?,?,?,?,?)",
+                       (attachment_id, patrol_id, name, mime, size, int(time.time()), question_id))
             db.commit()
         except Exception:
             target.unlink(missing_ok=True)

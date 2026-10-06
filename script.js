@@ -30,6 +30,7 @@ const routes = {
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
   safety: { title: 'Safety', icon: 'shield' },
   'daily-safety-patrol': { title: 'Daily Safety Patrol Checklist', icon: 'clipboard' },
+  'checklist-builder': { title: 'Checklist Builder', icon: 'clipboard' },
   'patrol-overview': { title: 'Patrol Overview & History', icon: 'grid' },
   health: { title: 'Health', icon: 'heart' },
   users: { title: 'User Management', icon: 'users' },
@@ -172,7 +173,7 @@ function renderDashboard() {
 }
 
 function renderSafetyHome() {
-  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">02 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Complete and submit the 23-item safety patrol.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol Overview &amp; History</strong><span>Review weekly or monthly activity, findings, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a></div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">02 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Choose a checklist or create one with questions and photo uploads.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol Overview &amp; History</strong><span>Review daily reports, findings photos, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a></div></div>`;
 }
 
 function renderHealth() {
@@ -364,6 +365,7 @@ function render() {
   document.title = `${routes[key].title} · SHE Digital`;
   if (key === 'users') renderUsers();
   else if (key === 'work-orders') renderWorkOrders();
+  else if (key === 'checklist-builder') renderChecklistBuilder();
   else if (key === 'patrol-overview') renderPatrolOverview();
   else if (key === 'daily-safety-patrol') {
     const id = location.hash.split('/')[2];

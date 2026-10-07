@@ -240,3 +240,35 @@
 .patrol-checklist-details[open] summary { margin-bottom:20px; }
 .patrol-report-followup { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px; }
 @media(max-width:760px) { .patrol-reply { padding:14px; } .patrol-reply-footer { flex-direction:column; align-items:stretch; } .patrol-reply-footer button { min-height:48px; width:100%; } .patrol-reply-state .patrol-answer-button { flex-basis:120px; } }
+
+/* Patrol history uses the SHE palette with compact, consistent section spacing. */
+#patrolDailyReports { padding:24px; margin-bottom:20px; background:linear-gradient(135deg,#eff7f1,#f8fbf7); border-color:#d5e6d9; }
+#patrolDailyReports > h2 { margin-bottom:8px; }
+#patrolDailyReports > .patrol-chart-note { margin:0; color:#647f70; font-size:12px; }
+.patrol-report-day { margin-top:18px; padding-top:16px; }
+.patrol-report-day > p { margin:7px 0 12px; }
+.patrol-report-record { margin:0 0 12px; padding:18px; background:#fff; border-color:#d4e4d8; box-shadow:0 3px 12px #164e3010; transition:border-color .2s,box-shadow .2s,transform .2s; animation:patrolCardEnter .28s ease both; }
+.patrol-report-record:last-child { margin-bottom:0; }
+.patrol-report-record:nth-of-type(2) { animation-delay:.04s; }
+.patrol-report-record:nth-of-type(3) { animation-delay:.08s; }
+.patrol-report-record:hover { border-color:#a9cdb5; box-shadow:0 6px 18px #164e3018; }
+.patrol-report-record > .patrol-answer { margin:12px 0; }
+.patrol-report-record > .patrol-empty { margin:10px 0; font-size:12px; color:#779080; }
+.patrol-report-followup { margin-top:12px; padding-top:12px; border-top:1px solid #edf3ee; gap:10px; }
+.patrol-report-followup .patrol-status { margin:0; }
+.patrol-report-followup .secondary-button { background:#edf6ef; border-color:#d5e6d9; min-height:44px; }
+.patrol-history { background:#f0f7f2; border-color:#d5e6d9; }
+.patrol-history .patrol-list-row { background:#fff; border-radius:10px; margin-top:8px; padding:14px; border:1px solid #dbe8de; transition:background .2s,border-color .2s; }
+.patrol-history .patrol-list-row:hover { background:#f8fcf9; border-color:#a9cdb5; }
+@keyframes patrolCardEnter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+@media(max-width:760px) {
+  .patrol-page #patrolDailyReports { padding:18px; margin-bottom:16px; }
+  .patrol-report-record { padding:14px; }
+  .patrol-report-followup { align-items:stretch; }
+  .patrol-report-followup .secondary-button { width:100%; }
+  .patrol-history .patrol-list-row { align-items:flex-start; flex-wrap:wrap; gap:10px; }
+  .patrol-history .patrol-list-row > span:first-child { min-width:0; width:100%; }
+  .patrol-history .patrol-list-meta { flex-wrap:wrap; }
+  .patrol-period-nav strong { min-width:0; flex:1; }
+}
+@media(prefers-reduced-motion:reduce) { .patrol-report-record { animation:none; transition:none; } }

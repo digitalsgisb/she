@@ -138,7 +138,7 @@ function renderMobileNavigation(active) {
 function renderNav(active) {
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('dashboard', `nav-link ${active === 'dashboard' ? 'active' : ''}`)}
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ${safetyExpanded ? '' : 'hidden'}><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
@@ -154,6 +154,9 @@ function renderNav(active) {
   document.getElementById('safetyToggle').addEventListener('click', () => {
     safetyExpanded = !safetyExpanded;
     renderNav(currentRoute());
+  });
+  nav.querySelector('a[href="#/safety"]').addEventListener('click', () => {
+    if (active === 'safety' && !safetyExpanded) { safetyExpanded = true; renderNav(active); }
   });
 }
 
@@ -358,6 +361,7 @@ function toggleMenu() {
 function render() {
   if (!currentUser) return;
   const key = currentRoute();
+  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(key);
   if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
   renderNav(key);
   renderMobileNavigation(key);

@@ -146,10 +146,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261007-patrol-edit1', html)
-        self.assertIn('/script.js?v=20261007-patrol-edit1', html)
-        self.assertIn('/patrol.js?v=20261007-patrol-edit1', html)
-        self.assertIn('/cmms-ui.js?v=20261007-patrol-edit1', html)
+        self.assertIn('/styles.css?v=20261007-item-remarks1', html)
+        self.assertIn('/script.js?v=20261007-item-remarks1', html)
+        self.assertIn('/patrol.js?v=20261007-item-remarks1', html)
+        self.assertIn('/cmms-ui.js?v=20261007-item-remarks1', html)
         self.assertIn('id="mobileTabbar"', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
@@ -232,6 +232,31 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request('/api/patrol-templates/0', 'PATCH', updated, cookie, csrf)[0], 200)
         server.init_db()
         self.assertEqual(self.request('/api/patrol-templates', cookie=cookie)[1]['templates'][0]['revision'], 3)
+
+    def test_item_remarks_saved_validated_and_optional_for_old_patrols(self):
+        self.first_admin()
+        cookie, csrf = self.login('admin', 'AdminPassword123!')
+        default = self.request('/api/patrol-templates', cookie=cookie)[1]['templates'][0]
+        payload = {'template_id': 0, 'template_revision': 1, 'inspector_name': 'Sara', 'rating': 2,
+                   'answers': {q['id']: 'ok' for q in default['questions']},
+                   'item_remarks': {default['questions'][0]['id']: '  Pallets at walkway\nRemove before shift  ', default['questions'][1]['id']: ''}}
+        for invalid in [{'unknown': 'Note'}, {default['questions'][0]['id']: 1}, {default['questions'][0]['id']: 'x' * 2001}, []]:
+            self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, item_remarks=invalid), cookie, csrf)[0], 400)
+        patrol_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)
+        detail = self.request(f'/api/patrols/{patrol_id}', cookie=cookie)[1]['patrol']
+        self.assertEqual(detail['item_remarks'], {default['questions'][0]['id']: 'Pallets at walkway\nRemove before shift'})
+        self.assertEqual(self.request('/api/patrols', cookie=cookie)[1]['patrols'][0]['counts']['ok'], 23)
+        legacy = {'inspector_name': 'Sara', 'rating': 3, 'answers': {f'{group}_{i}': 'ok' for group, count in server.PATROL_GROUPS.items() for i in range(count)}}
+        old_id = self.request('/api/patrols', 'POST', legacy, cookie, csrf)[1]['id']
+        self.assertEqual(self.request(f'/api/patrols/{old_id}', cookie=cookie)[1]['patrol']['item_remarks'], {})
+        legacy['item_remarks'] = {'general_0': 'Check after lunch'}
+        legacy_id = self.request('/api/patrols', 'POST', legacy, cookie, csrf)[1]['id']
+        self.assertEqual(self.request(f'/api/patrols/{legacy_id}', cookie=cookie)[1]['patrol']['item_remarks'], legacy['item_remarks'])
+        definition = {'title': 'Photo inspection', 'questions': [{'id': 'q_photo', 'type': 'photo', 'required': False, 'label': 'Evidence'}]}
+        template_id = self.request('/api/patrol-templates', 'POST', definition, cookie, csrf)[1]['id']
+        photo_id = self.request('/api/patrols', 'POST', {'template_id': template_id, 'template_revision': 1, 'inspector_name': 'Sara', 'rating': 3, 'answers': {}, 'item_remarks': {'q_photo': 'Camera unavailable'}}, cookie, csrf)[1]['id']
+        self.assertEqual(self.request(f'/api/patrols/{photo_id}', cookie=cookie)[1]['patrol']['item_remarks'], {'q_photo': 'Camera unavailable'})
 
     def test_patrol_submission_and_attachment_access(self):
         self.first_admin()

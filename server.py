@@ -122,6 +122,7 @@ def init_db() -> None:
         for table, column, definition in [
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
+            ('patrols', 'item_remarks_json', "TEXT NOT NULL DEFAULT '{}'"),
             ('patrol_attachments', 'question_id', "TEXT NOT NULL DEFAULT ''"),
         ]:
             if column not in {row['name'] for row in db.execute(f'PRAGMA table_info({table})')}:
@@ -613,6 +614,7 @@ class Handler(BaseHTTPRequestHandler):
         attachments = db.execute("SELECT id,filename,mime_type,size,created_at,question_id FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id", (patrol_id,)).fetchall()
         self.send_json(200, {"patrol": {"id": row["id"], "inspector_name": row["inspector_name"],
                                       "answers": json.loads(row["answers_json"]), "rating": row["rating"],
+                                      'item_remarks': json.loads(row['item_remarks_json']),
                                       "remarks": row["remarks"], "created_at": row["created_at"],
                                       "submitted_by": row["submitted_by"],
                                       'template': json.loads(row['template_json']), 'completed': bool(row['completed']),
@@ -666,12 +668,18 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(400, "Answer every checklist item with OK, NOT OK, or N/A.")
             return
         rating = data.get("rating")
+        item_remarks = data.get('item_remarks', {})
+        remark_keys = {q['id'] for q in template['questions']} if template else expected
+        if not isinstance(item_remarks, dict) or not set(item_remarks).issubset(remark_keys) or any(not isinstance(value, str) or len(value) > 2000 for value in item_remarks.values()):
+            self.error_json(400, 'Keep each item remark below 2,000 characters and use valid checklist items.')
+            return
+        item_remarks = {key: value.strip() for key, value in item_remarks.items() if value.strip()}
         remarks = data.get("remarks", "")
         if type(rating) is not int or rating not in (1, 2, 3) or not isinstance(remarks, str) or len(remarks) > 5000:
             self.error_json(400, "Choose a 1–3 star rating and keep remarks below 5,000 characters.")
             return
-        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,completed) VALUES(?,?,?,?,?,?,?,?)",
-                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time()), json.dumps(template), 0 if template else 1))
+        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,completed,item_remarks_json) VALUES(?,?,?,?,?,?,?,?,?)",
+                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time()), json.dumps(template), 0 if template else 1, json.dumps(item_remarks)))
         db.commit()
         self.send_json(201, {"id": cursor.lastrowid})
 

@@ -198,3 +198,9 @@
 .builder-question-heading button { padding:6px 10px; margin-left:5px; border:1px solid #cbd8ce; border-radius:6px; background:white; cursor:pointer; }
 .builder-question-settings label:first-child { display:grid; gap:8px; flex:1; min-width:180px; }
 @media (max-width:600px) { .patrol-photo-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); } .patrol-photo img { height:145px; } .patrol-report-record { padding:12px; } }
+.patrol-item-remark { margin-top:12px; padding:12px; border-left:3px solid #d6e4d9; background:#f7faf8; }
+.patrol-item-remark label { display:block; font-size:12px; margin-bottom:8px; color:#345b44; }
+.patrol-item-remark textarea { width:100%; min-height:70px; padding:10px; border:1px solid #cbd8ce; border-radius:8px; font:inherit; resize:vertical; }
+.patrol-item-remark p { margin:8px 0 0; }
+.patrol-grid-row > .patrol-item-remark { grid-column:1 / -1; margin:0 12px 12px; }
+@media(max-width:760px) { .patrol-item-remark textarea { font-size:16px; } }

@@ -49,8 +49,16 @@ function patrolPhotoMarkup(id, files, label = '') {
   }).join('')}</div>`;
 }
 
-function customPatrolQuestions(template, answers = null, attachments = [], patrolId = null) {
-  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : `<select id="${q.id}" name="${q.id}" ${q.required ? 'required' : ''}><option value="">Choose an answer</option>${(q.type === 'status' ? [['ok', 'OK'], ['not_ok', 'NOT OK'], ['na', 'N/A']] : q.options.map(o => [o, o])).map(([v,l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select>`}</div>`).join('');
+function patrolItemRemark(key, label, itemRemarks = null) {
+  return itemRemarks ? (itemRemarks[key] ? `<div class="patrol-item-remark"><strong>Item remarks</strong><p class="patrol-answer">${escapeHtml(itemRemarks[key])}</p></div>` : '') : `<div class="patrol-item-remark"><label for="remark_${key}">Remarks for this item <small>(optional)</small></label><textarea id="remark_${key}" name="remark_${key}" data-item-remark="${key}" aria-label="Remarks: ${escapeHtml(label)}" rows="2" maxlength="2000" placeholder="Add observations or follow-up notes for this item"></textarea></div>`;
+}
+
+function collectPatrolItemRemarks(form) {
+  return Object.fromEntries([...form.querySelectorAll('[data-item-remark]')].map(input => [input.dataset.itemRemark, input.value]));
+}
+
+function customPatrolQuestions(template, answers = null, attachments = [], patrolId = null, itemRemarks = {}) {
+  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : `<select id="${q.id}" name="${q.id}" ${q.required ? 'required' : ''}><option value="">Choose an answer</option>${(q.type === 'status' ? [['ok', 'OK'], ['not_ok', 'NOT OK'], ['na', 'N/A']] : q.options.map(o => [o, o])).map(([v,l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select>`}${patrolItemRemark(q.id, q.label, answers ? itemRemarks : null)}</div>`).join('');
 }
 
 async function renderChecklistBuilder() {
@@ -213,10 +221,10 @@ function renderPatrolOverviewPage() {
     <section class="patrol-card patrol-history"><div class="patrol-history-heading"><div><span class="eyebrow dark-eyebrow">HISTORY</span><h2>${currentUser.role === 'user' ? 'My past patrols' : 'Past patrols'}</h2></div><div class="patrol-history-filters"><input id="patrolSearch" type="search" value="${escapeHtml(patrolView.search)}" placeholder="Search inspector or ID" aria-label="Search patrol history" /><label><input id="patrolFindingsOnly" type="checkbox" ${patrolView.findingsOnly ? 'checked' : ''} /> With findings only</label></div></div><div id="patrolHistoryResults">${patrolHistoryMarkup()}</div></section></div>`;
 }
 
-function patrolGrid(group, title, items, answers = null) {
+function patrolGrid(group, title, items, answers = null, itemRemarks = {}) {
   return `<fieldset class="patrol-section"><legend>${escapeHtml(title)} <span class="required">*</span></legend><div class="patrol-grid"><div class="patrol-grid-header"><span>Inspection item</span><span>OK</span><span>NOT OK</span><span>N/A</span></div>${items.map((label, index) => {
     const key = `${group}_${index}`;
-    return `<div class="patrol-grid-row"><div class="patrol-item">${String.fromCharCode(97 + index)}) ${escapeHtml(label)}</div>${['ok', 'not_ok', 'na'].map(status => answers ? `<span class="patrol-result ${answers[key] === status ? 'selected' : ''}">${answers[key] === status ? '●' : '—'}</span>` : `<label class="patrol-choice"><input type="radio" name="${key}" value="${status}" aria-label="${escapeHtml(label)}: ${status === 'not_ok' ? 'NOT OK' : status.toUpperCase()}" required /><span></span></label>`).join('')}</div>`;
+    return `<div class="patrol-grid-row"><div class="patrol-item">${String.fromCharCode(97 + index)}) ${escapeHtml(label)}</div>${['ok', 'not_ok', 'na'].map(status => answers ? `<span class="patrol-result ${answers[key] === status ? 'selected' : ''}">${answers[key] === status ? '●' : '—'}</span>` : `<label class="patrol-choice"><input type="radio" name="${key}" value="${status}" aria-label="${escapeHtml(label)}: ${status === 'not_ok' ? 'NOT OK' : status.toUpperCase()}" required /><span></span></label>`).join('')}${patrolItemRemark(key, label, answers ? itemRemarks : null)}</div>`;
   }).join('')}</div></fieldset>`;
 }
 
@@ -230,7 +238,7 @@ function savePatrolDraft() {
   const form = document.getElementById('patrolForm');
   if (!form) return;
   const data = new FormData(form);
-  const draft = {inspector: data.get('inspector'), other_name: data.get('other_name'), rating: data.get('rating'), remarks: data.get('remarks'), answers: {}};
+  const draft = {inspector: data.get('inspector'), other_name: data.get('other_name'), rating: data.get('rating'), remarks: data.get('remarks'), item_remarks: collectPatrolItemRemarks(form), answers: {}};
   patrolSections.forEach(([group, , items]) => items.forEach((_, index) => {
     const key = `${group}_${index}`;
     draft.answers[key] = data.get(key);
@@ -263,6 +271,7 @@ function restorePatrolDraft() {
   const rating = form.querySelector(`input[name="rating"][value="${draft.rating}"]`);
   if (rating) rating.checked = true;
   form.elements.remarks.value = draft.remarks || '';
+  Object.entries(draft.item_remarks || {}).forEach(([key, value]) => { const input = form.elements.namedItem(`remark_${key}`); if (input && typeof value === 'string') input.value = value; });
   document.getElementById('patrolDraftNote').textContent = 'Draft restored from this device. Attachments must be selected again.';
 }
 
@@ -304,7 +313,7 @@ async function renderPatrolDetail(id) {
     const {patrol} = await api(`/api/patrols/${id}`);
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== String(id)) return;
     content.dataset.patrolSnapshot = JSON.stringify(patrol);
-    content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY / PATROL #${patrol.id}</span><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${patrol.completed ? 'Submitted' : 'Saved pending photos'} ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${!patrol.completed ? '<p class="form-error">This patrol is awaiting required photo uploads. Add them below, then finish submission.</p>' : ''}${patrol.template ? customPatrolQuestions(patrol.template, patrol.answers, patrol.attachments, id) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers)).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrolPhotoMarkup(id, patrol.attachments)}</div>${!patrol.completed ? `<label>Photo question<select id="patrolUploadQuestion"><option value="">General attachment</option>${patrol.template.questions.filter(q => q.type === 'photo').map(q => `<option value="${q.id}">${escapeHtml(q.label)}</option>`).join('')}</select></label><button type="button" class="primary-button" data-complete-patrol="${id}">Finish submission</button>` : ''}<label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`;
+    content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY / PATROL #${patrol.id}</span><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${patrol.completed ? 'Submitted' : 'Saved pending photos'} ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${!patrol.completed ? '<p class="form-error">This patrol is awaiting required photo uploads. Add them below, then finish submission.</p>' : ''}${patrol.template ? customPatrolQuestions(patrol.template, patrol.answers, patrol.attachments, id, patrol.item_remarks || {}) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers, patrol.item_remarks || {})).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrolPhotoMarkup(id, patrol.attachments)}</div>${!patrol.completed ? `<label>Photo question<select id="patrolUploadQuestion"><option value="">General attachment</option>${patrol.template.questions.filter(q => q.type === 'photo').map(q => `<option value="${q.id}">${escapeHtml(q.label)}</option>`).join('')}</select></label><button type="button" class="primary-button" data-complete-patrol="${id}">Finish submission</button>` : ''}<label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`;
   } catch (error) {
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== String(id)) return;
     content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div><a class="back-link" href="#/patrol-overview">Back to Patrol Overview</a></div>`;
@@ -454,7 +463,7 @@ function initPatrolEvents() {
     try {
       const photoInputs = [...form.querySelectorAll('[data-photo-question]')];
       validatePatrolFiles([...files, ...photoInputs.flatMap(input => [...input.files])]);
-      const {id} = await api('/api/patrols', 'POST', {template_id: activePatrolTemplate?.id, template_revision: activePatrolTemplate?.revision, inspector_name: data.get('inspector') === 'Other' ? data.get('other_name') : data.get('inspector'), answers, rating: Number(data.get('rating')), remarks: data.get('remarks')});
+      const {id} = await api('/api/patrols', 'POST', {template_id: activePatrolTemplate?.id, template_revision: activePatrolTemplate?.revision, inspector_name: data.get('inspector') === 'Other' ? data.get('other_name') : data.get('inspector'), answers, item_remarks: collectPatrolItemRemarks(form), rating: Number(data.get('rating')), remarks: data.get('remarks')});
       try {
         await uploadPatrolFiles(id, files);
         for (const input of photoInputs) await uploadPatrolFiles(id, [...input.files], input.dataset.photoQuestion);

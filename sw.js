@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-dark-cards-v8';
+const CACHE = 'she-shell-history-clear-v9';
 const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

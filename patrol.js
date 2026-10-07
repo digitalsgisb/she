@@ -39,6 +39,19 @@ const patrolView = {mode: 'day', anchor: new Date(), rows: [], search: '', findi
 let patrolTemplates = [];
 let activePatrolTemplate = null;
 let builderTemplate = null;
+let detailPatrol = null;
+const patrolStatusLabels = {open: 'Open', action_taken: 'Action taken · awaiting review', resolved: 'Resolved'};
+function patrolStatusMarkup(status) { return `<span id="patrolFollowupStatus" class="patrol-status patrol-status-${status}">${patrolStatusLabels[status] || 'Open'}</span>`; }
+
+function patrolThreadMarkup(patrol) {
+  return patrol.updates?.length ? patrol.updates.map(update => `<article class="patrol-reply ${update.user_id === currentUser.id ? 'patrol-reply-own' : ''}"><div class="patrol-reply-heading"><strong>${escapeHtml(update.author)}</strong><small>${escapeHtml(update.role === 'user' ? 'Inspector' : update.role === 'executive' ? 'Executive' : 'Admin')} · ${new Date(update.created_at * 1000).toLocaleString()}</small></div><p class="patrol-answer">${escapeHtml(update.message)}</p><small class="patrol-reply-status">${patrolStatusLabels[update.status]}</small>${update.attachments.length ? patrolPhotoMarkup(patrol.id, update.attachments, 'Follow-up / action photo') : ''}</article>`).join('') : '<p class="patrol-empty">No follow-ups yet. Share an action, ask a question, or add photos below.</p>';
+}
+
+function renderCompletedPatrol(patrol) {
+  detailPatrol = patrol;
+  const canResolve = currentUser.role !== 'user';
+  content.innerHTML = `<div class="page inner-page patrol-page"><a class="category-back" href="#/patrol-overview">${icon('arrow',16)} Back to daily reports</a><div class="page-heading"><span class="eyebrow dark-eyebrow">PATROL #${patrol.id}</span><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${escapeHtml(patrol.inspector_name)} · ${new Date(patrol.created_at*1000).toLocaleString()} · Submitted by ${escapeHtml(patrol.submitted_by)}</p>${patrolStatusMarkup(patrol.followup_status)}</div><section class="patrol-card"><h2>Original findings</h2><p class="patrol-answer">${escapeHtml(patrol.remarks || 'No overall remarks. Open the checklist below for individual observations.')}</p>${patrolPhotoMarkup(patrol.id,patrol.attachments)}<details class="patrol-checklist-details"><summary>View full checklist and item remarks · ${'★'.repeat(patrol.rating)}${'☆'.repeat(3-patrol.rating)}</summary>${patrol.template ? customPatrolQuestions(patrol.template,patrol.answers,patrol.attachments,patrol.id,patrol.item_remarks || {}) : patrolSections.map(([group,title,items]) => patrolGrid(group,title,items,patrol.answers,patrol.item_remarks || {})).join('')}</details></section><section class="patrol-card patrol-followup"><div class="patrol-followup-heading"><h2>Follow-up &amp; action photos</h2><small id="patrolThreadSync" role="status">Updates every 5 seconds</small></div><p class="patrol-chart-note">Reply to the inspector or SHE team. Attach photos showing the corrective action. ${canResolve ? 'Review the evidence before marking this patrol resolved.' : 'Mark action taken when ready for the SHE team to review.'}</p><div id="patrolThread" aria-live="polite">${patrolThreadMarkup(patrol)}</div><form id="patrolReplyForm" data-patrol-id="${patrol.id}" class="patrol-reply-form"><div class="patrol-field"><label for="patrolReplyMessage">Your reply <small>(optional with photos)</small></label><textarea id="patrolReplyMessage" rows="3" maxlength="2000" placeholder="What action was taken? Ask a question or share an update…"></textarea></div><div class="patrol-field"><label for="patrolReplyPhotos">Add action photos <small>(optional)</small></label><input id="patrolReplyPhotos" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.heic" multiple /><small>Up to 10 photos per reply. Photos stay with this update.</small><div id="patrolReplyPreview" class="patrol-reply-preview"></div></div><fieldset class="patrol-reply-state"><legend>Update status</legend><div class="patrol-answer-buttons">${[['keep','Keep current status'],['action_taken','Action taken'],['open','Open / reopen'],...(canResolve ? [['resolved','Reviewed · resolve']] : [])].map(([value,label]) => `<label class="patrol-answer-button"><input type="radio" name="followup_status" value="${value}" ${value==='keep' ? 'checked' : ''} /><span>${label}</span></label>`).join('')}</div></fieldset><div id="patrolReplyError" class="form-error" hidden role="alert"></div><div class="patrol-reply-footer"><span id="patrolReplyProgress" role="status">Replies and photos are shared with everyone who can access this patrol.</span><button type="submit" class="primary-button">Send update</button></div></form></section></div>`;
+}
 
 function patrolPhotoMarkup(id, files, label = '') {
   if (!files.length) return '<p class="patrol-empty">No photos or attachments.</p>';
@@ -94,7 +107,7 @@ function patrolDailyReportMarkup(rows) {
   const filtered = rows.filter(row => (!patrolView.findingsOnly || row.counts.not_ok > 0) && (!patrolView.search.trim() || [row.inspector_name, row.submitted_by, String(row.id), row.title].some(v => v.toLowerCase().includes(patrolView.search.trim().toLowerCase()))));
   const days = new Map();
   filtered.forEach(row => { const day = patrolLocalDate(new Date(row.created_at * 1000)); if (!days.has(day)) days.set(day, []); days.get(day).push(row); });
-  return `<section class="patrol-card" id="patrolDailyReports"><h2>Daily reports &amp; findings photos</h2><p class="patrol-chart-note">Open any photo to see it full size. Photos include the patrol's uploaded evidence.</p>${days.size ? [...days].map(([day, records]) => `<div class="patrol-report-day"><h3>${escapeHtml(new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'}))}</h3><p>${records.length} ${records.length === 1 ? 'patrol' : 'patrols'} · ${records.reduce((sum,r) => sum + r.counts.not_ok, 0)} NOT OK items</p>${records.map(row => `<article class="patrol-report-record"><div><a href="#/daily-safety-patrol/${row.id}"><strong>#${row.id} · ${escapeHtml(row.title)}</strong></a><span>${escapeHtml(row.inspector_name)} · ${new Date(row.created_at * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · ${row.counts.not_ok} NOT OK</span></div>${row.remarks ? `<p class="patrol-answer">${escapeHtml(row.remarks)}</p>` : ''}${patrolPhotoMarkup(row.id, row.attachments)}</article>`).join('')}</div>`).join('') : '<p class="patrol-empty">No patrols for this period.</p>'}</section>`;
+  return `<section class="patrol-card" id="patrolDailyReports"><h2>Daily reports &amp; findings photos</h2><p class="patrol-chart-note">Open any photo to see it full size. Photos include the patrol's uploaded evidence.</p>${days.size ? [...days].map(([day, records]) => `<div class="patrol-report-day"><h3>${escapeHtml(new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'}))}</h3><p>${records.length} ${records.length === 1 ? 'patrol' : 'patrols'} · ${records.reduce((sum,r) => sum + r.counts.not_ok, 0)} NOT OK items</p>${records.map(row => `<article class="patrol-report-record"><div><a href="#/daily-safety-patrol/${row.id}"><strong>#${row.id} · ${escapeHtml(row.title)}</strong></a><span>${escapeHtml(row.inspector_name)} · ${new Date(row.created_at * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · ${row.counts.not_ok} NOT OK</span></div>${row.remarks ? `<p class="patrol-answer">${escapeHtml(row.remarks)}</p>` : ''}${patrolPhotoMarkup(row.id, row.attachments)}<div class="patrol-report-followup"><span class="patrol-status patrol-status-${row.followup_status || 'open'}">${patrolStatusLabels[row.followup_status || 'open']} · ${row.update_count || 0} updates</span><a class="secondary-button" href="#/daily-safety-patrol/${row.id}">Reply / Add action photos</a></div></article>`).join('')}</div>`).join('') : '<p class="patrol-empty">No patrols for this period.</p>'}</section>`;
 }
 
 let patrolRefreshBusy = false;
@@ -123,6 +136,12 @@ async function refreshPatrolLive() {
       const id = location.hash.split('/')[2];
       if (/^\d+$/.test(id || '')) {
         const {patrol} = await api(`/api/patrols/${id}`);
+        if (currentRoute() === route && location.hash.split('/')[2] === id && document.getElementById('patrolReplyForm')) {
+          detailPatrol = patrol;
+          if (content.dataset.patrolSnapshot !== JSON.stringify(patrol)) { document.getElementById('patrolThread').innerHTML = patrolThreadMarkup(patrol); document.getElementById('patrolFollowupStatus').outerHTML = patrolStatusMarkup(patrol.followup_status); content.dataset.patrolSnapshot = JSON.stringify(patrol); }
+          document.getElementById('patrolThreadSync').textContent = 'Up to date';
+          return;
+        }
         if (currentRoute() === route && location.hash.split('/')[2] === id && patrol.completed && content.dataset.patrolSnapshot !== JSON.stringify(patrol) && !document.getElementById('patrolMoreFiles')?.files.length) {
           const scrollY = window.scrollY;
           await renderPatrolDetail(id);
@@ -139,6 +158,8 @@ async function refreshPatrolLive() {
       }
     } else await loadSafetyPulse(route === 'dashboard' ? 'dashboardSafetyPulse' : 'safetyHomePulse');
   } catch {
+    const threadSync = document.getElementById('patrolThreadSync');
+    if (threadSync) threadSync.textContent = 'Reconnecting…';
     const status = document.getElementById('patrolSyncStatus');
     if (status) status.textContent = 'Reconnecting…';
   } finally { patrolRefreshBusy = false; }
@@ -318,6 +339,7 @@ async function renderPatrolDetail(id) {
     const {patrol} = await api(`/api/patrols/${id}`);
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== String(id)) return;
     content.dataset.patrolSnapshot = JSON.stringify(patrol);
+    if (patrol.completed) { renderCompletedPatrol(patrol); return; }
     content.innerHTML = `<div class="page inner-page patrol-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY / PATROL #${patrol.id}</span><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${patrol.completed ? 'Submitted' : 'Saved pending photos'} ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${!patrol.completed ? '<p class="form-error">This patrol is awaiting required photo uploads. Add them below, then finish submission.</p>' : ''}${patrol.template ? customPatrolQuestions(patrol.template, patrol.answers, patrol.attachments, id, patrol.item_remarks || {}) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers, patrol.item_remarks || {})).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrolPhotoMarkup(id, patrol.attachments)}</div>${!patrol.completed ? `<label>Photo question<select id="patrolUploadQuestion"><option value="">General attachment</option>${patrol.template.questions.filter(q => q.type === 'photo').map(q => `<option value="${q.id}">${escapeHtml(q.label)}</option>`).join('')}</select></label><button type="button" class="primary-button" data-complete-patrol="${id}">Finish submission</button>` : ''}<label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`;
   } catch (error) {
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== String(id)) return;
@@ -325,14 +347,15 @@ async function renderPatrolDetail(id) {
   }
 }
 
-async function uploadPatrolFiles(id, files, questionId = '') {
+async function uploadPatrolFiles(id, files, questionId = '', updateId = '', onUploaded = null) {
   validatePatrolFiles(files);
   for (const file of files) {
-    const response = await fetch(`/api/patrols/${id}/attachments`, {method: 'POST', credentials: 'same-origin', headers: {'X-CSRF-Token': csrfToken, 'X-Question-Id': questionId, 'X-File-Name': encodeURIComponent(file.name), 'Content-Type': 'application/octet-stream'}, body: file});
+    const response = await fetch(`/api/patrols/${id}/attachments`, {method: 'POST', credentials: 'same-origin', headers: {'X-CSRF-Token': csrfToken, 'X-Question-Id': questionId, 'X-Update-Id': String(updateId), 'X-File-Name': encodeURIComponent(file.name), 'Content-Type': 'application/octet-stream'}, body: file});
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(`${file.name}: ${data.error || `Upload failed (${response.status}).`}`);
     }
+    onUploaded?.(file);
   }
 }
 
@@ -345,6 +368,37 @@ function validatePatrolFiles(files) {
 }
 
 function initPatrolEvents() {
+  content.addEventListener('submit', async event => {
+    if (event.target.id !== 'patrolReplyForm') return;
+    event.preventDefault();
+    const form = event.target, id = form.dataset.patrolId;
+    const message = document.getElementById('patrolReplyMessage');
+    const photoInput = document.getElementById('patrolReplyPhotos');
+    const files = [...photoInput.files];
+    const error = document.getElementById('patrolReplyError');
+    const progress = document.getElementById('patrolReplyProgress');
+    const button = form.querySelector('[type="submit"]');
+    error.hidden = true; button.disabled = true;
+    try {
+      validatePatrolFiles(files);
+      if (files.some(file => !/\.(jpe?g|png|gif|webp|heic)$/i.test(file.name))) throw new Error('Choose photos for this update.');
+      if (!message.value.trim() && !files.length) throw new Error('Write a reply or add an action photo.');
+      if (!form.dataset.updateId) {
+        const choice = form.querySelector('input[name="followup_status"]:checked').value;
+        const result = await api(`/api/patrols/${id}/updates`, 'POST', {message: message.value.trim() || 'Added action photos.', status: choice === 'keep' ? detailPatrol.followup_status : choice, expected_status: detailPatrol.followup_status});
+        form.dataset.updateId = result.id;
+        form.dataset.uploaded = '0';
+        message.readOnly = true; photoInput.disabled = true;
+        form.querySelectorAll('input[name="followup_status"]').forEach(input => { input.disabled = true; });
+      }
+      await uploadPatrolFiles(id, files.slice(Number(form.dataset.uploaded)), '', form.dataset.updateId, () => { form.dataset.uploaded = String(Number(form.dataset.uploaded)+1); progress.textContent = `Uploaded ${form.dataset.uploaded} of ${files.length} photos…`; });
+      notify('Update shared.');
+      if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('/')[2] !== id) return;
+      await renderPatrolDetail(id);
+      document.getElementById('patrolReplyForm')?.scrollIntoView({behavior:'smooth',block:'center'});
+    } catch (err) { error.textContent = form.dataset.updateId ? `Reply saved. ${err.message} Retry to upload the remaining photos.` : err.message; error.hidden = false; button.textContent = form.dataset.updateId ? 'Retry photo upload' : 'Send update'; }
+    finally { button.disabled = false; }
+  });
   setInterval(refreshPatrolLive, 5000);
   document.addEventListener('visibilitychange', refreshPatrolLive);
   window.addEventListener('online', refreshPatrolLive);
@@ -422,6 +476,13 @@ function initPatrolEvents() {
       document.getElementById('patrolDailyReports').outerHTML = patrolDailyReportMarkup(patrolView.rows);
   });
   content.addEventListener('change', async event => {
+    if (event.target.id === 'patrolReplyPhotos') {
+      const preview = document.getElementById('patrolReplyPreview'); preview.innerHTML = '';
+      [...event.target.files].forEach(file => {
+        const card = document.createElement('span'); card.textContent = file.name; preview.appendChild(card);
+        if (file.size <= 15_000_000 && /\.(jpe?g|png|gif|webp)$/i.test(file.name)) { const reader = new FileReader(); reader.onload = () => { if (!preview.isConnected) return; const img = document.createElement('img'); img.src = reader.result; img.alt = file.name; card.prepend(img); }; reader.readAsDataURL(file); }
+      });
+    }
     if (event.target.id === 'builderItemJump' && event.target.value !== '') { const item = document.querySelector(`[data-question-index="${Number(event.target.value)}"]`); item?.scrollIntoView({behavior:'smooth', block:'center'}); item?.querySelector('input')?.focus({preventScroll:true}); }
     if (event.target.id === 'patrolTemplateSelect') { savePatrolDraft(); location.hash = `#/daily-safety-patrol${event.target.value ? `/template-${event.target.value}` : ''}`; }
     if (event.target.id === 'patrolDate' && event.target.value) { patrolView.anchor = new Date(`${event.target.value}T12:00:00`); renderPatrolOverview(); }

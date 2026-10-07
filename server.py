@@ -107,6 +107,15 @@ def init_db() -> None:
                 definition_json TEXT NOT NULL,
                 revision INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS patrol_updates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patrol_id INTEGER NOT NULL REFERENCES patrols(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                message TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS patrol_updates_patrol ON patrol_updates(patrol_id,created_at,id);
             CREATE TABLE IF NOT EXISTS patrol_attachments (
                 id TEXT PRIMARY KEY,
                 patrol_id INTEGER NOT NULL REFERENCES patrols(id) ON DELETE CASCADE,
@@ -123,7 +132,9 @@ def init_db() -> None:
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
             ('patrols', 'item_remarks_json', "TEXT NOT NULL DEFAULT '{}'"),
+            ('patrols', 'followup_status', "TEXT NOT NULL DEFAULT 'open'"),
             ('patrol_attachments', 'question_id', "TEXT NOT NULL DEFAULT ''"),
+            ('patrol_attachments', 'update_id', 'INTEGER REFERENCES patrol_updates(id)'),
         ]:
             if column not in {row['name'] for row in db.execute(f'PRAGMA table_info({table})')}:
                 db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
@@ -453,6 +464,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if method == 'POST' and re.fullmatch(r'/api/patrols/\d+/updates', path):
+                self.create_patrol_update(db, int(path.split('/')[3]), data, user)
+                return
             if path == '/api/patrol-templates' or re.fullmatch(r'/api/patrol-templates/\d+', path):
                 self.save_patrol_template(db, path, method, data, user)
                 return
@@ -547,6 +561,27 @@ class Handler(BaseHTTPRequestHandler):
         db.commit()
         self.send_json(200, {'ok': True})
 
+    def create_patrol_update(self, db, patrol_id, data, user):
+        db.execute('BEGIN IMMEDIATE')
+        row = db.execute("SELECT * FROM patrols WHERE id=? AND completed=1 AND (user_id=? OR ? IN ('executive','admin'))", (patrol_id, user['id'], user['role'])).fetchone()
+        if not row:
+            self.error_json(404, 'Completed patrol not found.')
+            return
+        message, status = data.get('message', ''), data.get('status', row['followup_status'])
+        if not isinstance(message, str) or not 1 <= len(message.strip()) <= 2000 or status not in ('open', 'action_taken', 'resolved'):
+            self.error_json(400, 'Add a message of up to 2,000 characters and choose a valid status.')
+            return
+        if status == 'resolved' and row['followup_status'] != 'resolved' and user['role'] not in ('executive', 'admin'):
+            self.error_json(403, 'An Executive or Admin must verify and resolve the patrol.')
+            return
+        if data.get('expected_status') != row['followup_status']:
+            self.error_json(409, 'The patrol status changed. Review the latest update and send again.')
+            return
+        cursor = db.execute('INSERT INTO patrol_updates(patrol_id,user_id,message,status,created_at) VALUES(?,?,?,?,?)', (patrol_id, user['id'], message.strip(), status, int(time.time())))
+        db.execute('UPDATE patrols SET followup_status=? WHERE id=?', (status, patrol_id))
+        db.commit()
+        self.send_json(201, {'id': cursor.lastrowid})
+
     def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         if path == "/api/patrols":
             query = parse_qs(urlsplit(self.path).query)
@@ -582,7 +617,9 @@ class Handler(BaseHTTPRequestHandler):
                                 "counts": counts, "not_ok_by_section": sections,
                                 'title': template['title'] if template else 'Daily Safety Patrol Checklist',
                                 'remarks': row['remarks'],
-                                'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id', (row['id'],))]})
+                                'followup_status': row['followup_status'],
+                                'update_count': db.execute('SELECT COUNT(*) FROM patrol_updates WHERE patrol_id=?', (row['id'],)).fetchone()[0],
+                                'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL ORDER BY created_at,id', (row['id'],))]})
             self.send_json(200, {"patrols": patrols})
             return
         match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)
@@ -611,13 +648,17 @@ class Handler(BaseHTTPRequestHandler):
                 while chunk := source.read(1024 * 1024):
                     self.wfile.write(chunk)
             return
-        attachments = db.execute("SELECT id,filename,mime_type,size,created_at,question_id FROM patrol_attachments WHERE patrol_id=? ORDER BY created_at,id", (patrol_id,)).fetchall()
+        attachments = db.execute("SELECT id,filename,mime_type,size,created_at,question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL ORDER BY created_at,id", (patrol_id,)).fetchall()
+        updates = []
+        for update in db.execute('SELECT p.*,u.display_name AS author,u.role AS role FROM patrol_updates p JOIN users u ON u.id=p.user_id WHERE patrol_id=? ORDER BY created_at,id', (patrol_id,)):
+            updates.append({**dict(update), 'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size FROM patrol_attachments WHERE patrol_id=? AND update_id=? ORDER BY created_at,id', (patrol_id, update['id']))]})
         self.send_json(200, {"patrol": {"id": row["id"], "inspector_name": row["inspector_name"],
                                       "answers": json.loads(row["answers_json"]), "rating": row["rating"],
                                       'item_remarks': json.loads(row['item_remarks_json']),
                                       "remarks": row["remarks"], "created_at": row["created_at"],
                                       "submitted_by": row["submitted_by"],
                                       'template': json.loads(row['template_json']), 'completed': bool(row['completed']),
+                                      'followup_status': row['followup_status'], 'updates': updates,
                                       "attachments": [dict(item) for item in attachments]}})
 
     def create_patrol(self, db: sqlite3.Connection, data: dict, user: sqlite3.Row) -> None:
@@ -689,9 +730,17 @@ class Handler(BaseHTTPRequestHandler):
         if not patrol:
             self.error_json(404, "Patrol not found.")
             return
-        count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?", (patrol_id,)).fetchone()[0]
+        update_id = self.headers.get('X-Update-Id', '')
+        if update_id:
+            if not update_id.isdecimal() or not db.execute('SELECT 1 FROM patrol_updates WHERE id=? AND patrol_id=? AND user_id=?', (update_id, patrol_id, user['id'])).fetchone():
+                self.error_json(400, 'Choose your own follow-up on this patrol.')
+                return
+            update_id = int(update_id)
+        else:
+            update_id = None
+        count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=? AND update_id IS ?", (patrol_id, update_id)).fetchone()[0]
         if count >= 10:
-            self.error_json(400, "A patrol can have up to 10 attachments.")
+            self.error_json(400, "Use up to 10 attachments per patrol or follow-up.")
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
@@ -711,7 +760,13 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(400, "Use a Word, Excel, PowerPoint, PDF, image, video, or audio file.")
             return
         mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        if update_id and Path(name).suffix.lower() not in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic'}:
+            self.error_json(400, 'Choose photos for the follow-up.')
+            return
         question_id = self.headers.get('X-Question-Id', '')
+        if update_id and question_id:
+            self.error_json(400, 'Follow-up photos belong to the update, not the original checklist.')
+            return
         if question_id:
             template = json.loads(patrol['template_json'])
             question = next((q for q in template['questions'] if q['id'] == question_id and q['type'] == 'photo'), None) if template else None
@@ -731,12 +786,12 @@ class Handler(BaseHTTPRequestHandler):
                     output.write(chunk)
                     remaining -= len(chunk)
             db.execute('BEGIN IMMEDIATE')
-            if db.execute('SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=?', (patrol_id,)).fetchone()[0] >= 10:
+            if db.execute('SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=? AND update_id IS ?', (patrol_id, update_id)).fetchone()[0] >= 10:
                 target.unlink(missing_ok=True)
                 self.error_json(400, 'A patrol can have up to 10 attachments.')
                 return
-            db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at,question_id) VALUES(?,?,?,?,?,?,?)",
-                       (attachment_id, patrol_id, name, mime, size, int(time.time()), question_id))
+            db.execute("INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at,question_id,update_id) VALUES(?,?,?,?,?,?,?,?)",
+                       (attachment_id, patrol_id, name, mime, size, int(time.time()), question_id, update_id))
             db.commit()
         except Exception:
             target.unlink(missing_ok=True)

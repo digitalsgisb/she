@@ -146,10 +146,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261007-answer-buttons1', html)
-        self.assertIn('/script.js?v=20261007-answer-buttons1', html)
-        self.assertIn('/patrol.js?v=20261007-answer-buttons1', html)
-        self.assertIn('/cmms-ui.js?v=20261007-answer-buttons1', html)
+        self.assertIn('/styles.css?v=20261007-followup1', html)
+        self.assertIn('/script.js?v=20261007-followup1', html)
+        self.assertIn('/patrol.js?v=20261007-followup1', html)
+        self.assertIn('/cmms-ui.js?v=20261007-followup1', html)
         self.assertIn('id="mobileTabbar"', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
@@ -257,6 +257,47 @@ class AccountFlowTests(unittest.TestCase):
         template_id = self.request('/api/patrol-templates', 'POST', definition, cookie, csrf)[1]['id']
         photo_id = self.request('/api/patrols', 'POST', {'template_id': template_id, 'template_revision': 1, 'inspector_name': 'Sara', 'rating': 3, 'answers': {}, 'item_remarks': {'q_photo': 'Camera unavailable'}}, cookie, csrf)[1]['id']
         self.assertEqual(self.request(f'/api/patrols/{photo_id}', cookie=cookie)[1]['patrol']['item_remarks'], {'q_photo': 'Camera unavailable'})
+
+    def test_patrol_two_way_followup_status_and_photos(self):
+        self.first_admin()
+        admin_cookie, admin_csrf = self.login('admin', 'AdminPassword123!')
+        for name, role in [('inspector', 'user'), ('otheruser', 'user'), ('exec', 'executive')]:
+            self.request('/api/users', 'POST', {'username': name, 'display_name': name, 'password': 'TestingPassword123!', 'role': role}, admin_cookie, admin_csrf)
+        cookie, csrf = self.login('inspector', 'TestingPassword123!')
+        other_cookie, other_csrf = self.login('otheruser', 'TestingPassword123!')
+        exec_cookie, exec_csrf = self.login('exec', 'TestingPassword123!')
+        payload = {'inspector_name': 'Sara', 'rating': 2, 'answers': {f'{group}_{i}': 'ok' for group, count in server.PATROL_GROUPS.items() for i in range(count)}}
+        patrol_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        path = f'/api/patrols/{patrol_id}/updates'
+        message = {'message': 'Walkway cleared. Please review.', 'status': 'action_taken', 'expected_status': 'open'}
+        self.assertEqual(self.request(path, 'POST', message)[0], 401)
+        self.assertEqual(self.request(path, 'POST', message, cookie)[0], 403)
+        self.assertEqual(self.request(path, 'POST', message, other_cookie, other_csrf)[0], 404)
+        self.assertEqual(self.request(path, 'POST', dict(message, message=''), cookie, csrf)[0], 400)
+        self.assertEqual(self.request(path, 'POST', dict(message, status='resolved'), cookie, csrf)[0], 403)
+        update_id = self.request(path, 'POST', message, cookie, csrf)[1]['id']
+        detail = self.request(f'/api/patrols/{patrol_id}', cookie=exec_cookie)[1]['patrol']
+        self.assertEqual(detail['followup_status'], 'action_taken')
+        self.assertEqual(detail['updates'][0]['author'], 'inspector')
+        self.assertEqual(self.request(path, 'POST', message, cookie, csrf)[0], 409)
+        with server.database() as db:
+            for i in range(10):
+                db.execute('INSERT INTO patrol_attachments(id,patrol_id,filename,mime_type,size,created_at) VALUES(?,?,?,?,?,?)', (f'{i:032x}',patrol_id,'original.jpg','image/jpeg',1,1))
+        upload = Request(self.base+f'/api/patrols/{patrol_id}/attachments', data=b'action photo', headers={'Cookie':cookie,'X-CSRF-Token':csrf,'X-Update-Id':str(update_id),'X-File-Name':'after.jpg','Content-Type':'application/octet-stream'},method='POST')
+        attachment_id = json.loads(urlopen(upload).read())['id']
+        detail = self.request(f'/api/patrols/{patrol_id}', cookie=exec_cookie)[1]['patrol']
+        self.assertEqual(len(detail['attachments']),10)
+        self.assertEqual(len(detail['updates'][0]['attachments']),1)
+        photo_path = f'/api/patrols/{patrol_id}/attachments/{attachment_id}'
+        self.assertEqual(self.request(photo_path, cookie=exec_cookie)[1], 'action photo')
+        self.assertEqual(self.request(photo_path, cookie=other_cookie)[0],404)
+        status, _, _ = self.request(path,'POST',{'message':'Reviewed the photo. Resolved.','status':'resolved','expected_status':'action_taken'},exec_cookie,exec_csrf)
+        self.assertEqual(status,201)
+        row = self.request('/api/patrols',cookie=cookie)[1]['patrols'][0]
+        self.assertEqual(row['followup_status'],'resolved')
+        self.assertEqual(row['update_count'],2)
+        self.assertEqual(len(row['attachments']),10)
+        self.assertEqual(self.request(path,'POST',{'message':'Please check again tomorrow.','status':'open','expected_status':'resolved'},admin_cookie,admin_csrf)[0],201)
 
     def test_patrol_submission_and_attachment_access(self):
         self.first_admin()

@@ -4,6 +4,10 @@ SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health
 
 ## Daily Safety Patrol Checklist
 
+Completed patrols now support **two-way follow-up** between the submitter and SHE Executives/Admins. From a daily report, choose **Reply / Add action photos** to see original evidence, a dated conversation, and a reply composer. Written replies and photos are optional individually, but each update needs a message or a photo. Attach up to 10 action photos per reply; they appear with that update, separately from the original patrol photos. Upload progress and retry preserve successfully uploaded files and avoid reposting the reply when only a photo fails. The full original checklist opens on demand below the findings.
+
+Follow-up status is **Open**, **Action taken · awaiting review**, or **Resolved**. Submitters can share actions and reopen their own patrols; only Executives and Admins can verify and resolve them. Existing access rules apply to conversations and photos. New replies refresh every 5 seconds without replacing the reply composer, so typing and selected photos survive incoming updates. Daily report cards show status and update count. Replies need a connection; they are not queued offline.
+
 Patrol inspection and multiple-choice answers use visible tap buttons on both phones and PCs. OK, NOT OK, and N/A have distinct selected states. Optional questions include **Clear answer**, and every item remark and the overall patrol remarks remain optional.
 
 Every checklist item now has an optional **Remarks for this item** box, including inspection, written-answer, multiple-choice, and photo questions in default and custom checklists. Item remarks support up to 2,000 characters, are restored with the device's draft, and appear beside their item in the submitted report. Overall patrol remarks are still available. Older reports remain readable with no item remarks.

@@ -204,3 +204,12 @@
 .patrol-item-remark p { margin:8px 0 0; }
 .patrol-grid-row > .patrol-item-remark { grid-column:1 / -1; margin:0 12px 12px; }
 @media(max-width:760px) { .patrol-item-remark textarea { font-size:16px; } }
+.patrol-answer-buttons { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0; }
+.patrol-answer-button { position:relative; display:block; flex:1 1 90px; cursor:pointer; }
+.patrol-answer-button input { position:absolute; width:1px; height:1px; margin:0; opacity:0; }
+.patrol-answer-button span { display:flex; align-items:center; justify-content:center; min-height:48px; padding:12px; border:2px solid #d6e4d9; border-radius:10px; background:#fff; color:#345b44; text-align:center; font-weight:700; overflow-wrap:anywhere; }
+.patrol-answer-button input:checked + span { border-color:#216e49; background:#e6f3eb; color:#17573c; box-shadow:inset 0 0 0 1px #216e49; }
+.patrol-answer-button input:checked + span[data-answer-status="not_ok"] { border-color:#ba3c36; background:#fff0ee; color:#942c28; box-shadow:inset 0 0 0 1px #ba3c36; }
+.patrol-answer-button input:checked + span[data-answer-status="na"] { border-color:#677873; background:#edf1ef; color:#3f514b; box-shadow:inset 0 0 0 1px #677873; }
+.patrol-answer-button input:focus-visible + span { outline:3px solid #a4c4f8; outline-offset:3px; }
+.patrol-clear-answer { border:0; padding:6px 0; background:transparent; color:#466959; text-decoration:underline; cursor:pointer; font-size:12px; }

@@ -4,6 +4,8 @@ SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health
 
 ## Daily Safety Patrol Checklist
 
+Patrol inspection and multiple-choice answers use visible tap buttons on both phones and PCs. OK, NOT OK, and N/A have distinct selected states. Optional questions include **Clear answer**, and every item remark and the overall patrol remarks remain optional.
+
 Every checklist item now has an optional **Remarks for this item** box, including inspection, written-answer, multiple-choice, and photo questions in default and custom checklists. Item remarks support up to 2,000 characters, are restored with the device's draft, and appear beside their item in the submitted report. Overall patrol remarks are still available. Older reports remain readable with no item remarks.
 
 Executives and Admins can also edit the existing **Daily Safety Patrol Checklist**. Open the patrol form, select the checklist, click **Edit checklist**, then use **Choose an item to edit** to jump to a specific inspection item. Change its wording, answer type, choices, or required setting, or add, remove, and reorder items, then save. The existing 23 items are available automatically, and edits persist across restarts. Regular users can fill the default checklist but cannot edit it. Submitted reports retain their original checklist wording.

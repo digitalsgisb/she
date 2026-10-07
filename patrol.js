@@ -57,8 +57,13 @@ function collectPatrolItemRemarks(form) {
   return Object.fromEntries([...form.querySelectorAll('[data-item-remark]')].map(input => [input.dataset.itemRemark, input.value]));
 }
 
+function patrolAnswerButtons(question) {
+  const options = question.type === 'status' ? [['ok', 'OK'], ['not_ok', 'NOT OK'], ['na', 'N/A']] : question.options.map(option => [option, option]);
+  return `<div id="${question.id}" class="patrol-answer-buttons" role="radiogroup" aria-label="${escapeHtml(question.label)}">${options.map(([value, label]) => `<label class="patrol-answer-button"><input type="radio" name="${question.id}" value="${escapeHtml(value)}" ${question.required ? 'required' : ''} /><span data-answer-status="${question.type === 'status' ? value : 'choice'}">${escapeHtml(label)}</span></label>`).join('')}</div>${question.required ? '' : `<button type="button" class="patrol-clear-answer" data-clear-answer="${question.id}">Clear answer</button>`}`;
+}
+
 function customPatrolQuestions(template, answers = null, attachments = [], patrolId = null, itemRemarks = {}) {
-  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : `<select id="${q.id}" name="${q.id}" ${q.required ? 'required' : ''}><option value="">Choose an answer</option>${(q.type === 'status' ? [['ok', 'OK'], ['not_ok', 'NOT OK'], ['na', 'N/A']] : q.options.map(o => [o, o])).map(([v,l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select>`}${patrolItemRemark(q.id, q.label, answers ? itemRemarks : null)}</div>`).join('');
+  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : patrolAnswerButtons(q)}${patrolItemRemark(q.id, q.label, answers ? itemRemarks : null)}</div>`).join('');
 }
 
 async function renderChecklistBuilder() {
@@ -285,7 +290,7 @@ async function renderPatrolForm() {
     <fieldset class="patrol-section patrol-inspector"><legend>Inspector's Name <span class="required">*</span></legend><div class="patrol-inspector-options"><label><input type="radio" name="inspector" value="Sara" required /> Sara</label><label><input type="radio" name="inspector" value="Aman" /> Aman</label><label><input type="radio" name="inspector" value="Other" /> Other</label><input id="patrolOtherName" name="other_name" type="text" maxlength="80" placeholder="Enter inspector name" disabled /></div></fieldset>
     ${activePatrolTemplate ? customPatrolQuestions(activePatrolTemplate) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items)).join('')}
     <fieldset class="patrol-section"><legend>Overall Rating <span class="required">*</span></legend><div class="patrol-stars" role="radiogroup" aria-label="Overall rating">${[1, 2, 3].map(value => `<label><input type="radio" name="rating" value="${value}" required /><span aria-hidden="true">☆</span><span class="sr-only">${value} ${value === 1 ? 'star' : 'stars'}</span></label>`).join('')}</div></fieldset>
-    <div class="patrol-field"><label for="patrolRemarks">Remarks</label><textarea id="patrolRemarks" name="remarks" rows="4" maxlength="5000" placeholder="Add findings or follow-up notes"></textarea></div>
+    <div class="patrol-field"><label for="patrolRemarks">Overall remarks <small>(optional)</small></label><textarea id="patrolRemarks" name="remarks" rows="4" maxlength="5000" placeholder="Add findings or follow-up notes"></textarea></div>
     <div class="patrol-field"><label for="patrolFiles">Attachments</label><input id="patrolFiles" name="files" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><small>Up to 10 files, 1 GB each. Word, Excel, PowerPoint, PDF, image, video, or audio.</small></div>
     <p class="patrol-draft-note" id="patrolDraftNote">Your answers are saved on this device as you fill the form. Submission needs an internet connection.</p><div class="form-error" id="patrolError" role="alert" hidden></div><div class="patrol-actions"><a class="secondary-button" href="#/safety">Cancel</a><button class="primary-button" type="submit">Submit patrol</button></div>
   </form></div>`;
@@ -351,6 +356,11 @@ function initPatrolEvents() {
     if (field === 'type') renderBuilderQuestions();
   });
   content.addEventListener('click', async event => {
+    const clear = event.target.closest('[data-clear-answer]');
+    if (clear) {
+      document.getElementById(clear.dataset.clearAnswer)?.querySelectorAll('input[type="radio"]').forEach(input => { input.checked = false; });
+      savePatrolDraft();
+    }
     if (event.target.closest('[data-add-question]')) {
       if (builderTemplate.questions.length >= 100) { notify('Use up to 100 questions.'); return; }
       builderTemplate.questions.push({id: `q_${crypto.randomUUID().replaceAll('-', '')}`, label: '', type: 'status', required: true, options: []});

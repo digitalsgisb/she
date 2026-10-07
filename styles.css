@@ -272,3 +272,22 @@
   .patrol-period-nav strong { min-width:0; flex:1; }
 }
 @media(prefers-reduced-motion:reduce) { .patrol-report-record { animation:none; transition:none; } }
+
+/* Keep submenu nodes mounted so opening and closing both animate naturally. */
+.subnav { display:grid; grid-template-rows:0fr; margin:0 0 0 26px; padding:0; border:0; opacity:0; visibility:hidden; transition:grid-template-rows .28s ease,opacity .22s ease,visibility .28s; }
+.subnav.expanded { grid-template-rows:1fr; opacity:1; visibility:visible; animation:none; }
+.subnav-content { min-height:0; overflow:hidden; padding-left:14px; border-left:1px solid #ffffff30; }
+.subnav-content > .subnav-link:first-child { margin-top:7px; }
+.subnav-content > .subnav-link:last-child { margin-bottom:3px; }
+.patrol-report-record { position:relative; isolation:isolate; color:#fff; background:linear-gradient(145deg,#0c4d3e,#08392f); border-color:#226a53; box-shadow:0 5px 16px #08392f20; }
+.patrol-report-record:hover { border-color:#80b993; box-shadow:0 8px 22px #08392f30; transform:translateY(-2px); }
+.patrol-report-record .patrol-report-open { color:#fff; }
+.patrol-report-open::after { content:''; position:absolute; inset:0; z-index:1; border-radius:12px; }
+.patrol-report-record:has(.patrol-report-open:focus-visible) { outline:3px solid #91bd59; outline-offset:3px; }
+.patrol-report-record > div:first-child > span,.patrol-report-record > .patrol-empty { color:#bad5c8; }
+.patrol-report-record > .patrol-answer { color:#edf7f0; }
+.patrol-report-record .patrol-report-followup { border-top-color:#ffffff26; }
+.patrol-report-record .patrol-photo,.patrol-report-record .patrol-report-followup a,.patrol-report-record .attachment-link { position:relative; z-index:2; }
+.patrol-report-record .patrol-report-followup .secondary-button { color:#fff; background:#ffffff14; border-color:#ffffff38; }
+.patrol-report-record .patrol-report-followup .secondary-button:hover { background:#ffffff26; }
+@media(prefers-reduced-motion:reduce) { .subnav { transition:none; } .patrol-report-record:hover { transform:none; } }

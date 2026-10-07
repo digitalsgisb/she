@@ -136,17 +136,30 @@ function renderMobileNavigation(active) {
 }
 
 function renderNav(active) {
+  const previousSubnavs = [...nav.querySelectorAll('.subnav')];
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('dashboard', `nav-link ${active === 'dashboard' ? 'active' : ''}`)}
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ${safetyExpanded ? '' : 'hidden'}><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a></div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ${envExpanded ? '' : 'hidden'}>${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div>
+    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">WORKSPACE</div>
     ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
     ${currentUser?.role === 'admin' ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
     ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
+  previousSubnavs.forEach(previous => {
+    const replacement = document.getElementById(previous.id);
+    previous.innerHTML = replacement.innerHTML;
+    replacement.replaceWith(previous);
+  });
+  [['safetySubnav', safetyExpanded], ['environmentSubnav', envExpanded]].forEach(([id, expanded]) => {
+    const submenu = document.getElementById(id);
+    submenu.getBoundingClientRect();
+    submenu.classList.toggle('expanded', expanded);
+    submenu.inert = !expanded;
+    submenu.setAttribute('aria-hidden', String(!expanded));
+  });
   document.getElementById('envToggle').addEventListener('click', () => {
     envExpanded = !envExpanded;
     renderNav(currentRoute());
@@ -154,6 +167,9 @@ function renderNav(active) {
   document.getElementById('safetyToggle').addEventListener('click', () => {
     safetyExpanded = !safetyExpanded;
     renderNav(currentRoute());
+  });
+  nav.querySelector('a[href="#/environmental"]').addEventListener('click', () => {
+    if (active === 'environmental' && !envExpanded) { envExpanded = true; renderNav(active); }
   });
   nav.querySelector('a[href="#/safety"]').addEventListener('click', () => {
     if (active === 'safety' && !safetyExpanded) { safetyExpanded = true; renderNav(active); }
@@ -362,6 +378,7 @@ function render() {
   if (!currentUser) return;
   const key = currentRoute();
   safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(key);
+  envExpanded = key === 'environmental' || envItems.includes(key);
   if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
   renderNav(key);
   renderMobileNavigation(key);

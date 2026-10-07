@@ -102,6 +102,11 @@ def init_db() -> None:
                 definition_json TEXT NOT NULL,
                 revision INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS patrol_default_template (
+                id INTEGER PRIMARY KEY CHECK (id=0),
+                definition_json TEXT NOT NULL,
+                revision INTEGER NOT NULL DEFAULT 1
+            );
             CREATE TABLE IF NOT EXISTS patrol_attachments (
                 id TEXT PRIMARY KEY,
                 patrol_id INTEGER NOT NULL REFERENCES patrols(id) ON DELETE CASCADE,
@@ -112,6 +117,8 @@ def init_db() -> None:
             );
             """
         )
+        db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
+                   ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         for table, column, definition in [
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
@@ -327,7 +334,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/patrol-templates':
             with database() as db:
                 if self.authorize(db):
-                    self.send_json(200, {'templates': [dict(id=row['id'], user_id=row['user_id'], revision=row['revision'], **json.loads(row['definition_json'])) for row in db.execute('SELECT * FROM patrol_templates ORDER BY id DESC')]})
+                    default = db.execute('SELECT * FROM patrol_default_template WHERE id=0').fetchone()
+                    templates = [dict(id=0, user_id=None, is_default=True, revision=default['revision'], **json.loads(default['definition_json']))]
+                    templates.extend(dict(id=row['id'], user_id=row['user_id'], revision=row['revision'], **json.loads(row['definition_json'])) for row in db.execute('SELECT * FROM patrol_templates ORDER BY id DESC'))
+                    self.send_json(200, {'templates': templates})
             return
         if path == "/api/patrols" or re.fullmatch(r"/api/patrols/\d+(?:/attachments/[0-9a-f]{32})?", path):
             with database() as db:
@@ -506,11 +516,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.error_json(400, 'Provide the checklist revision.')
                 return
             template_id = int(path.split('/')[-1])
-            row = db.execute('SELECT * FROM patrol_templates WHERE id=?', (template_id,)).fetchone()
-            if not row or (row['user_id'] != user['id'] and user['role'] not in ('executive', 'admin')):
+            table = 'patrol_default_template' if template_id == 0 else 'patrol_templates'
+            row = db.execute(f'SELECT * FROM {table} WHERE id=?', (template_id,)).fetchone()
+            if not row or (user['role'] not in ('executive', 'admin') and (template_id == 0 or row['user_id'] != user['id'])):
                 self.error_json(403, 'You can edit your own checklists. Executives and admins can edit all checklists.')
                 return
-            cursor = db.execute('UPDATE patrol_templates SET definition_json=?,revision=revision+1 WHERE id=? AND revision=?', (definition, template_id, data.get('revision')))
+            cursor = db.execute(f'UPDATE {table} SET definition_json=?,revision=revision+1 WHERE id=? AND revision=?', (definition, template_id, data.get('revision')))
             if cursor.rowcount != 1:
                 self.error_json(409, 'Another device updated this checklist. Reload before editing.')
                 return
@@ -563,7 +574,7 @@ class Handler(BaseHTTPRequestHandler):
                 template = json.loads(row['template_json'])
                 status_answers = [answers.get(q['id']) for q in template['questions'] if q['type'] == 'status'] if template else list(answers.values())
                 counts = {status: sum(value == status for value in status_answers) for status in PATROL_STATUSES}
-                sections = {group: sum(answers.get(f"{group}_{index}") == "not_ok" for index in range(size))
+                sections = {group: sum(answers.get(f"{group}_{index}", answers.get(f"q_{group}_{index}")) == "not_ok" for index in range(size))
                             for group, size in PATROL_GROUPS.items()}
                 patrols.append({"id": row["id"], "inspector_name": row["inspector_name"], "rating": row["rating"],
                                 "created_at": row["created_at"], "submitted_by": row["submitted_by"],
@@ -620,7 +631,8 @@ class Handler(BaseHTTPRequestHandler):
             if type(data['template_id']) is not int:
                 self.error_json(400, 'Choose a valid checklist.')
                 return
-            row = db.execute('SELECT * FROM patrol_templates WHERE id=?', (data['template_id'],)).fetchone()
+            table = 'patrol_default_template' if data['template_id'] == 0 else 'patrol_templates'
+            row = db.execute(f'SELECT * FROM {table} WHERE id=?', (data['template_id'],)).fetchone()
             if not row:
                 self.error_json(404, 'Checklist not found.')
                 return
@@ -646,6 +658,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not valid:
                     self.error_json(400, f"Invalid answer: {question['label']}")
                     return
+        if template is None and db.execute('SELECT revision FROM patrol_default_template WHERE id=0').fetchone()['revision'] > 1:
+            self.error_json(409, 'The default checklist changed. Reload the form before submitting.')
+            return
         expected = {f"{group}_{index}" for group, count in PATROL_GROUPS.items() for index in range(count)}
         if template is None and (not isinstance(answers, dict) or set(answers) != expected or any(not isinstance(value, str) or value not in PATROL_STATUSES for value in answers.values())):
             self.error_json(400, "Answer every checklist item with OK, NOT OK, or N/A.")

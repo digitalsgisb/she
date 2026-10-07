@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-patrol-flex-v2';
+const CACHE = 'she-shell-patrol-edit-v3';
 const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

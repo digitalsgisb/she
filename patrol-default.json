@@ -1,0 +1,167 @@
+{
+  "title": "Daily Safety Patrol Checklist",
+  "description": "This checklist is used to conduct routine safety inspections across the workplace to identify and correct unsafe conditions, behaviors, or hazards. The objective is to maintain a safe working environment, ensure compliance with safety standards, and prevent incidents or injuries. The patrol should be carried out by authorized personnel, and any findings must be reported to the relevant department for prompt corrective action.",
+  "questions": [
+    {
+      "id": "q_general_0",
+      "label": "Housekeeping is maintained (clean and tidy work areas)",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_general_1",
+      "label": "Emergency exits are clear and accessible",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_general_2",
+      "label": "Fire extinguishers are in place and accessible",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_general_3",
+      "label": "First aid kits are available and stocked",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_general_4",
+      "label": "Proper signage (warning, PPE, emergency) is visible",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_machinery_0",
+      "label": "Equipment/machinery is in good condition",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_machinery_1",
+      "label": "Safety guards are in place and functional",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_machinery_2",
+      "label": "Lock-out/tag-out procedures followed",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_machinery_3",
+      "label": "All safety devices on the machine are checked and covered in the daily machine checklist",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_ppe_0",
+      "label": "Workers wearing appropriate PPE",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_ppe_1",
+      "label": "PPE in good condition (no damage/defects)",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_0",
+      "label": "Are all moving parts of machinery properly guarded and secured?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_1",
+      "label": "Are heavy objects stored and handled safely to prevent injury or collapse?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_2",
+      "label": "Is there a clear separation between vehicle and pedestrian pathways?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_3",
+      "label": "Are all elevated work areas protected with guardrails or fall protection?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_4",
+      "label": "Are all electrical cables and connections in good condition and insulated?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_5",
+      "label": "Spills/leaks are properly managed",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_6",
+      "label": "Trip/fall hazards (wires, objects, uneven surfaces)",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_7",
+      "label": "Chemicals properly labeled and stored",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_hazards_8",
+      "label": "Are sharp tools or edges properly stored, covered, or marked to prevent injury?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_others_0",
+      "label": "Area cleaned and no potential breeding sources identified?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_others_1",
+      "label": "Schedule waste properly segregated according to types?",
+      "type": "status",
+      "required": true,
+      "options": []
+    },
+    {
+      "id": "q_others_2",
+      "label": "Forklift in good condition?",
+      "type": "status",
+      "required": true,
+      "options": []
+    }
+  ]
+}

@@ -146,10 +146,10 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261006-patrol-flex1', html)
-        self.assertIn('/script.js?v=20261006-patrol-flex1', html)
-        self.assertIn('/patrol.js?v=20261006-patrol-flex1', html)
-        self.assertIn('/cmms-ui.js?v=20261006-patrol-flex1', html)
+        self.assertIn('/styles.css?v=20261007-patrol-edit1', html)
+        self.assertIn('/script.js?v=20261007-patrol-edit1', html)
+        self.assertIn('/patrol.js?v=20261007-patrol-edit1', html)
+        self.assertIn('/cmms-ui.js?v=20261007-patrol-edit1', html)
         self.assertIn('id="mobileTabbar"', html)
         self.assertEqual(headers["Cache-Control"], "no-store")
         status, icon, headers = self.request("/favicon.svg?v=20260928-sync1")
@@ -179,7 +179,7 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request('/api/patrol-templates')[0], 401)
         self.assertEqual(self.request('/api/patrol-templates', 'POST', definition, cookie)[0], 403)
         template_id = self.request('/api/patrol-templates', 'POST', definition, cookie, csrf)[1]['id']
-        self.assertEqual(self.request('/api/patrol-templates', cookie=other_cookie)[1]['templates'][0]['title'], definition['title'])
+        self.assertEqual(next(t for t in self.request('/api/patrol-templates', cookie=other_cookie)[1]['templates'] if t['id'] == template_id)['title'], definition['title'])
         payload = {'template_id': template_id, 'template_revision': 1, 'inspector_name': 'Tester', 'answers': {'q_check': 'not_ok', 'q_note': 'Spill', 'q_area': 'A'}, 'rating': 2}
         self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, template_id=[]), cookie, csrf)[0], 400)
         self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, answers=dict(payload['answers'], q_area='C')), cookie, csrf)[0], 400)
@@ -201,6 +201,37 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request('/api/patrols', 'POST', payload, cookie, csrf)[0], 409)
         snapshot = self.request(f'/api/patrols/{patrol_id}', cookie=other_cookie)[1]['patrol']['template']
         self.assertEqual(snapshot['title'], 'Warehouse patrol')
+
+    def test_default_checklist_item_edits_require_executive_or_admin(self):
+        self.first_admin()
+        cookie, csrf = self.login('admin', 'AdminPassword123!')
+        for username, role in [('exec', 'executive'), ('operator', 'user')]:
+            self.request('/api/users', 'POST', {'username': username, 'display_name': username, 'password': 'TestingPassword123!', 'role': role}, cookie, csrf)
+        exec_cookie, exec_csrf = self.login('exec', 'TestingPassword123!')
+        user_cookie, user_csrf = self.login('operator', 'TestingPassword123!')
+        original = self.request('/api/patrol-templates', cookie=cookie)[1]['templates'][0]
+        self.assertEqual(original['id'], 0)
+        self.assertEqual(len(original['questions']), 23)
+        payload = {'template_id': 0, 'template_revision': original['revision'], 'inspector_name': 'Sara', 'rating': 3, 'answers': {q['id']: 'ok' for q in original['questions']}}
+        patrol_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)
+        edited = json.loads(json.dumps(original))
+        edited['questions'][0]['label'] = 'Walkways and production areas are clean'
+        self.assertEqual(self.request('/api/patrol-templates/0', 'PATCH', edited, user_cookie, user_csrf)[0], 403)
+        self.assertEqual(self.request('/api/patrol-templates/0', 'PATCH', edited, exec_cookie, exec_csrf)[0], 200)
+        updated = self.request('/api/patrol-templates', cookie=user_cookie)[1]['templates'][0]
+        self.assertEqual(updated['questions'][0]['label'], edited['questions'][0]['label'])
+        self.assertEqual(updated['questions'][1:], original['questions'][1:])
+        self.assertEqual(updated['revision'], 2)
+        self.assertEqual(self.request('/api/patrols', 'POST', payload, cookie, csrf)[0], 409)
+        legacy = {'inspector_name': 'Sara', 'rating': 3, 'answers': {f'{group}_{i}': 'ok' for group, count in server.PATROL_GROUPS.items() for i in range(count)}}
+        self.assertEqual(self.request('/api/patrols', 'POST', legacy, cookie, csrf)[0], 409)
+        snapshot = self.request(f'/api/patrols/{patrol_id}', cookie=cookie)[1]['patrol']['template']
+        self.assertEqual(snapshot['questions'][0]['label'], original['questions'][0]['label'])
+        updated['questions'][1]['label'] = 'Emergency exit routes unobstructed'
+        self.assertEqual(self.request('/api/patrol-templates/0', 'PATCH', updated, cookie, csrf)[0], 200)
+        server.init_db()
+        self.assertEqual(self.request('/api/patrol-templates', cookie=cookie)[1]['templates'][0]['revision'], 3)
 
     def test_patrol_submission_and_attachment_access(self):
         self.first_admin()

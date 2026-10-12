@@ -25,6 +25,7 @@ from threading import Lock
 from urllib.parse import parse_qs, quote, urlsplit
 
 from cmms_bridge import CmmsError, bridge
+import reporting
 
 
 ROOT = Path(__file__).resolve().parent
@@ -128,6 +129,7 @@ def init_db() -> None:
         )
         db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
+        reporting.init(db)
         for table, column, definition in [
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
@@ -249,6 +251,8 @@ class Handler(BaseHTTPRequestHandler):
             limit = 7_000_000 if re.fullmatch(r"/api/cmms/work-orders/[a-zA-Z0-9-]+/attachments", urlsplit(self.path).path) else 16_384
             if urlsplit(self.path).path.startswith(('/api/patrol-templates', '/api/patrols')):
                 limit = 600_000
+            if urlsplit(self.path).path.startswith('/api/reporting/'):
+                limit = 9_000_000
             if length < 2 or length > limit:
                 raise ValueError
             value = json.loads(self.rfile.read(length))
@@ -318,6 +322,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith('/api/reporting/'):
+            with database() as db:
+                reporting.get(self, db, path)
+            return
         if path == "/healthz":
             body = b"ok"
             self.send_response(200)
@@ -363,6 +371,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.cmms_get(path)
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
+        assets.update({'/report': ROOT / 'report.html', '/report/': ROOT / 'report.html',
+                       '/report.html': ROOT / 'report.html', '/reporting-ui.js': ROOT / 'reporting-ui.js',
+                       '/reporting.css': ROOT / 'reporting.css'})
         if re.fullmatch(r"/brand/[1-4]\.png|/icons/(?:icon-192|icon-512|maskable-512|apple-touch-icon)\.png", path):
             assets[path] = ROOT / "public" / path.lstrip("/")
         file = assets.get(path)
@@ -457,6 +468,12 @@ class Handler(BaseHTTPRequestHandler):
         if data is None:
             return
         with database() as db:
+            if method == 'POST' and path == '/api/reporting/submit':
+                try:
+                    reporting.submit(self, db, data)
+                except (ValueError, TypeError) as error:
+                    self.error_json(400, str(error))
+                return
             if method == "POST" and path == "/api/login":
                 self.login(db, data)
                 return
@@ -464,6 +481,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path.startswith('/api/reporting/'):
+                reporting.change(self, db, path, method, data, user)
+                return
             if method == 'POST' and re.fullmatch(r'/api/patrols/\d+/updates', path):
                 self.create_patrol_update(db, int(path.split('/')[3]), data, user)
                 return

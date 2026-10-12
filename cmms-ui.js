@@ -32,6 +32,7 @@ function cmmsPlantControl() {
 
 async function renderWorkOrders() {
   const segments = cmmsPath();
+  if (['port-klang', 'sendayan'].includes(segments[2])) cmmsState.plant = segments[2];
   const action = `${cmmsPlantControl()} <button class="secondary-button cmms-install-button" type="button">Install app</button> <button class="secondary-button cmms-push-button" type="button">Enable alerts</button> <a class="primary-button" href="#/work-orders/new">Issue work order</a>`;
   content.innerHTML = cmmsShell(segments[1] === 'new' ? 'Issue SHE work order' : segments[1] ? 'Work order detail' : 'SHE Work Orders', action);
   try {

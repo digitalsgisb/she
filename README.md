@@ -1,6 +1,28 @@
 # SHE Digital
 
-SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Each top-level section opens its own landing page so more features can be added without replacing the section overview. Safety currently has the Daily Safety Patrol Checklist and a separate Patrol Overview & History page. Health has a landing page ready for future modules; Environmental lists planned Red Tag, Hiyari Hatto, Waste, and Environmental Findings pages.
+SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Safety has the Daily Safety Patrol Checklist and Patrol Overview & History. Health has a landing page ready for future modules. Environmental includes public Environment, Hiyari Hatto and Kaizen reporting, Executive form management and a SHE follow-up inbox. Red Tag and Waste remain planned modules.
+
+## Public SHE reporting and environmental programme
+
+The public **`/report`** page needs no login and offers **Environment**, **Hiyari Hatto**, and **Kaizen**. Share `https://she.sugidigital.org/report` after deploying this version. Environment includes water leakage, oil / chemical spillage, improper waste disposal, waste segregation, drainage / discharge, equipment leakage, energy wastage, and other concerns. Hiyari Hatto and Kaizen initially collect near misses and improvement ideas for SHE review.
+
+Reports collect name, optional contact / department, plant, location, form answers, and up to three JPEG, PNG or WebP photos (2 MB per photo). Guests receive a reference number. Reports and photos are private to signed-in Executives and Admins in **Environmental → SHE Reporting Inbox**. Photos are stored with the report in SQLite; they are not automatically copied to CMMS. The inbox shows the latest 500 reports, with search and filters. Follow-up actions record the actor, date, note, and Open / In progress / Resolved / Closed status.
+
+**Environmental → Reporting Forms** lets Executives and Admins create, edit, preview, and delete forms. Edit the title, description, icon, reporting area and workflow; add, remove, reorder and edit questions. Questions support short/long answers, choices, numbers and dates, with optional required answers. Name, contact, plant, location and photos are shared fields. Deletion removes a form from the public portal while retaining existing reports. Reports store their original form definition. Stale form submissions and conflicting edits are rejected.
+
+**Water leakage automatically attempts to issue a CMMS Kaizen work order**, under the configured SHE requester account, with the reporter's name, plant, location, answers and SHE reference. Other environmental forms initially go to SHE review. Executives can change the workflow per form. Configure the existing `CMMS_URL`, `CMMS_USERNAME` and `CMMS_PASSWORD` before using automatic orders. Reports are committed before the remote request. A known failure can be retried from the report detail. For uncertain remote results (including interrupted requests), search CMMS for the SHE reference, then link the matching existing SHE Kaizen order. If no order exists, manually issue a SHE Kaizen order containing that reference and link it. This avoids blind retries that could duplicate an order. Follow-up status in SHE is separate from CMMS work-order status; the **Open work order** link opens the existing CMMS workflow.
+
+Submission retries retain the same request key and body to avoid duplicate reports and orders. Public submissions require a short-lived reporting token and same-origin requests. The process applies a limit of 300 submissions per client IP per 10 minutes; behind a reverse proxy this may be a shared address, so account for that when planning a large launch. Keep this endpoint online and use the same deployed URL on all devices. Database backups must include the reports and their photo data.
+
+### Reusing the already printed QR
+
+The supplied QR decodes to **`https://cmms.sugidigital.org/requester?plant=port-klang`**. It points at a general requester entry, rather than a dedicated environmental QR identifier. The printed code cannot be rewritten. It can be reused if the owner of that CMMS hostname changes what the exact URL does.
+
+After confirming with the CMMS owner that this exact link is retired, configure a **temporary HTTP 302 redirect**, at CMMS or its reverse proxy, from that exact hostname + `/requester` + `plant=port-klang` to `https://she.sugidigital.org/report`. Match only that GET navigation; keep CMMS APIs and other routes working. Do not redirect the entire CMMS hostname. Use 302 during rollout so the destination can be adjusted without a permanent cached redirect. Test the original QR on a phone before announcing the programme.
+
+The owner has confirmed the old QR link is retired and should go directly to SHE reporting. The adjacent CMMS checkout (`../CMMS/apps/api/src/server.ts`) now implements the temporary 302 redirect for this exact hostname, path and single `plant=port-klang` query parameter, with caching disabled. Deploy SHE Digital first, then rebuild and restart CMMS to activate it. No live redirect or CMMS shutdown has been applied. Keep the CMMS hostname reachable; its backend must remain running if water leakage should automatically issue Kaizen work orders.
+
+Deploy with the existing rebuild command: `docker compose up -d --build --force-recreate`. Verify a standard guest report appears in the Executive inbox, issue a test water leakage report and confirm its Kaizen order in CMMS, then edit and preview a form. Run backend tests with `python -m unittest -v test_server.py test_reporting.ReportingTests` (CMMS calls in reporting tests are mocked).
 
 ## Daily Safety Patrol Checklist
 

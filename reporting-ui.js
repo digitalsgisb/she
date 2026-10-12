@@ -1,0 +1,183 @@
+/* Shared reporting experience: public capture and authenticated SHE administration. */
+const SHEReporting = (() => {
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const groups = {environment:'Environment', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen'};
+  const symbols = {
+    water:'<path d="M12 3S5 11 5 16a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="M8 16a4 4 0 0 0 4 4"/>',
+    spill:'<path d="M5 5h12v13H5zM5 9h12M5 15h12m16-4-3 5a3 3 0 0 0 6 0l-3-5Z"/>',
+    waste:'<path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/>',
+    recycle:'<path d="m8 4 4-2 4 7H8m10 2 4 4-4 6-4-7m-3 7H3l4-7 4 7"/>',
+    drain:'<path d="M4 14h16M4 18h16M4 22h16M6 10 8 4l2 6m4 0 2-6 2 6"/>',
+    tool:'<path d="m14 6 4 4 4-4a7 7 0 0 1-9 9l-7 7-4-4 7-7a7 7 0 0 1 5-9v4Z"/>',
+    energy:'<path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/>',
+    leaf:'<path d="M21 3C9 2 2 8 4 16s17 6 17-13Z"/><path d="M3 22 16 9"/>',
+    alert:'<path d="m12 3 10 18H2L12 3Zm0 6v5m0 3v1"/>',
+    idea:'<path d="M8 17c0-3-4-3-4-8a8 8 0 0 1 16 0c0 5-4 5-4 8H8Zm0 3h8m-7 3h6M9 9l3 3 3-3m-3 3v5"/>'
+  };
+  const svg = (name, size=32) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${symbols[name] || symbols.leaf}</svg>`;
+  let publicData, requestKey, submitting=false, publicPayload=null, renderVersion=0;
+  const publicRoot = document.getElementById('reportRoot');
+  async function publicApi(path, method='GET', body) {
+    const response = await fetch(path, {method, credentials:'same-origin', headers:body ? {'Content-Type':'application/json'} : {}, body:body ? JSON.stringify(body) : undefined});
+    const result = await response.json();
+    if (!response.ok) { const error=new Error(result.error || 'Could not connect. Please try again.');error.status=response.status;throw error; }
+    return result;
+  }
+  const errorBox = () => '<div class="form-error" id="reportError" role="alert" hidden></div>';
+  function showError(root, error) {
+    const target = root.querySelector('#reportError');
+    if (target) { target.textContent=error.message; target.hidden=false; target.scrollIntoView({block:'nearest'}); }
+  }
+  function hero(title, detail, kicker='SMALL ACTIONS. BETTER TOMORROWS.') {
+    return `<section class="report-hero"><div><span class="report-kicker">${esc(kicker)}</span><h1>${title}</h1><p>${esc(detail)}</p></div><div class="report-hero-art" aria-hidden="true">${svg('leaf',100)}<span>SEE IT · REPORT IT · IMPROVE IT</span></div></section>`;
+  }
+  function choices() {
+    return `<div class="report-intro"><span class="eyebrow dark-eyebrow">START HERE / MULA DI SINI</span><h2>What would you like to report?</h2><p>No account needed. Employees and guests are welcome.</p></div><div class="report-choice-grid">${[
+      ['environment','leaf','Protect our environment','Leaks, waste, spills and everyday environmental concerns.','Alam sekitar'],
+      ['hiyari-hatto','alert','Spot a near miss','Share an unsafe situation before someone gets hurt.','Kejadian nyaris'],
+      ['kaizen','idea','Make things better','An idea today can become a better way of working tomorrow.','Penambahbaikan']
+    ].map(([key,symbol,title,desc,malay],i)=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-choice-top"><span class="report-symbol">${svg(symbol,38)}</span><span class="report-number">0${i+1}</span></span><span class="report-kicker">${groups[key]}</span><h3>${title}</h3><p>${desc}</p><span class="report-choice-bottom">${malay} <b aria-hidden="true">↗</b></span></a>`).join('')}</div>`;
+  }
+  function topicCards(list, publicMode=true) {
+    return `<div class="report-topic-grid">${list.map(f=>`<${publicMode ? 'a' : 'article'} ${publicMode ? `href="#/${f.group}/${f.id}"` : ''} class="report-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon)}</span><div><h3>${esc(f.title)}</h3><p>${esc(f.description)}</p><span class="report-workflow">${f.workflow === 'kaizen' ? '↗ Automatic Kaizen work order' : 'SHE review & follow-up'}</span></div>${publicMode ? '<span aria-hidden="true">→</span>' : `<div class="report-topic-actions"><button class="secondary-button" data-edit-form="${f.id}">Edit</button><button class="report-danger" data-delete-form="${f.id}">Delete</button></div>`}</${publicMode ? 'a' : 'article'}>`).join('')}</div>`;
+  }
+  function field(q) {
+    const id='answer-'+q.id, attrs=`id="${esc(id)}" name="${esc(q.id)}" ${q.required?'required':''}`;
+    let control;
+    if (q.type === 'textarea') control=`<textarea ${attrs} rows="4" maxlength="2000"></textarea>`;
+    else if (q.type === 'select') control=`<select ${attrs}><option value="">Choose an answer</option>${q.options.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;
+    else control=`<input ${attrs} type="${esc(q.type)}" ${q.type==='number'?'step="any"':'maxlength="2000"'} />`;
+    return `<label for="${esc(id)}">${esc(q.label)} ${q.required?'<span class="required-mark">*</span>':'<small>Optional</small>'}</label>${control}`;
+  }
+  function renderPublic() {
+    if (!publicData || submitting) return;
+    const [area,id] = location.hash.replace(/^#\/?/,'').split('/');
+    const selected=publicData.forms.find(f=>String(f.id)===id && f.group===area);
+    document.title = `${selected?.title || groups[area] || 'Report it. Improve it.'} · SHE Digital`;
+    if (selected) {
+      requestKey=crypto.randomUUID(); publicPayload=null;
+      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← ${groups[area]}</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><span class="report-kicker">${groups[area]} / REPORT A FINDING</span><h1>${esc(selected.title)}</h1><p>${esc(selected.description)}</p></div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'This report automatically requests a Kaizen work order. SHE will follow up if CMMS is unavailable.' : 'Your report goes to the SHE department for review and action.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Where & who</h2><div class="report-two-col"><div><label for="reporter">Your name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact / department <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Plant <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose a plant</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Exact location <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="e.g. Production, Line 2, beside wash area" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>Tell us what happened</h2>${selected.questions.map(field).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Add evidence <small>Optional</small></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>Up to 3 JPEG, PNG or WebP photos · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">Your name, contact details and photos are shared with authorized SHE staff for follow-up. If a work order is required, your name and report details are also shared with CMMS.</p>${errorBox()}<button type="submit" class="primary-button full-width">Submit report <span>→</span></button><p class="report-urgent">For immediate danger, notify your supervisor or site emergency contact right away.</p></form></div>`;
+      publicRoot.querySelector('#photos').addEventListener('change', e=>{
+        const output=publicRoot.querySelector('#photoPreview');
+        output.textContent=Array.from(e.target.files).map(f=>f.name).join(' · ');
+      });
+      publicRoot.querySelector('#findingForm').addEventListener('submit', e=>submitPublic(e,selected));
+    } else if (groups[area]) {
+      const list=publicData.forms.filter(f=>f.group===area);
+      publicRoot.innerHTML=`<div class="report-wrap"><a class="back-link" href="#/">← All reporting areas</a>${hero(groups[area], 'Choose the topic that best describes your finding.', 'REPORT IT. IMPROVE IT. / LAPOR. PERBAIKI.')}<div class="report-intro"><h2>${area==='environment'?'What can you report?':'Choose a form'}</h2><p>A few details are all it takes to get started.</p></div>${list.length ? topicCards(list) : '<p class="report-empty">No forms available in this area yet. Please contact SHE.</p>'}</div>`;
+    } else {
+      publicRoot.innerHTML=`<div class="report-wrap">${hero('A better workplace<br /><em>starts with you.</em>', 'See something that could be safer, greener or better? Share it with SHE in just a few minutes.')}${choices()}<div class="report-how"><span><b>01</b> Choose a topic</span><span><b>02</b> Share the details</span><span><b>03</b> SHE takes action</span></div></div>`;
+    }
+    window.scrollTo(0,0);
+  }
+  async function submitPublic(event,form) {
+    event.preventDefault();
+    if (submitting) return;
+    const root=event.currentTarget, button=root.querySelector('[type=submit]');
+    submitting=true; button.disabled=true; button.textContent='Submitting…';
+    root.querySelector('#reportError').hidden=true;
+    try {
+      if (!publicPayload) {
+        const files=Array.from(root.querySelector('#photos').files);
+        if (files.length>3 || files.some(f=>f.size>2000000 || !['image/jpeg','image/png','image/webp'].includes(f.type))) throw new Error('Choose up to three JPEG, PNG or WebP photos, each smaller than 2 MB.');
+        const photos=await Promise.all(files.map(async f=>({name:f.name,mime:f.type,content:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=()=>reject(new Error('Could not read photo.'));r.readAsDataURL(f);})})));
+        const values=Object.fromEntries(new FormData(root));
+        publicPayload={token:publicData.token, request_key:requestKey, form_id:form.id, revision:form.revision, reporter:values.reporter, contact:values.contact, plant:values.plant, location:values.location, answers:Object.fromEntries(form.questions.map(q=>[q.id,values[q.id] || ''])), photos};
+      }
+      // Refresh only the public token on retry; the report body and idempotency key stay unchanged.
+      if (button.dataset.retry==='true') publicPayload.token=(await publicApi('/api/reporting/public')).token;
+      const result=await publicApi('/api/reporting/submit','POST',publicPayload);
+      publicRoot.innerHTML=`<div class="report-wrap report-success"><span class="report-success-icon">✓</span><span class="report-kicker">THANK YOU / TERIMA KASIH</span><h1>You made a difference.</h1><p>Your report has been received by SHE.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this reference for follow-up with SHE.</p>${result.order_state==='issued' ? `<div class="report-flow-note">Kaizen work order issued: ${esc(result.order_id)}</div>` : result.order_state !== 'none' ? '<div class="report-flow-note">Your report is saved. SHE will follow up on the Kaizen work order connection.</div>' : ''}<a class="primary-button" href="/report">Report another finding →</a></div>`;
+      publicPayload=null;
+      window.scrollTo(0,0);
+    } catch(error) {
+      showError(root,error);
+      if (error.status && error.status<500) {publicPayload=null;root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=false);}
+      // Freeze an attempted payload until its receipt is recovered: retries must use the same key and body.
+      if (publicPayload) {
+        root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);
+        const output=root.querySelector('#reportError');
+        output.append(document.createTextNode(' Retry sends the same report. To correct a rejected form, return to the topic list and reopen it.'));
+      }
+    } finally { submitting=false; button.disabled=false;button.dataset.retry=String(Boolean(publicPayload)); button.textContent=publicPayload ? 'Retry same report →' : 'Submit report →'; }
+  }
+  const date = value => new Date(value*1000).toLocaleString('en-MY');
+  const stateLabel = state => ({none:'SHE review',pending:'Work order pending',sending:'Check CMMS before linking',failed:'Work order needs retry',uncertain:'Check CMMS before linking',issued:'Kaizen work order issued'}[state] || state);
+  const heading = (title,detail,actions='') => `<div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / REPORTING</span><h1>${esc(title)}</h1><p>${esc(detail)}</p></div>${actions}</div>`;
+  async function renderStaff(key) {
+    const root=document.getElementById('content'), version=++renderVersion;
+    const elevated=currentUser && ['admin','executive'].includes(currentUser.role);
+    root.innerHTML='<div class="page inner-page" role="status">Loading reporting…</div>';
+    try {
+      if (['reporting-forms','reporting-inbox'].includes(key) && !elevated) {
+        root.innerHTML='<div class="page inner-page">Executive access required.</div>';return;
+      }
+      if (key==='reporting-inbox') {
+        const id=location.hash.split('/')[2];
+        if (/^\d+$/.test(id || '')) { await detail(root,id,version); return; }
+        const result=await api('/api/reporting/reports');
+        if (version!==renderVersion || currentRoute()!==key) return;
+        inbox(root,result.reports);return;
+      }
+      const result=await publicApi('/api/reporting/public');
+      if (version!==renderVersion || currentRoute()!==key) return;
+      if (key==='reporting-forms') { formList(root,result.forms);return; }
+      const group=key==='findings'?'environment':key;
+      root.innerHTML=`<div class="page inner-page report-staff-page">${heading(key==='environmental'?'Environmental':groups[group] || key, 'Every finding is a chance to improve our workplace.', `<a href="/report${groups[group] ? '?area='+group : ''}" class="primary-button">Make a report ↗</a>`)}${hero('See it. Report it.<br /><em>Improve it.</em>', 'A simple, open reporting channel for employees and guests.', 'SHE ENVIRONMENTAL PROGRAMME')}${elevated ? '<div class="report-admin-links"><a class="secondary-button" href="#/reporting-inbox">Open SHE inbox →</a><a class="secondary-button" href="#/reporting-forms">Manage reporting forms →</a></div>' : ''}${key==='environmental' ? `<div class="report-intro"><h2>Three ways to make a difference</h2><p>Share this public link on posters: <a href="/report">${esc(location.origin)}/report</a></p></div><div class="report-staff-options">${Object.entries(groups).map(([g,label])=>`<a class="report-staff-option" href="#/${g==='environment'?'findings':g}">${svg(g==='environment'?'leaf':g==='kaizen'?'idea':'alert')}<strong>${label}</strong><span>Open reporting area →</span></a>`).join('')}</div>` : `<div class="report-intro"><h2>Available forms</h2></div>${topicCards(result.forms.filter(f=>f.group===group)).replaceAll('href="#/', 'href="/report#/')}`}</div>`;
+    } catch(error) { if (version===renderVersion) root.innerHTML=`<div class="page inner-page"><p role="alert">${esc(error.message)}</p><button class="secondary-button" id="reportReload">Try again</button></div>`;root.querySelector('#reportReload')?.addEventListener('click',()=>renderStaff(key)); }
+  }
+  function inbox(root,reports) {
+    root.innerHTML=`<div class="page inner-page">${heading('SHE reporting inbox','Reports from employees and guests. Review, take action, verify and close.', '<button class="secondary-button" id="refreshReports">Refresh</button>')}<div class="report-stats">${[['Total',reports.length],['Open',reports.filter(r=>r.status==='open').length],['In progress',reports.filter(r=>r.status==='in_progress').length],['Work order follow-up',reports.filter(r=>['pending','failed','uncertain','sending'].includes(r.order_state)).length]].map(([label,count])=>`<div><strong>${count}</strong><span>${label}</span></div>`).join('')}</div><div class="report-filter"><label>Search reports<input id="reportSearch" type="search" placeholder="Reference, name, location or topic" /></label><label>Status<select id="reportStatus"><option value="">All statuses</option>${['open','in_progress','resolved','closed'].map(s=>`<option value="${s}">${s.replace('_',' ')}</option>`).join('')}</select></label><label>Area<select id="reportArea"><option value="">All areas</option>${Object.entries(groups).map(([g,label])=>`<option value="${g}">${label}</option>`).join('')}</select></label></div><p class="field-hint">Showing up to the 500 most recent reports.</p><div id="reportRows"></div></div>`;
+    const draw=()=>{
+      const search=root.querySelector('#reportSearch').value.toLowerCase(), status=root.querySelector('#reportStatus').value, area=root.querySelector('#reportArea').value;
+      const rows=reports.filter(r=>(!status || r.status===status) && (!area || r.group===area) && `${r.reference} ${r.title} ${r.reporter} ${r.location}`.toLowerCase().includes(search));
+      root.querySelector('#reportRows').innerHTML=rows.length ? rows.map(r=>`<a class="report-inbox-row" href="#/reporting-inbox/${r.id}"><span class="report-inbox-mark">${svg(r.group==='environment'?'leaf':r.group==='kaizen'?'idea':'alert',24)}</span><div><small>${esc(r.reference)} · ${esc(groups[r.group])}</small><h3>${esc(r.title)}</h3><p>${esc(r.reporter)} · ${esc(r.location)} · ${r.plant==='port-klang'?'Port Klang':'Sendayan'}</p><small>${date(r.created_at)}</small></div><div class="report-row-state"><span class="report-status">${esc(r.status.replace('_',' '))}</span><small>${esc(stateLabel(r.order_state))}</small></div><span aria-hidden="true">→</span></a>`).join('') : '<p class="report-empty">No reports match these filters.</p>';
+    };
+    root.querySelectorAll('.report-filter input,.report-filter select').forEach(el=>el.addEventListener('input',draw));
+    root.querySelector('#refreshReports').addEventListener('click',()=>renderStaff('reporting-inbox'));draw();
+  }
+  async function detail(root,id,version) {
+    const {report:r}=await api(`/api/reporting/reports/${id}`);
+    if (version!==renderVersion || currentRoute()!=='reporting-inbox') return;
+    root.innerHTML=`<div class="page inner-page"><a class="back-link" href="#/reporting-inbox">← SHE inbox</a>${heading(r.snapshot.title,`${r.reference} · ${date(r.created_at)}`)}<div class="report-detail-grid"><section class="report-detail-card"><h2>Original report</h2><dl class="report-definition"><dt>Reporter</dt><dd>${esc(r.reporter)}</dd><dt>Contact / department</dt><dd>${esc(r.contact || 'Not supplied')}</dd><dt>Plant & location</dt><dd>${r.plant==='port-klang'?'Port Klang':'Sendayan'} · ${esc(r.location)}</dd>${r.snapshot.questions.map(q=>`<dt>${esc(q.label)}</dt><dd>${esc(r.answers[q.id] || 'Not supplied')}</dd>`).join('')}</dl><div class="report-evidence">${r.photos.map(p=>`<a href="data:${esc(p.mime)};base64,${esc(p.content)}" download="${esc(p.name)}"><img src="data:${esc(p.mime)};base64,${esc(p.content)}" alt="${esc(p.name)}" /><span>${esc(p.name)}</span></a>`).join('')}</div></section><div><section class="report-detail-card"><h2>Follow-up</h2><span class="report-status">${esc(r.status.replace('_',' '))}</span><form id="reportUpdate" class="stacked-form"><label for="actionStatus">Status</label><select id="actionStatus" name="status">${['open','in_progress','resolved','closed'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}</select><label for="actionNote">Action / verification note</label><textarea id="actionNote" name="note" maxlength="2000" rows="4" required></textarea><button class="primary-button">Save follow-up</button></form></section><section class="report-detail-card"><h2>Work order</h2><p>${esc(stateLabel(r.order_state))}</p>${r.order_id ? `<p>Order ID: <strong>${esc(r.order_id)}</strong></p><a class="secondary-button" href="#/work-orders/${encodeURIComponent(r.order_id)}/${r.plant}">Open work order →</a>` : ''}${r.order_error ? `<p class="report-urgent">${esc(r.order_error)}</p>` : ''}${['pending','failed'].includes(r.order_state)?'<button class="secondary-button" id="retryOrder">Retry issuing Kaizen order</button>':''}${['uncertain','sending'].includes(r.order_state)?'<p>Search CMMS for this report reference first. Link the matching order below to avoid creating a duplicate.</p><form id="linkOrder" class="stacked-form"><label for="orderId">Existing CMMS order ID</label><input id="orderId" name="order_id" maxlength="100" required /><button class="secondary-button">Link verified order</button></form>':''}</section>${errorBox()}</div></div><section class="report-detail-card"><h2>Action history</h2>${r.updates.length ? r.updates.map(u=>`<article class="report-update"><strong>${esc(u.actor)} · ${esc(u.status.replace('_',' '))}</strong><small>${date(u.created_at)}</small><p>${esc(u.note)}</p></article>`).join('') : '<p>No follow-up actions yet.</p>'}</section></div>`;
+    const perform=async (path,body,button)=>{button.disabled=true;try {await api(path,'POST',body);await renderStaff('reporting-inbox');}catch(error){showError(root,error);button.disabled=false;}};
+    root.querySelector('#reportUpdate').addEventListener('submit',event=>{event.preventDefault();perform(`/api/reporting/reports/${id}/updates`,{...Object.fromEntries(new FormData(event.target)),revision:r.revision},event.target.querySelector('button'));});
+    root.querySelector('#retryOrder')?.addEventListener('click',event=>perform(`/api/reporting/reports/${id}/retry-order`,{},event.target));
+    root.querySelector('#linkOrder')?.addEventListener('submit',event=>{event.preventDefault();perform(`/api/reporting/reports/${id}/link-order`,Object.fromEntries(new FormData(event.target)),event.target.querySelector('button'));});
+  }
+  function formList(root,list) {
+    root.innerHTML=`<div class="page inner-page">${heading('Reporting forms','Create and edit topics, questions and routing. Submitted reports retain their original questions.', '<button class="primary-button" id="addReportingForm">＋ New form</button>')}<div class="report-flow-note">Deleting removes a form from the public portal. Previously submitted reports remain in the SHE inbox.</div>${errorBox()}${Object.entries(groups).map(([g,label])=>`<div class="report-intro"><h2>${label}</h2></div>${topicCards(list.filter(f=>f.group===g),false)}`).join('')}</div>`;
+    root.querySelector('#addReportingForm').addEventListener('click',()=>editor(root));
+    root.querySelectorAll('[data-edit-form]').forEach(b=>b.addEventListener('click',()=>editor(root,list.find(f=>String(f.id)===b.dataset.editForm))));
+    root.querySelectorAll('[data-delete-form]').forEach(b=>b.addEventListener('click',async()=>{
+      const f=list.find(f=>String(f.id)===b.dataset.deleteForm);
+      if (!confirm(`Delete “${f.title}” from the public reporting portal? Existing reports will be kept.`)) return;
+      b.disabled=true;
+      try {await api(`/api/reporting/forms/${f.id}/delete`,'POST',{revision:f.revision});await renderStaff('reporting-forms');}catch(error){showError(root,error);b.disabled=false;}
+    }));
+  }
+  function editor(root,existing) {
+    const f=existing ? structuredClone(existing) : {title:'',description:'',group:'environment',icon:'leaf',workflow:'she',questions:[{id:'q'+Date.now(),label:'Describe your finding',type:'textarea',required:true,options:[]}]};
+    root.innerHTML=`<div class="page inner-page"><a class="back-link" href="#/reporting-forms" id="cancelEditor">← Reporting forms</a>${heading(existing?'Edit reporting form':'Create a reporting form','Shape a clear, helpful form for employees and guests.')}<form id="reportFormEditor" class="stacked-form report-editor"><section class="report-detail-card"><h2>Form details</h2><label for="formTitle">Form title</label><input id="formTitle" name="title" value="${esc(f.title)}" maxlength="120" required /><label for="formDescription">Description / Malay subtitle</label><textarea id="formDescription" name="description" rows="2" maxlength="1000">${esc(f.description)}</textarea><div class="report-two-col"><div><label for="formGroup">Reporting area</label><select id="formGroup" name="group">${Object.entries(groups).map(([g,label])=>`<option value="${g}" ${f.group===g?'selected':''}>${label}</option>`).join('')}</select></div><div><label for="formIcon">Topic icon</label><select id="formIcon" name="icon">${Object.keys(symbols).map(s=>`<option ${f.icon===s?'selected':''}>${s}</option>`).join('')}</select></div></div><label for="formWorkflow">After submission</label><select id="formWorkflow" name="workflow"><option value="she" ${f.workflow==='she'?'selected':''}>Send to SHE for review and action</option><option value="kaizen" ${f.workflow==='kaizen'?'selected':''}>Automatically issue a Kaizen work order</option></select><p class="field-hint">Every report also collects name, optional contact, plant, location and optional photos.</p></section><section class="report-detail-card"><h2>Questions</h2><div id="reportEditorQuestions"></div><button type="button" class="secondary-button" id="addQuestion">＋ Add question</button></section>${errorBox()}<div class="report-editor-actions"><button type="button" class="secondary-button" id="previewForm">Preview form</button><button class="primary-button" type="submit">Save form</button></div><section id="formPreview" class="report-detail-card" hidden></section></form></div>`;
+    const form=root.querySelector('#reportFormEditor'), questions=root.querySelector('#reportEditorQuestions');
+    function sync() {questions.querySelectorAll('[data-q-index]').forEach(el=>{const q=f.questions[Number(el.dataset.qIndex)];q.label=el.querySelector('[data-label]').value;q.type=el.querySelector('[data-type]').value;q.required=el.querySelector('[data-required]').checked;q.options=el.querySelector('[data-options]').value.split('\n').map(x=>x.trim()).filter(Boolean);});}
+    function draw() {
+      questions.innerHTML=f.questions.map((q,i)=>`<div class="report-question" data-q-index="${i}"><div class="report-question-top"><strong>Question ${i+1}</strong><div><button type="button" data-up="${i}" ${i===0?'disabled':''} aria-label="Move question ${i+1} up">↑</button><button type="button" data-down="${i}" ${i===f.questions.length-1?'disabled':''} aria-label="Move question ${i+1} down">↓</button><button type="button" data-remove="${i}" ${f.questions.length===1?'disabled':''}>Remove</button></div></div><label for="qLabel${i}">Question wording</label><input id="qLabel${i}" data-label value="${esc(q.label)}" maxlength="240" required /><label for="qType${i}">Answer type</label><select id="qType${i}" data-type>${Object.entries({text:'Short answer',textarea:'Long answer',select:'Choose one',number:'Number',date:'Date'}).map(([value,label])=>`<option value="${value}" ${q.type===value?'selected':''}>${label}</option>`).join('')}</select><div data-choice-fields ${q.type==='select'?'':'hidden'}><label for="qOptions${i}">Choices · one per line</label><textarea id="qOptions${i}" data-options rows="3">${esc(q.options.join('\n'))}</textarea></div><label class="report-checkbox"><input type="checkbox" data-required ${q.required?'checked':''} /> Required answer</label></div>`).join('');
+      questions.querySelectorAll('[data-type]').forEach(el=>el.addEventListener('change',()=>{el.closest('.report-question').querySelector('[data-choice-fields]').hidden=el.value!=='select';}));
+      questions.querySelectorAll('[data-up],[data-down],[data-remove]').forEach(b=>b.addEventListener('click',()=>{sync();const i=Number(b.dataset.up ?? b.dataset.down ?? b.dataset.remove);if (b.hasAttribute('data-remove')) f.questions.splice(i,1);else {const j=i+(b.hasAttribute('data-up')?-1:1);[f.questions[i],f.questions[j]]=[f.questions[j],f.questions[i]];}draw();}));
+    }
+    draw();
+    root.querySelector('#cancelEditor').addEventListener('click',e=>{e.preventDefault();renderStaff('reporting-forms');});
+    root.querySelector('#addQuestion').addEventListener('click',()=>{sync();if(f.questions.length>=30){showError(root,new Error('Maximum 30 questions.'));return;}f.questions.push({id:'q'+crypto.randomUUID().replaceAll('-',''),label:'',type:'text',required:false,options:[]});draw();});
+    root.querySelector('#previewForm').addEventListener('click',()=>{sync();const values=Object.fromEntries(new FormData(form)), preview=root.querySelector('#formPreview');preview.hidden=false;preview.innerHTML=`<span class="report-kicker">PREVIEW · UNSAVED</span><h2>${esc(values.title || 'Untitled form')}</h2><p>${esc(values.description)}</p><div class="stacked-form">${f.questions.map(field).join('')}</div>`;preview.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);preview.scrollIntoView({block:'start',behavior:'smooth'});});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();sync();const button=form.querySelector('[type=submit]');button.disabled=true;
+      try {const values=Object.fromEntries(new FormData(form));await api(existing?`/api/reporting/forms/${f.id}`:'/api/reporting/forms',existing?'PATCH':'POST',{...values,revision:f.revision,questions:f.questions});await renderStaff('reporting-forms');}catch(error){showError(root,error);button.disabled=false;}
+    });
+  }
+  if (publicRoot) {
+    publicApi('/api/reporting/public').then(data=>{publicData=data;const area=new URLSearchParams(location.search).get('area');if (!location.hash && groups[area]) location.hash='/'+area;renderPublic();}).catch(error=>{publicRoot.innerHTML=`<div class="report-wrap"><p role="alert">${esc(error.message)}</p><a class="secondary-button" href="/report">Try again</a></div>`;});
+    window.addEventListener('hashchange',renderPublic);
+  }
+  return {renderStaff};
+})();

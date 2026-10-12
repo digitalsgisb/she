@@ -100,10 +100,17 @@ class ReportingTests(unittest.TestCase):
         form.pop('revision')
         self.assertEqual(self.request('/api/reporting/forms', 'POST', form, cookie, csrf)[0], 201)
 
-    def test_regular_users_cannot_manage_forms_or_read_guest_reports(self):
+    def test_operators_read_all_reports_but_cannot_manage_forms_or_followup(self):
         cookie, csrf = self.elevated('user')
+        self.assertEqual(self.request('/api/reporting/submit', 'POST', self.payload())[0], 201)
         self.assertEqual(self.request('/api/reporting/forms', cookie=cookie)[0], 403)
-        self.assertEqual(self.request('/api/reporting/reports', cookie=cookie)[0], 403)
+        self.assertEqual(self.request('/api/reporting/reports', cookie=cookie)[0], 200)
+        report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
+        self.assertIsNone(report['user_id'])
+        self.assertEqual(report['reporter'], 'Guest Person')
+        self.assertEqual(self.request('/api/reporting/reports/1/updates', 'POST', {'revision':1,'status':'closed','note':'Operator action'}, cookie, csrf)[0], 403)
+        self.assertEqual(self.request('/api/reporting/reports/1/retry-order', 'POST', {}, cookie, csrf)[0], 403)
+        self.assertEqual(self.request('/api/reporting/reports/1/link-order', 'POST', {'order_id':'WO-1'}, cookie, csrf)[0], 403)
         self.assertEqual(self.request('/api/reporting/forms', 'POST', {}, cookie, csrf)[0], 403)
         self.assertEqual(self.request('/api/reporting/forms/1/delete', 'POST', {'revision':1}, cookie, csrf)[0], 403)
 

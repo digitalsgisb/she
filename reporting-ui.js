@@ -32,11 +32,14 @@ const SHEReporting = (() => {
     return `<section class="report-hero"><div><span class="report-kicker">${esc(kicker)}</span><h1>${title}</h1><p>${esc(detail)}</p></div><div class="report-hero-art" aria-hidden="true">${svg('leaf',100)}<span>SEE IT · REPORT IT · IMPROVE IT</span></div></section>`;
   }
   function choices() {
-    return `<div class="report-intro"><span class="eyebrow dark-eyebrow">START HERE / MULA DI SINI</span><h2>What would you like to report?</h2><p>No account needed. Employees and guests are welcome.</p></div><div class="report-choice-grid">${[
-      ['environment','leaf','Protect our environment','Leaks, waste, spills and everyday environmental concerns.','Alam sekitar'],
-      ['hiyari-hatto','alert','Spot a near miss','Share an unsafe situation before someone gets hurt.','Kejadian nyaris'],
-      ['kaizen','idea','Make things better','An idea today can become a better way of working tomorrow.','Penambahbaikan']
-    ].map(([key,symbol,title,desc,malay],i)=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-choice-top"><span class="report-symbol">${svg(symbol,38)}</span><span class="report-number">0${i+1}</span></span><span class="report-kicker">${groups[key]}</span><h3>${title}</h3><p>${desc}</p><span class="report-choice-bottom">${malay} <b aria-hidden="true">↗</b></span></a>`).join('')}</div>`;
+    return `<div class="report-choice-grid report-home-choices" aria-label="Choose a reporting area">${[
+      ['environment','leaf','Leaks, spills, waste & environmental concerns.','Alam sekitar'],
+      ['hiyari-hatto','alert','Spot a near miss. Help prevent an accident.','Kejadian nyaris'],
+      ['kaizen','idea','Share an idea. Improve the way we work.','Penambahbaikan']
+    ].map(([key,symbol,desc,malay],i)=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-symbol">${svg(symbol,34)}</span><div class="report-choice-copy"><span class="report-choice-label">${malay}</span><h2>${groups[key]}</h2><p>${desc}</p></div><span class="report-choice-go" aria-hidden="true">↗</span><span class="report-choice-index" aria-hidden="true">0${i+1}</span></a>`).join('')}</div>`;
+  }
+  function menuTopics(list) {
+    return `<div class="report-menu-grid">${list.map(f=>`<a href="#/${f.group}/${f.id}" class="report-menu-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon,27)}</span><div><h2>${esc(f.title)}</h2><p>${esc(f.description)}</p></div><span class="report-menu-go" aria-hidden="true">↗</span>${f.workflow==='kaizen'?'<span class="report-menu-auto">AUTO KAIZEN</span>':''}</a>`).join('')}</div>`;
   }
   function topicCards(list, publicMode=true) {
     return `<div class="report-topic-grid">${list.map(f=>`<${publicMode ? 'a' : 'article'} ${publicMode ? `href="#/${f.group}/${f.id}"` : ''} class="report-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon)}</span><div><h3>${esc(f.title)}</h3><p>${esc(f.description)}</p><span class="report-workflow">${f.workflow === 'kaizen' ? '↗ Automatic Kaizen work order' : 'SHE review & follow-up'}</span></div>${publicMode ? '<span aria-hidden="true">→</span>' : `<div class="report-topic-actions"><button class="secondary-button" data-edit-form="${f.id}">Edit</button><button class="report-danger" data-delete-form="${f.id}">Delete</button></div>`}</${publicMode ? 'a' : 'article'}>`).join('')}</div>`;
@@ -53,6 +56,7 @@ const SHEReporting = (() => {
     if (!publicData || submitting) return;
     const [area,id] = location.hash.replace(/^#\/?/,'').split('/');
     const selected=publicData.forms.find(f=>String(f.id)===id && f.group===area);
+    publicRoot.dataset.view=selected ? 'form' : groups[area] ? 'topics' : 'home';
     document.title = `${selected?.title || groups[area] || 'Report it. Improve it.'} · SHE Digital`;
     if (selected) {
       requestKey=crypto.randomUUID(); publicPayload=null;
@@ -64,9 +68,9 @@ const SHEReporting = (() => {
       publicRoot.querySelector('#findingForm').addEventListener('submit', e=>submitPublic(e,selected));
     } else if (groups[area]) {
       const list=publicData.forms.filter(f=>f.group===area);
-      publicRoot.innerHTML=`<div class="report-wrap"><a class="back-link" href="#/">← All reporting areas</a>${hero(groups[area], 'Choose the topic that best describes your finding.', 'REPORT IT. IMPROVE IT. / LAPOR. PERBAIKI.')}<div class="report-intro"><h2>${area==='environment'?'What can you report?':'Choose a form'}</h2><p>A few details are all it takes to get started.</p></div>${list.length ? topicCards(list) : '<p class="report-empty">No forms available in this area yet. Please contact SHE.</p>'}</div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-menu"><a class="back-link" href="#/">← All reporting areas</a><div class="report-menu-heading"><span class="report-kicker">SEE IT. REPORT IT. IMPROVE IT.</span><h1>${esc(groups[area])}<span>${svg(area==='environment'?'leaf':area==='kaizen'?'idea':'alert',32)}</span></h1><p>${area==='environment'?'What did you notice? Choose a topic below.':'Choose a form and share your finding with SHE.'}</p></div>${list.length ? menuTopics(list) : '<p class="report-empty">No forms available in this area yet. Please contact SHE.</p>'}<p class="report-menu-note">${area==='environment'?'Water leakage → automatic Kaizen order. Other findings → SHE review.':'Your report goes to SHE for review and follow-up.'}</p></div>`;
     } else {
-      publicRoot.innerHTML=`<div class="report-wrap">${hero('A better workplace<br /><em>starts with you.</em>', 'See something that could be safer, greener or better? Share it with SHE in just a few minutes.')}${choices()}<div class="report-how"><span><b>01</b> Choose a topic</span><span><b>02</b> Share the details</span><span><b>03</b> SHE takes action</span></div></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-home"><section class="report-welcome"><span class="report-open-pill"><i></i> EMPLOYEES & GUESTS WELCOME</span><h1>See it. Report it.<br /><em>Make a difference.</em></h1><p>A safer, greener workplace starts with you.<br class="report-mobile-break" /> Choose a reporting area to get started.</p></section>${choices()}<div class="report-home-trust"><span>${svg('leaf',16)} No account needed</span><span class="report-trust-dot">·</span><span>Every report reaches SHE</span></div></div>`;
     }
     window.scrollTo(0,0);
   }
@@ -87,6 +91,7 @@ const SHEReporting = (() => {
       // Refresh only the public token on retry; the report body and idempotency key stay unchanged.
       if (button.dataset.retry==='true') publicPayload.token=(await publicApi('/api/reporting/public')).token;
       const result=await publicApi('/api/reporting/submit','POST',publicPayload);
+      publicRoot.dataset.view='success';
       publicRoot.innerHTML=`<div class="report-wrap report-success"><span class="report-success-icon">✓</span><span class="report-kicker">THANK YOU / TERIMA KASIH</span><h1>You made a difference.</h1><p>Your report has been received by SHE.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this reference for follow-up with SHE.</p>${result.order_state==='issued' ? `<div class="report-flow-note">Kaizen work order issued: ${esc(result.order_id)}</div>` : result.order_state !== 'none' ? '<div class="report-flow-note">Your report is saved. SHE will follow up on the Kaizen work order connection.</div>' : ''}<a class="primary-button" href="/report">Report another finding →</a></div>`;
       publicPayload=null;
       window.scrollTo(0,0);

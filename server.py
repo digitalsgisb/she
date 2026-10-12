@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 from cmms_bridge import CmmsError, bridge
 import reporting
 import access
+import she_statistics
 import redtag
 
 
@@ -378,6 +379,12 @@ class Handler(BaseHTTPRequestHandler):
                     templates = [dict(id=0, user_id=None, is_default=True, revision=default['revision'], **json.loads(default['definition_json']))]
                     templates.extend(dict(id=row['id'], user_id=row['user_id'], revision=row['revision'], **json.loads(row['definition_json'])) for row in db.execute('SELECT * FROM patrol_templates ORDER BY id DESC'))
                     self.send_json(200, {'templates': templates})
+            return
+        if path == '/api/patrols/statistics':
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    she_statistics.get(self, db, session[0], 'patrol')
             return
         if path == "/api/patrols" or re.fullmatch(r"/api/patrols/\d+(?:/attachments/[0-9a-f]{32})?", path):
             with database() as db:

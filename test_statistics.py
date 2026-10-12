@@ -19,7 +19,7 @@ class StatisticsTests(unittest.TestCase):
         self.first_admin()
         self.admin,self.csrf=self.login('admin','AdminPassword123!')
         with server.database() as db:
-            for name,role,features in [('executive','executive',['red-tag','reporting']),('operator','user',['red-tag','reporting']),('restricted','executive',['patrol'])]:
+            for name,role,features in [('executive','executive',['patrol','red-tag','reporting']),('operator','user',['red-tag','reporting']),('restricted','executive',[])]:
                 db.execute('INSERT INTO users(username,display_name,password_hash,role,active,created_at,feature_access) VALUES(?,?,?,?,1,1,?)',
                            (name,name,server.hash_password('PasswordForTest123!'),role,json.dumps(features)))
         self.executive,self.exec_csrf=self.login('executive','PasswordForTest123!')
@@ -38,7 +38,7 @@ class StatisticsTests(unittest.TestCase):
                            (str(i),'hash',json.dumps(dict(title=title,group=group)),'{}','Guest','','port-klang','Production','[]',status,timestamp,order))
     def test_role_and_feature_checks_on_both_statistic_endpoints(self):
         self.accounts()
-        for path in ['/api/red-tags/statistics','/api/reporting/statistics']:
+        for path in ['/api/patrols/statistics','/api/red-tags/statistics','/api/reporting/statistics']:
             self.assertEqual(self.request(path)[0],401)
             self.assertEqual(self.request(path,cookie=self.operator)[0],403)
             self.assertEqual(self.request(path,cookie=self.restricted)[0],403)
@@ -102,5 +102,34 @@ class StatisticsTests(unittest.TestCase):
             self.assertEqual(response['summary']['total'],0)
             self.assertIsNone(response['summary']['completion_rate'])
             self.assertTrue(all(p['count']==0 for p in response['trend']['points']))
+
+    def test_patrol_typed_answers_incomplete_submissions_and_followup(self):
+        self.accounts()
+        custom=dict(title='Custom machinery check',questions=[dict(id='q_guard',type='status'),dict(id='q_note',type='text')])
+        with server.database() as db:
+            fixtures=[('2026-10-01T00:00:00',{'general_0':'not_ok','general_1':'ok','ppe_0':'na'},None,'open',1),
+                      ('2026-10-13T12:00:00',{'q_guard':'not_ok','q_note':'not_ok'},custom,'action_taken',1),
+                      ('2026-10-20T12:00:00',{'general_0':'ok','ppe_0':'na'},None,'open',1),
+                      ('2026-10-21T12:00:00',{'q_guard':'not_ok','q_note':'not_ok'},custom,'resolved',1),
+                      ('2026-10-22T12:00:00',{'general_0':'not_ok'},None,'open',0),
+                      ('2026-09-30T23:59:59',{'general_0':'not_ok'},None,'open',1)]
+            for day,answers,template,status,completed in fixtures:
+                timestamp=int(datetime.fromisoformat(day).replace(tzinfo=stats.TZ).timestamp())
+                db.execute('INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,followup_status,completed) VALUES(1,?,?,?,?,?,?,?,?)',
+                           ('Sara',json.dumps(answers),3,'',timestamp,json.dumps(template),status,completed))
+        response=self.request('/api/patrols/statistics?month=2026-10',cookie=self.executive)[1]
+        self.assertEqual(response['summary']['total'],4)
+        self.assertEqual(response['summary']['with_findings'],3)
+        self.assertEqual(response['summary']['not_ok_items'],3)
+        self.assertEqual(response['summary']['ok_rate'],40)
+        self.assertEqual(response['summary']['outstanding'],2)
+        self.assertEqual(response['backlog']['outstanding'],3)
+        self.assertEqual(response['answers'],[dict(label='OK',count=2),dict(label='NOT OK',count=3),dict(label='N/A',count=2)])
+        self.assertEqual(sum(x['count'] for x in response['sections']),3)
+        self.assertEqual(sum(x['count'] for x in response['statuses']),4)
+        self.assertEqual(response['trend']['points'][0]['count'],1)
+        self.assertEqual(response['checklists'][0]['count'],2)
+        self.assertEqual(sum(x['count'] for x in response['trend']['points']),4)
+        self.assertEqual(self.request('/api/patrols/statistics',cookie=self.operator)[0],403)
 
 if __name__=='__main__': unittest.main()

@@ -101,6 +101,48 @@ def reports(db, selection, group):
     result['group_label']=labels.get(group,'All reporting areas')
     return result
 
+def patrol_summary(rows):
+    result=summary(rows)
+    result['with_findings']=sum(r['not_ok']>0 for r in rows)
+    result['not_ok_items']=sum(r['not_ok'] for r in rows)
+    ok=sum(r['ok'] for r in rows)
+    checked=ok+result['not_ok_items']
+    result['ok_rate']=round(ok/checked*100,1) if checked else None
+    return result
+
+def patrols(db, selection):
+    groups={'general':'General observations','machinery':'Machinery / equipment','ppe':'PPE',
+            'hazards':'Hazards','others':'Other observations'}
+    rows=[]
+    for row in db.execute('SELECT inspector_name,answers_json,rating,created_at,template_json,followup_status FROM patrols WHERE completed=1'):
+        answers=json.loads(row['answers_json'])
+        template=json.loads(row['template_json'])
+        keys=[q['id'] for q in template['questions'] if q['type']=='status'] if template else list(answers)
+        checked=Counter(answers.get(k) for k in keys)
+        sections=Counter()
+        for key in keys:
+            if answers.get(key)=='not_ok':
+                match=re.fullmatch(r'(?:q_)?(general|machinery|ppe|hazards|others)_\d+',key)
+                sections[groups[match[1]] if match else 'Custom checklists']+=1
+        not_ok=checked['not_ok']
+        status='No findings' if not not_ok else {'open':'Open','action_taken':REVIEW,'resolved':'Resolved'}[row['followup_status']]
+        rows.append(dict(date=datetime.fromtimestamp(row['created_at'],TZ).date().isoformat(),
+                         status=status,inspector=row['inspector_name'],checklist=template['title'] if template else 'Daily Safety Patrol Checklist',
+                         rating=str(row['rating'])+' star'+('s' if row['rating']!=1 else ''),
+                         ok=checked['ok'],not_ok=not_ok,na=checked['na'],sections=sections))
+    selected=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
+    section_counts=Counter()
+    for row in selected: section_counts.update(row['sections'])
+    state_counts=Counter(r['status'] for r in selected)
+    activity=trend(selected,selection)
+    activity['unit']='patrols'
+    activity['note']=activity['note'].replace('Findings','Completed patrols')
+    return dict(kind='patrol',selection=selection,summary=patrol_summary(selected),backlog=patrol_summary(rows),
+                statuses=[dict(label=label,count=state_counts[label]) for label in ('No findings','Open',REVIEW,'Resolved')],
+                answers=[dict(label=label,count=sum(r[key] for r in selected)) for label,key in [('OK','ok'),('NOT OK','not_ok'),('N/A','na')]],
+                sections=[dict(label=label,count=count) for label,count in sorted(section_counts.items(),key=lambda x:(-x[1],x[0]))],
+                inspectors=counts(selected,'inspector'),checklists=counts(selected,'checklist'),ratings=counts(selected,'rating'),trend=activity)
+
 def get(h, db, user, kind):
     if user['role'] not in ('executive','admin'):
         h.error_json(403,'Statistics are available to Executives and Admins only.')
@@ -108,7 +150,7 @@ def get(h, db, user, kind):
     query=parse_qs(urlsplit(h.path).query)
     try:
         selection=period(query)
-        result=red_tags(db,user,selection) if kind=='red-tag' else reports(db,selection,query.get('group',['environment'])[0])
+        result=patrols(db,selection) if kind=='patrol' else red_tags(db,user,selection) if kind=='red-tag' else reports(db,selection,query.get('group',['environment'])[0])
         h.send_json(200,result)
     except ValueError as error:
         h.error_json(400,str(error))

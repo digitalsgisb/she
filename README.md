@@ -1,6 +1,10 @@
 # SHE Digital
 
-SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Safety has the Daily Safety Patrol Checklist and Patrol Overview & History. Health has a landing page ready for future modules. Environmental includes public Environment, Hiyari Hatto and Kaizen reporting, Executive form management and a SHE follow-up inbox. Red Tag and Waste remain planned modules.
+SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Safety has the Daily Safety Patrol Checklist and Patrol Overview & History. Health has a landing page ready for future modules. Environmental includes public Environment, Hiyari Hatto and Kaizen reporting, Executive form management and a SHE follow-up inbox. Safety also includes Red Tag / Safety genba and a phone-focused PIC action inbox. Waste remains a planned module.
+
+## Red Tag / Tuesday safety genba
+
+Record genba hazards with before pictures, assign section/PIC accounts, print dated physical forms, and export finding details for Google Sheets. PICs receive assigned findings in **My Red Tag Actions**, take or select after photos on their phone, and send completed actions for SHE verification. Executives/Admins control each user's feature access. See [setup, PIC workflow, printing and export](docs/red-tag-genba.md). Deploy the updated server before using these features.
 
 ## Public SHE reporting and environmental programme
 
@@ -44,7 +48,7 @@ Open reports, patrol details, checklist selectors, and dashboard counts refresh 
 
 Open **Safety → Daily Safety Patrol Checklist** to submit an inspection. The form includes the inspector (Sara, Aman, or another name), all 23 items from the supplied checklist with OK / NOT OK / N/A choices, a required 1–3 star overall rating, remarks, and up to 10 attachments of 1 GB each. Answers and remarks are saved as a local draft on the current device while the form is open; attachments must be selected again after a reload. Submission requires a connection.
 
-The **Safety → Patrol Overview & History** page shows weekly and monthly monitoring, including completed patrols, patrols with findings, NOT OK answers, OK rate excluding N/A, activity, and findings by section. Its history can be searched or filtered to patrols with findings, and each record opens its full answers and attachments. The **Safety** landing page links to both patrol features and summarizes the current month. Users see their own patrols and monitoring; Executives and Admins see all patrols. Only Admins manage accounts. Existing user databases migrate automatically to support the Executive role. Patrols and attachment files are stored beside the SQLite database, so the existing Docker volume persists them. All patrol endpoints require a signed-in session; submissions and uploads also require the CSRF token.
+The **Safety → Patrol Overview & History** page shows weekly and monthly monitoring, including completed patrols, patrols with findings, NOT OK answers, OK rate excluding N/A, activity, and findings by section. Its history can be searched or filtered to patrols with findings, and each record opens its full answers and attachments. The **Safety** landing page links to both patrol features and summarizes the current month. Users see their own patrols and monitoring; Executives and Admins see all patrols. Admins manage all accounts; Executives can manage regular user accounts and their feature access. Existing user databases migrate automatically to support the Executive role. Patrols and attachment files are stored beside the SQLite database, so the existing Docker volume persists them. All patrol endpoints require a signed-in session; submissions and uploads also require the CSRF token.
 
 On phones and in the installed PWA, a SHE-green bottom bar provides quick links to Home, Patrol, History, and Orders. **More** opens the full sidebar with Safety, Health, Environmental, My Account, and User Management for admins. The bar stays out of the way of the patrol form's submit controls and respects phone safe areas.
 
@@ -89,7 +93,7 @@ docker compose build
 docker compose run --rm -it safety-digital python server.py create-admin
 ```
 
-The command prompts for an admin username, display name, and password of at least 12 characters. The password is entered interactively and is not stored in a command, environment file, or Git. Run this only once. Later accounts are created in **User Management** after an admin signs in.
+The command prompts for an admin username, display name, and password of at least 12 characters. The password is entered interactively and is not stored in a command, environment file, or Git. Run this only once. Later accounts are created in **User Management** after an Admin or Executive signs in (Executives create regular user accounts only).
 
 ### 4. Start and verify
 

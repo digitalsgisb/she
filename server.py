@@ -26,6 +26,8 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from cmms_bridge import CmmsError, bridge
 import reporting
+import access
+import redtag
 
 
 ROOT = Path(__file__).resolve().parent
@@ -130,6 +132,7 @@ def init_db() -> None:
         db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
+        redtag.init(db)
         for table, column, definition in [
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
@@ -163,6 +166,8 @@ def init_db() -> None:
                 raise
             finally:
                 db.execute("PRAGMA foreign_keys=ON")
+        if "feature_access" not in {r["name"] for r in db.execute("PRAGMA table_info(users)")}:
+            db.execute("ALTER TABLE users ADD COLUMN feature_access TEXT")
 
 
 def hash_password(password: str) -> str:
@@ -190,6 +195,7 @@ def public_user(row: sqlite3.Row) -> dict:
         "role": row["role"],
         "active": bool(row["active"]),
         "created_at": row["created_at"],
+        "features": access.features(row),
     }
 
 
@@ -251,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
             limit = 7_000_000 if re.fullmatch(r"/api/cmms/work-orders/[a-zA-Z0-9-]+/attachments", urlsplit(self.path).path) else 16_384
             if urlsplit(self.path).path.startswith(('/api/patrol-templates', '/api/patrols')):
                 limit = 600_000
+            if urlsplit(self.path).path.startswith('/api/red-tags'):
+                limit = 3_000_000
             if urlsplit(self.path).path.startswith('/api/reporting/'):
                 limit = 9_000_000
             if length < 2 or length > limit:
@@ -312,7 +320,12 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(HTTPStatus.UNAUTHORIZED, "Please sign in.")
             return None
         user, details = session
-        if admin and user["role"] != "admin":
+        feature = access.route_feature(urlsplit(self.path).path)
+        allowed = access.features(user)
+        if feature and feature not in allowed and not (feature == "red-tag" and "red-tag-pic" in allowed):
+            self.error_json(403, "You do not have access to this feature.")
+            return None
+        if admin and user["role"] not in ("admin", "executive"):
             self.error_json(HTTPStatus.FORBIDDEN, "Admin access required.")
             return None
         if csrf and not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), details["csrf_token"]):
@@ -322,6 +335,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith("/api/red-tags"):
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    redtag.get(self, db, path, session[0])
+            return
         if path.startswith('/api/reporting/'):
             with database() as db:
                 reporting.get(self, db, path)
@@ -348,7 +367,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/users":
             with database() as db:
                 if self.authorize(db, admin=True):
-                    users = db.execute("SELECT * FROM users ORDER BY created_at DESC,id DESC").fetchall()
+                    actor = self.session(db)[0]
+                    users = db.execute("SELECT * FROM users WHERE role='user' OR ?='admin' ORDER BY created_at DESC,id DESC", (actor["role"],)).fetchall()
                     self.send_json(200, {"users": [public_user(user) for user in users]})
             return
         if path == '/api/patrol-templates':
@@ -371,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.cmms_get(path)
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
+        assets.update({"/redtag-ui.js": ROOT / "redtag-ui.js", "/redtag.css": ROOT / "redtag.css"})
         assets.update({'/report': ROOT / 'report.html', '/report/': ROOT / 'report.html',
                        '/report.html': ROOT / 'report.html', '/reporting-ui.js': ROOT / 'reporting-ui.js',
                        '/reporting.css': ROOT / 'reporting.css'})
@@ -481,6 +502,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path.startswith("/api/red-tags"):
+                redtag.change(self, db, path, method, data, user)
+                return
             if path.startswith('/api/reporting/'):
                 reporting.change(self, db, path, method, data, user)
                 return
@@ -507,10 +531,13 @@ class Handler(BaseHTTPRequestHandler):
             if method == "POST" and path == "/api/me/password":
                 self.change_password(db, user, data)
                 return
-            if user["role"] != "admin":
-                self.error_json(403, "Admin access required.")
+            if user["role"] not in ("admin", "executive"):
+                self.error_json(403, "Executive or Admin access required.")
                 return
             if method == "POST" and path == "/api/users":
+                if user["role"] == "executive" and data.get("role", "user") != "user":
+                    self.error_json(403, "Executives can create regular user accounts only.")
+                    return
                 self.create_user(db, data)
                 return
             match = re.fullmatch(r"/api/users/(\d+)", path)
@@ -519,6 +546,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             match = re.fullmatch(r"/api/users/(\d+)/reset-password", path)
             if method == "POST" and match:
+                target = db.execute("SELECT role FROM users WHERE id=?", (int(match.group(1)),)).fetchone()
+                if user["role"] == "executive" and (not target or target["role"] != "user"):
+                    self.error_json(403, "Executives can manage regular user accounts only.")
+                    return
                 self.reset_password(db, user["id"], int(match.group(1)), data)
                 return
             self.error_json(404, "Not found.")
@@ -927,10 +958,16 @@ class Handler(BaseHTTPRequestHandler):
             self.error_json(400, "Enter a valid username, display name, role and password of at least 12 characters.")
             return
         try:
+            feature_access = access.validate(data["features"]) if "features" in data else None
+        except ValueError as error:
+            self.error_json(400, str(error))
+            return
+        try:
             cursor = db.execute("INSERT INTO users(username,display_name,password_hash,role,active,created_at) VALUES(?,?,?,?,1,?)", (username, name, hash_password(password), role, int(time.time())))
         except sqlite3.IntegrityError:
             self.error_json(409, "That username is already in use.")
             return
+        db.execute("UPDATE users SET feature_access=? WHERE id=?", (feature_access, cursor.lastrowid))
         created = db.execute("SELECT * FROM users WHERE id=?", (cursor.lastrowid,)).fetchone()
         db.commit()
         self.send_json(201, {"user": public_user(created)})
@@ -941,7 +978,7 @@ class Handler(BaseHTTPRequestHandler):
         if not target:
             self.error_json(404, "User not found.")
             return
-        if not data or set(data) - {"display_name", "role", "active"}:
+        if not data or set(data) - {"display_name", "role", "active", "features"}:
             self.error_json(400, "Invalid update.")
             return
         name = str(data.get("display_name", target["display_name"])).strip()
@@ -949,6 +986,14 @@ class Handler(BaseHTTPRequestHandler):
         active = data.get("active", bool(target["active"]))
         if not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user") or not isinstance(active, bool):
             self.error_json(400, "Invalid user details.")
+            return
+        if actor["role"] == "executive" and (target["role"] != "user" or role != "user"):
+            self.error_json(403, "Executives can manage regular user accounts only.")
+            return
+        try:
+            feature_access = access.validate(data["features"]) if "features" in data else target["feature_access"]
+        except ValueError as error:
+            self.error_json(400, str(error))
             return
         if user_id == actor["id"] and (role != "admin" or not active):
             self.error_json(400, "You cannot remove your own admin access.")
@@ -959,6 +1004,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.error_json(400, "At least one active admin is required.")
                 return
         db.execute("UPDATE users SET display_name=?,role=?,active=? WHERE id=?", (name, role, int(active), user_id))
+        db.execute("UPDATE users SET feature_access=? WHERE id=?", (feature_access, user_id))
         if not active:
             db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
         updated = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()

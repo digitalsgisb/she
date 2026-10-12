@@ -25,6 +25,7 @@ const routes = {
   dashboard: { title: 'Dashboard', icon: 'grid' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
+  'red-tag-pic': { title: 'My Red Tag Actions', icon: 'tag' },
   'hiyari-hatto': { title: 'Hiyari Hatto', icon: 'alert' },
   waste: { title: 'Waste', icon: 'waste' },
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
@@ -41,7 +42,34 @@ const routes = {
   account: { title: 'My Account', icon: 'person' },
 };
 
-const envItems = ['findings', 'hiyari-hatto', 'kaizen', 'red-tag', 'waste'];
+
+const workspaceFeatures = {'patrol':'Safety patrol & history','red-tag':'Red Tag / Safety genba','red-tag-pic':'PIC actions — assigned red tags only','reporting':'Environmental reporting & inbox','work-orders':'SHE Work Orders','health':'Health','waste':'Waste'};
+function canAccessRoute(key) {
+  if (!currentUser) return false;
+  const has = feature => currentUser.role === 'admin' || (currentUser.features || Object.keys(workspaceFeatures)).includes(feature);
+  if (['dashboard','account'].includes(key)) return true;
+  if (key === 'users') return ['admin','executive'].includes(currentUser.role);
+  if (key === 'safety') return has('patrol') || has('red-tag') || has('red-tag-pic');
+  if (key === 'environmental') return has('reporting') || has('waste');
+  if (['daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return has('patrol');
+  if (['findings','hiyari-hatto','kaizen','reporting-inbox','reporting-forms'].includes(key)) return has('reporting') && (key !== 'reporting-forms' || currentUser.role !== 'user');
+  return has(key);
+}
+function filterFeatureLinks(root) {
+  root.querySelectorAll('a[href^="#/"]').forEach(link => {
+    if (!canAccessRoute(link.getAttribute('href').slice(2).split('/')[0])) {
+      const parent=link.closest('.nav-parent');
+      if(parent){ const submenu=parent.nextElementSibling;parent.remove();if(submenu?.classList.contains('subnav'))submenu.remove(); }
+      else link.remove();
+    }
+  });
+}
+function featurePermissions(user) {
+  const selected=user?.features || Object.keys(workspaceFeatures);
+  return '<fieldset class="feature-permissions"><legend>Feature access</legend><p class="field-hint">Select what this account can open. Admins have all features.</p>'+Object.entries(workspaceFeatures).map(([key,label])=>'<label><input type="checkbox" name="feature" value="'+key+'" '+(selected.includes(key)?'checked':'')+'>'+label+'</label>').join('')+'</fieldset>';
+}
+
+const envItems = ['findings', 'hiyari-hatto', 'kaizen', 'waste'];
 const featureDescriptions = {
   'red-tag': 'A space for Red Tag records and follow-up.',
   'hiyari-hatto': 'A space to capture near misses and early warnings.',
@@ -134,6 +162,12 @@ function mobileTab(key, label, symbol, active) {
 }
 
 function renderMobileNavigation(active) {
+  mobileTabbar.classList.remove('pic-navigation');
+  if(canAccessRoute('red-tag-pic')&&!canAccessRoute('daily-safety-patrol')) {
+    mobileTabbar.classList.add('pic-navigation');
+    mobileTabbar.innerHTML=mobileTab('dashboard','Home','grid',active==='dashboard')+mobileTab('red-tag-pic','My Actions','tag',active==='red-tag-pic')+'<button class="mobile-tab" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">'+icon('menu',20)+'<span>More</span></button>';
+    return;
+  }
   const tab = active === 'dashboard' ? 'dashboard' : active === 'daily-safety-patrol' ? 'daily-safety-patrol' : active === 'patrol-overview' ? 'patrol-overview' : active === 'work-orders' ? 'work-orders' : 'more';
   mobileTabbar.innerHTML = `${mobileTab('dashboard', 'Home', 'grid', tab === 'dashboard')}${mobileTab('daily-safety-patrol', 'Patrol', 'clipboard', tab === 'daily-safety-patrol')}${mobileTab('patrol-overview', 'History', 'clock', tab === 'patrol-overview')}${mobileTab('work-orders', 'Orders', 'briefcase', tab === 'work-orders')}<button class="mobile-tab ${tab === 'more' ? 'active' : ''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu', 20)}<span>More</span></button>`;
 }
@@ -142,14 +176,14 @@ function renderNav(active) {
   const previousSubnavs = [...nav.querySelectorAll('.subnav')];
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('dashboard', `nav-link ${active === 'dashboard' ? 'active' : ''}`)}
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a></div></div>
+    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol Overview &amp; History</a><a class="subnav-link" href="#/red-tag"><span class="subnav-dot"></span>Red Tag · Safety genba</a><a class="subnav-link" href="#/red-tag-pic"><span class="subnav-dot"></span>My Red Tag Actions</a></div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${[...envItems, 'reporting-inbox', ...(currentUser?.role !== 'user' ? ['reporting-forms'] : [])].map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">WORKSPACE</div>
     ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
-    ${currentUser?.role === 'admin' ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
+    ${['admin','executive'].includes(currentUser?.role) ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
     ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
   previousSubnavs.forEach(previous => {
     const replacement = document.getElementById(previous.id);
@@ -158,6 +192,7 @@ function renderNav(active) {
   });
   [['safetySubnav', safetyExpanded], ['environmentSubnav', envExpanded]].forEach(([id, expanded]) => {
     const submenu = document.getElementById(id);
+    if (!submenu) return;
     submenu.getBoundingClientRect();
     submenu.classList.toggle('expanded', expanded);
     submenu.inert = !expanded;
@@ -177,6 +212,7 @@ function renderNav(active) {
   nav.querySelector('a[href="#/safety"]').addEventListener('click', () => {
     if (active === 'safety' && !safetyExpanded) { safetyExpanded = true; renderNav(active); }
   });
+  filterFeatureLinks(nav);
 }
 
 function sectionCard(key, number, description) {
@@ -195,7 +231,7 @@ function renderDashboard() {
 }
 
 function renderSafetyHome() {
-  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">02 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Choose a checklist or create one with questions and photo uploads.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol Overview &amp; History</strong><span>Review daily reports, findings photos, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a></div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">03 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Choose a checklist or create one with questions and photo uploads.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol Overview &amp; History</strong><span>Review daily reports, findings photos, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/red-tag"><span class="module-icon">${icon('tag',23)}</span><span class="module-copy"><small>TUESDAY GENBA</small><strong>Red Tag · Safety genba</strong><span>Record hazards, assign PICs, track actions, and print findings.</span></span><span class="module-arrow">${icon('arrow',18)}</span></a></div></div>`;
 }
 
 function renderHealth() {
@@ -203,6 +239,7 @@ function renderHealth() {
 }
 
 async function loadSafetyPulse(targetId) {
+  if (!canAccessRoute('daily-safety-patrol')) { const target=document.getElementById(targetId); if(target) target.textContent='Open Red Tag to record and review safety genba findings.'; return; }
   const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
   try {
@@ -289,13 +326,14 @@ async function showLogin(message = '') {
 
 function showApp(session) {
   currentUser = session.user;
-  cmmsStart();
+  if (canAccessRoute('work-orders')) cmmsStart();
   csrfToken = session.csrf_token;
   loginScreen.hidden = true;
   appShell.classList.add('app-shell');
   appShell.hidden = false;
   loginForm.reset();
   headerUser.textContent = currentUser.display_name;
+  if(currentUser.role!=='admin' && currentUser.features?.length===1 && currentUser.features[0]==='red-tag-pic' && currentRoute()==='dashboard') location.hash='#/red-tag-pic';
   render();
 }
 
@@ -324,7 +362,9 @@ function openUserModal(kind, user = null) {
     title = `Reset password`;
     fields = `<p class="modal-description">Set a new password for ${escapeHtml(user.display_name)}. All current sessions for this user will end.</p><label for="userPassword">New password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />`;
   }
+  if (kind !== 'reset') fields += featurePermissions(user);
   modalBody.innerHTML = `<span class="eyebrow dark-eyebrow">USER MANAGEMENT</span><h2 id="modalTitle">${escapeHtml(title)}</h2><form id="userModalForm" class="stacked-form">${fields}<div class="form-error" id="modalError" role="alert" hidden></div><div class="modal-actions"><button class="secondary-button" type="button" id="cancelModal">Cancel</button><button class="primary-button" type="submit">${kind === 'create' ? 'Create user' : kind === 'edit' ? 'Save changes' : 'Reset password'}</button></div></form>`;
+  if(currentUser.role === 'executive') { modalBody.querySelectorAll('#userRole option').forEach(o => { if(o.value !== 'user') o.remove(); }); }
   addPasswordToggles(modalBody);
   modalBackdrop.hidden = false;
   document.getElementById('cancelModal').addEventListener('click', closeModal);
@@ -333,6 +373,7 @@ function openUserModal(kind, user = null) {
     const form = event.currentTarget;
     const submit = form.querySelector('button[type="submit"]');
     const data = Object.fromEntries(new FormData(form));
+    if (kind !== 'reset') { data.features = [...form.querySelectorAll('[name=feature]:checked')].map(x => x.value); delete data.feature; }
     if (kind === 'edit') data.active = data.active === 'true';
     submit.disabled = true;
     try {
@@ -380,14 +421,15 @@ function toggleMenu() {
 function render() {
   if (!currentUser) return;
   const key = currentRoute();
-  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder'].includes(key);
+  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(key);
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
-  if (key === 'users' && currentUser.role !== 'admin') { location.hash = '#/dashboard'; return; }
+  if (!canAccessRoute(key)) { location.hash = '#/dashboard'; return; }
   renderNav(key);
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
   if (key === 'users') renderUsers();
+  else if (['red-tag','red-tag-pic'].includes(key)) renderGenba();
   else if (key === 'work-orders') renderWorkOrders();
   else if (key === 'checklist-builder') renderChecklistBuilder();
   else if (key === 'patrol-overview') renderPatrolOverview();
@@ -396,8 +438,11 @@ function render() {
     if (id && /^\d+$/.test(id)) renderPatrolDetail(id);
     else renderPatrolForm();
   }
-  else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key);
+  else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
+  if(key==='safety' && canAccessRoute('red-tag-pic'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/red-tag-pic"><span class="module-icon">'+icon('tag',23)+'</span><span class="module-copy"><strong>My Red Tag Actions</strong><span>Receive assigned findings and upload action notes and after pictures.</span></span></a>');
+  filterFeatureLinks(content);
+  filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');
   if (key === 'safety') loadSafetyPulse('safetyHomePulse');
   if (key === 'account') {

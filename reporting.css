@@ -15,12 +15,15 @@
 .report-atmosphere { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .report-atmosphere::before {
   content: ""; position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 12% 0%, #29785588, transparent 52%), radial-gradient(ellipse at 95% 100%, #072f2980, transparent 65%);
+  background: radial-gradient(ellipse at 12% 0%, #378a6288, transparent 52%), radial-gradient(ellipse at 95% 100%, #072f2980, transparent 65%);
+  animation: report-glow 16s ease-in-out infinite alternate;
 }
-.report-atmosphere span { position: absolute; border: 1px solid #b9e3bd18; border-radius: 50%; width: 660px; height: 660px; right: -280px; top: -330px; animation: report-orbit 24s ease-in-out infinite alternate; }
+.report-atmosphere span { position: absolute; border: 1px solid #b9e3bd38; border-radius: 50%; width: 660px; height: 660px; right: -280px; top: -330px; animation: report-orbit 12s ease-in-out infinite alternate; }
 .report-atmosphere span:nth-child(2) { width: 750px; height: 750px; top: -375px; right: -325px; animation-delay: -8s; }
 .report-atmosphere span:nth-child(3) { width: 520px; height: 520px; left: -330px; top: auto; bottom: -240px; animation-delay: -14s; }
-.report-atmosphere svg { position: absolute; width: 250px; height: 250px; right: 3%; bottom: 6%; stroke: #b8e3ba10; stroke-width: .7; animation: report-leaf-float 13s ease-in-out infinite; }
+.report-atmosphere svg { position: absolute; width: 250px; height: 250px; right: 3%; bottom: 6%; stroke: #cdeecb38; stroke-width: .8; animation: report-leaf-float 14s ease-in-out infinite; }
+.report-atmosphere svg:nth-of-type(2) { width: 125px; height: 125px; left: 5%; right: auto; top: 14%; bottom: auto; stroke: #cdeecb2c; animation-duration: 18s; animation-delay: -7s; }
+.report-atmosphere svg:nth-of-type(3) { width: 85px; height: 85px; right: 17%; bottom: 68%; stroke: #cdeecb30; animation-duration: 12s; animation-delay: -4s; }
 .report-public .report-header { width: 100%; max-width: 1120px; padding: 20px 32px; margin: 0 auto; flex-shrink: 0; }
 .report-public .report-brand { color: #f2faf4; gap: 11px; }
 .report-public .report-brand img { width: 40px; height: 40px; background: #fff; padding: 4px; border-radius: 50%; }
@@ -40,7 +43,7 @@
 .report-welcome h1 em { color: #d2edaa; font-style: normal; }
 .report-welcome p { color: #c2d9cc; font-size: 13px; line-height: 1.8; margin: 0; }
 .report-mobile-break { display: none; }
-.report-public .report-home-choices { gap: 16px; }
+.report-public .report-home-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 760px; margin: auto; }
 .report-public .report-home-choices .report-choice {
   position: relative; display: flex; flex-direction: column; align-items: flex-start;
   border-radius: 22px; border: 1px solid #f1f9e840; background: #f4f8ed;
@@ -90,6 +93,15 @@
 .report-public .report-form-heading .report-kicker { color: #d5eab9; }
 .report-public .report-form-heading p, .report-public .report-success p { color: #c4dacb; }
 .report-public .report-form { color: #203d35; }
+.report-public #reportRoot { view-transition-name: report-page; }
+.report-public #reportRoot[data-view="form"] .report-form-wrap { animation: report-form-in .65s cubic-bezier(.22, 1, .36, 1) backwards; }
+.report-public .report-form-section { animation: report-form-in .7s cubic-bezier(.22, 1, .36, 1) backwards; }
+.report-public .report-form-section:nth-child(2) { animation-delay: .07s; }
+.report-public .report-form-section:nth-child(3) { animation-delay: .14s; }
+.report-public .report-form input, .report-public .report-form textarea, .report-public .report-form select { transition: border-color .2s ease, box-shadow .25s ease, background-color .25s ease; }
+.report-public .report-form input:focus, .report-public .report-form textarea:focus, .report-public .report-form select:focus { background: #fff; border-color: #73a57d; box-shadow: 0 0 0 3px #5c996015; }
+.report-public .report-form button { transition: background-color .2s ease, opacity .2s ease, transform .2s ease; }
+.report-public .report-form button:active { transform: scale(.99); }
 .report-public .report-form .report-privacy { color: #73806d; }
 .report-public .report-reference { color: #285c3c; }
 .report-public .report-loading { color: #cce3d3; }
@@ -101,8 +113,15 @@
 .report-public .report-choice:active, .report-menu-topic:active { transform: scale(.98); }
 .report-public .report-home-choices .report-choice, .report-menu-topic { animation-fill-mode: backwards; }
 @keyframes report-enter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes report-orbit { from { transform: translate(0, 0) scale(1); } to { transform: translate(-30px, 30px) scale(1.06); } }
-@keyframes report-leaf-float { 0%, 100% { transform: translateY(0) rotate(-12deg); } 50% { transform: translateY(-20px) rotate(-6deg); } }
+@keyframes report-orbit { from { transform: translate(0, 0) scale(1); } to { transform: translate(-65px, 65px) scale(1.16); } }
+@keyframes report-leaf-float { 0%, 100% { transform: translate(0, 0) rotate(-18deg); } 50% { transform: translate(-38px, -60px) rotate(4deg); } }
+@keyframes report-glow { from { transform: scale(1); opacity: .75; } to { transform: scale(1.2) translate(3%, 3%); opacity: 1; } }
+@keyframes report-form-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes report-page-out { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes report-page-in { from { opacity: 0; transform: translateY(6px); } }
+::view-transition-group(report-page) { animation-duration: .45s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+::view-transition-old(report-page) { animation: report-page-out .18s ease-out both; }
+::view-transition-new(report-page) { animation: report-page-in .45s cubic-bezier(.22, 1, .36, 1) .04s backwards; }
 @keyframes report-pulse { 0%, 100% { box-shadow: 0 0 0 4px #c4ee9c12; } 50% { box-shadow: 0 0 0 7px #c4ee9c04; } }
 @media (max-width: 760px) {
   .report-public .report-header { padding: 17px 22px; }
@@ -176,4 +195,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .report-public *, .report-public *::before, .report-public *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  ::view-transition-group(report-page), ::view-transition-old(report-page), ::view-transition-new(report-page) { animation: none !important; }
 }

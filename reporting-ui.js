@@ -2,7 +2,7 @@
 const SHEReporting = (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const groups = {environment:'Environment', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen'};
-  const publicGroups = {environment:'Environment', 'hiyari-hatto':'Near miss', kaizen:'Idea'};
+  const publicGroups = {environment:'Environment', 'hiyari-hatto':'Near miss'};
   const simpleTitles = {
     'Water leakage':'Water leak', 'Oil / chemical spillage':'Oil / chemical spill',
     'Improper waste disposal':'Waste in wrong place', 'Waste segregation issue':'Wrong waste bin',
@@ -29,7 +29,7 @@ const SHEReporting = (() => {
     idea:'<path d="M8 17c0-3-4-3-4-8a8 8 0 0 1 16 0c0 5-4 5-4 8H8Zm0 3h8m-7 3h6M9 9l3 3 3-3m-3 3v5"/>'
   };
   const svg = (name, size=32) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${symbols[name] || symbols.leaf}</svg>`;
-  let publicData, requestKey, submitting=false, publicPayload=null, renderVersion=0;
+  let publicData, requestKey, submitting=false, publicPayload=null, renderVersion=0, publicTransition;
   const publicRoot = document.getElementById('reportRoot');
   async function publicApi(path, method='GET', body) {
     const response = await fetch(path, {method, credentials:'same-origin', headers:body ? {'Content-Type':'application/json'} : {}, body:body ? JSON.stringify(body) : undefined});
@@ -46,11 +46,11 @@ const SHEReporting = (() => {
     return `<section class="report-hero"><div><span class="report-kicker">${esc(kicker)}</span><h1>${title}</h1><p>${esc(detail)}</p></div><div class="report-hero-art" aria-hidden="true">${svg('leaf',100)}<span>SEE IT · REPORT IT · IMPROVE IT</span></div></section>`;
   }
   function choices() {
+    const nearMissForms=publicData.forms.filter(f=>f.group==='hiyari-hatto');
     return `<div class="report-choice-grid report-home-choices" aria-label="Choose a reporting area">${[
       ['environment','leaf','Leak · Spill · Waste'],
-      ['hiyari-hatto','alert','Almost an accident'],
-      ['kaizen','idea','Make work better']
-    ].map(([key,symbol,desc])=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-symbol">${svg(symbol,34)}</span><div class="report-choice-copy"><h2>${publicGroups[key]}</h2><p>${desc}</p></div><span class="report-choice-go" aria-hidden="true">→</span></a>`).join('')}</div>`;
+      ['hiyari-hatto','alert','Hiyari Hatto']
+    ].map(([key,symbol,desc])=>`<a class="report-choice choice-${key}" href="#/${key==='hiyari-hatto' && nearMissForms.length===1 ? key+'/'+nearMissForms[0].id : key}"><span class="report-symbol">${svg(symbol,34)}</span><div class="report-choice-copy"><h2>${publicGroups[key]}</h2><p>${desc}</p></div><span class="report-choice-go" aria-hidden="true">→</span></a>`).join('')}</div>`;
   }
   function menuTopics(list) {
     return `<div class="report-menu-grid">${list.map(f=>`<a href="#/${f.group}/${f.id}" class="report-menu-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon,32)}</span><div><h2>${esc(publicTitle(f))}</h2></div><span class="report-menu-go" aria-hidden="true">→</span></a>`).join('')}</div>`;
@@ -72,19 +72,27 @@ const SHEReporting = (() => {
   }
   function renderPublic() {
     if (!publicData || submitting) return;
+    if (document.startViewTransition && publicRoot.dataset.view && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      publicTransition?.skipTransition();
+      publicTransition=document.startViewTransition(renderPublicContent);
+      publicTransition.finished.catch(()=>{});
+    } else renderPublicContent();
+  }
+  function renderPublicContent() {
+    if (!publicData || submitting) return;
     const [area,id] = location.hash.replace(/^#\/?/,'').split('/');
-    const selected=publicData.forms.find(f=>String(f.id)===id && f.group===area);
-    publicRoot.dataset.view=selected ? 'form' : groups[area] ? 'topics' : 'home';
+    const selected=publicGroups[area] && publicData.forms.find(f=>String(f.id)===id && f.group===area);
+    publicRoot.dataset.view=selected ? 'form' : publicGroups[area] ? 'topics' : 'home';
     document.title = `${selected ? publicTitle(selected) : publicGroups[area] || 'Report to SHE'} · SHE Digital`;
     if (selected) {
       requestKey=crypto.randomUUID(); publicPayload=null;
-      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← Back</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><h1>${esc(publicTitle(selected))}</h1>${publicDescription(selected)}</div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'SHE will arrange repairs.' : 'SHE will check your report.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Your details</h2><div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Where is it? <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>The problem</h2>${selected.questions.map(q=>field(q,true,area)).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Photos <small>Optional</small></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">SHE staff can see your details and photos. Repair reports also go to the maintenance system.</p>${errorBox()}<button type="submit" class="primary-button full-width">Send report <span>→</span></button><p class="report-urgent">Danger now? Tell your supervisor.</p></form></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← Back</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><h1>${esc(publicTitle(selected))}</h1>${selected.group === 'hiyari-hatto' ? '<p>Hiyari Hatto</p>' : ''}${publicDescription(selected)}</div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'SHE will arrange repairs.' : 'SHE will check your report.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Your details</h2><div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Where is it? <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>The problem</h2>${selected.questions.map(q=>field(q,true,area)).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Photos <small>Optional</small></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">SHE staff can see your details and photos. Repair reports also go to the maintenance system.</p>${errorBox()}<button type="submit" class="primary-button full-width">Send report <span>→</span></button><p class="report-urgent">Danger now? Tell your supervisor.</p></form></div>`;
       publicRoot.querySelector('#photos').addEventListener('change', e=>{
         const output=publicRoot.querySelector('#photoPreview');
         output.textContent=Array.from(e.target.files).map(f=>f.name).join(' · ');
       });
       publicRoot.querySelector('#findingForm').addEventListener('submit', e=>submitPublic(e,selected));
-    } else if (groups[area]) {
+    } else if (publicGroups[area]) {
       const list=publicData.forms.filter(f=>f.group===area);
       publicRoot.innerHTML=`<div class="report-wrap report-menu"><a class="back-link" href="#/">← Back</a><div class="report-menu-heading"><h1>${esc(publicGroups[area])}<span>${svg(area==='environment'?'leaf':area==='kaizen'?'idea':'alert',32)}</span></h1><p>Choose one.</p></div>${list.length ? menuTopics(list) : '<p class="report-empty">No forms yet. Ask SHE.</p>'}</div>`;
     } else {
@@ -199,7 +207,7 @@ const SHEReporting = (() => {
     });
   }
   if (publicRoot) {
-    publicApi('/api/reporting/public').then(data=>{publicData=data;const area=new URLSearchParams(location.search).get('area');if (!location.hash && groups[area]) location.hash='/'+area;renderPublic();}).catch(error=>{publicRoot.innerHTML=`<div class="report-wrap"><p role="alert">${esc(error.message)}</p><a class="secondary-button" href="/report">Try again</a></div>`;});
+    publicApi('/api/reporting/public').then(data=>{publicData=data;const area=new URLSearchParams(location.search).get('area');if (!location.hash && publicGroups[area]) location.hash='/'+area;renderPublic();}).catch(error=>{publicRoot.innerHTML=`<div class="report-wrap"><p role="alert">${esc(error.message)}</p><a class="secondary-button" href="/report">Try again</a></div>`;});
     window.addEventListener('hashchange',renderPublic);
   }
   return {renderStaff};

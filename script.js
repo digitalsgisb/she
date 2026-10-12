@@ -237,15 +237,13 @@ function renderStatsDashboard(key) {
     'red-tag-dashboard':{kind:'red-tag',detail:'Monitor genba findings, section priorities, and PIC follow-up.',link:'red-tag',action:'Open genba findings'},
     'environment-dashboard':{kind:'environment',detail:'Monitor reporting topics, locations, activity, and work-order follow-up.',link:'reporting-inbox',action:'Open SHE reporting inbox'}
   }[key];
-  content.innerHTML='<div class="page inner-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">DASHBOARDS / EXECUTIVE OVERVIEW</span><h1>'+routes[key].title+'</h1><p>'+config.detail+'</p></div><a class="secondary-button" href="#/'+config.link+'">'+config.action+' →</a></div><section id="focusStatistics"></section></div>';
+  content.innerHTML='<div class="page inner-page focused-dashboard-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">DASHBOARDS / EXECUTIVE OVERVIEW</span><h1>'+routes[key].title+'</h1><p>'+config.detail+'</p></div><a class="secondary-button" href="#/'+config.link+'">'+config.action+' →</a></div><section id="focusStatistics"></section></div>';
   SHEStats.mount(document.getElementById('focusStatistics'),config.kind);
 }
 
 function renderDashboard() {
-  return `<div class="page dashboard-page"><section class="hero"><div class="hero-text"><div class="eyebrow hero-eyebrow"><span class="eyebrow-line"></span>SUGIHARA · SHE WORKSPACE</div><h1>Good day.<br /><em>Let's make every day safer.</em></h1><p>Your shared view of Safety, Health and Environmental work. Open a section to see its features and activity.</p><a class="hero-action" href="#/safety">Explore Safety ${icon('arrow', 19)}</a></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-leaf">${icon('leaf', 104)}</div><span class="art-caption">SAFETY&nbsp; · &nbsp;HEALTH&nbsp; · &nbsp;ENVIRONMENT</span></div></section>
-    <div class="intro-row"><div><span class="eyebrow dark-eyebrow">ALL SHE AREAS</span><h2>One dashboard. Three areas.</h2><p>Start with an area, then open the feature you need.</p></div></div>
-    <div class="section-grid">${sectionCard('safety', 1, 'Patrol checklists, monitoring and future safety tools.')}${sectionCard('health', 2, 'The home for health and wellbeing features.')}${sectionCard('environmental', 3, 'Environmental findings, guest reporting and SHE follow-up.')}</div>
-    <div class="content-heading"><div><span class="eyebrow dark-eyebrow">AT A GLANCE</span><h2>Across the workspace</h2></div></div><div class="workspace-overview-grid"><a class="workspace-overview-tile" href="#/safety"><span class="workspace-overview-icon">${icon('shield', 23)}</span><strong>Safety</strong><p id="dashboardSafetyPulse">Loading this month's patrol activity…</p><span>Open Safety ${icon('arrow', 16)}</span></a><a class="workspace-overview-tile" href="#/health"><span class="workspace-overview-icon">${icon('heart', 23)}</span><strong>Health</strong><p>Health modules are ready to be added.</p><span>Open Health ${icon('arrow', 16)}</span></a><a class="workspace-overview-tile" href="#/environmental"><span class="workspace-overview-icon">${icon('leaf', 23)}</span><strong>Environmental</strong><p>Guest reporting, editable forms and SHE follow-up.</p><span>Open Environmental ${icon('arrow', 16)}</span></a></div></div>`;
+  const elevated=SHEStats.allowed();
+  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>Main Dashboard</h1><p>${elevated?'Your SHE overview. Open a focused dashboard for charts and follow-up.':'Open a section to continue your SHE work.'}</p></div><span class="main-dashboard-symbol" aria-hidden="true">${icon('shield',40)}</span></section><div class="intro-row"><div><h2>One dashboard. Three areas.</h2><p>Open the tools available to your account.</p></div></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, genba findings, and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div>${elevated?'<div class="main-summary-heading"><span class="eyebrow dark-eyebrow">THIS MONTH & OUTSTANDING ACTIONS</span></div>':''}</div>`;
 }
 
 function renderSafetyHome() {
@@ -257,6 +255,7 @@ function renderHealth() {
 }
 
 async function loadSafetyPulse(targetId) {
+  if(!document.getElementById(targetId))return;
   if(!SHEStats.allowed()){const target=document.getElementById(targetId);if(target)target.textContent='Open the tools available to your account.';return;}
   if (!canAccessRoute('daily-safety-patrol')) { const target=document.getElementById(targetId); if(target) target.textContent='Open Red Tag to record and review safety genba findings.'; return; }
   const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);

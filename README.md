@@ -4,6 +4,9 @@ SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health
 
 ## Executive dashboards
 
+Dashboards prioritize PC use. Main Dashboard uses a compact welcome and summaries. Each focus dashboard opens to an **Overview** tab with key figures and three charts in one row on wide PC screens; other charts and PIC tables have their own tabs. Overview layouts are browser-tested at **1366×768** and **1440×900** without vertical page scrolling, including long section/topic names. Narrow windows and browser zoom can need some scrolling; detailed tables and chart values remain available. The selected tab survives filter changes and data refresh. Phones use the same tabs with readable stacked charts.
+
+
 **Dashboards** in the sidebar opens automatically and shows **Main Dashboard**, **Patrol Dashboard**, **Red Tag Dashboard**, and **Environmental Dashboard**. Only Executives/Admins see the three detailed statistical pages, subject to their module permissions. Regular users keep Main Dashboard without statistical data. Safety and Environmental parent links also expand their menus automatically. The sidebar promotional card has been removed.
 
 The main dashboard has concise Patrol, Red Tag and Environmental summaries. Each detailed dashboard has its own page; forms, genba findings, PIC actions and patrol history stay on their working pages. Patrol charts include follow-up distribution, OK / NOT OK / N/A answers, NOT OK sections, activity, inspectors, checklist use and overall ratings. Incomplete patrol submissions and written/choice answers are excluded from inspection counts. The OK rate excludes N/A. Follow-up counts apply to patrols with original NOT OK answers, so clear patrols do not inflate the backlog.

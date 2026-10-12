@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-reporting-green-v11';
+const CACHE = 'she-shell-reporting-simple-v12';
 const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/report', '/reporting-ui.js', '/reporting.css', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

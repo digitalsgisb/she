@@ -2,6 +2,20 @@
 const SHEReporting = (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const groups = {environment:'Environment', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen'};
+  const publicGroups = {environment:'Environment', 'hiyari-hatto':'Near miss', kaizen:'Idea'};
+  const simpleTitles = {
+    'Water leakage':'Water leak', 'Oil / chemical spillage':'Oil / chemical spill',
+    'Improper waste disposal':'Waste in wrong place', 'Waste segregation issue':'Wrong waste bin',
+    'Drainage / discharge issue':'Drain problem', 'Equipment leakage':'Equipment leak',
+    'Energy wastage':'Energy waste', 'Other environmental concerns':'Other',
+    'Hiyari Hatto':'Near miss', 'Kaizen idea':'Idea'
+  };
+  const publicTitle = form => simpleTitles[form.title] || form.title;
+  const defaultDescriptions = new Set(['Kebocoran paip air', 'Tumpahan minyak / bahan kimia',
+    'Pembuangan sisa tidak betul', 'Isu pengasingan sisa', 'Isu saliran / pelepasan',
+    'Kebocoran peralatan', 'Pembaziran tenaga', 'Lain-lain isu alam sekitar',
+    'Report a near miss / laporkan kejadian nyaris', 'Suggest an improvement / cadangkan penambahbaikan']);
+  const publicDescription = form => defaultDescriptions.has(form.description) ? '' : `<p>${esc(form.description)}</p>`;
   const symbols = {
     water:'<path d="M12 3S5 11 5 16a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="M8 16a4 4 0 0 0 4 4"/>',
     spill:'<path d="M5 5h12v13H5zM5 9h12M5 15h12m16-4-3 5a3 3 0 0 0 6 0l-3-5Z"/>',
@@ -33,34 +47,38 @@ const SHEReporting = (() => {
   }
   function choices() {
     return `<div class="report-choice-grid report-home-choices" aria-label="Choose a reporting area">${[
-      ['environment','leaf','Leaks, spills, waste & environmental concerns.','Alam sekitar'],
-      ['hiyari-hatto','alert','Spot a near miss. Help prevent an accident.','Kejadian nyaris'],
-      ['kaizen','idea','Share an idea. Improve the way we work.','Penambahbaikan']
-    ].map(([key,symbol,desc,malay],i)=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-symbol">${svg(symbol,34)}</span><div class="report-choice-copy"><span class="report-choice-label">${malay}</span><h2>${groups[key]}</h2><p>${desc}</p></div><span class="report-choice-go" aria-hidden="true">↗</span><span class="report-choice-index" aria-hidden="true">0${i+1}</span></a>`).join('')}</div>`;
+      ['environment','leaf','Leak · Spill · Waste'],
+      ['hiyari-hatto','alert','Almost an accident'],
+      ['kaizen','idea','Make work better']
+    ].map(([key,symbol,desc])=>`<a class="report-choice choice-${key}" href="#/${key}"><span class="report-symbol">${svg(symbol,34)}</span><div class="report-choice-copy"><h2>${publicGroups[key]}</h2><p>${desc}</p></div><span class="report-choice-go" aria-hidden="true">→</span></a>`).join('')}</div>`;
   }
   function menuTopics(list) {
-    return `<div class="report-menu-grid">${list.map(f=>`<a href="#/${f.group}/${f.id}" class="report-menu-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon,27)}</span><div><h2>${esc(f.title)}</h2><p>${esc(f.description)}</p></div><span class="report-menu-go" aria-hidden="true">↗</span>${f.workflow==='kaizen'?'<span class="report-menu-auto">AUTO KAIZEN</span>':''}</a>`).join('')}</div>`;
+    return `<div class="report-menu-grid">${list.map(f=>`<a href="#/${f.group}/${f.id}" class="report-menu-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon,32)}</span><div><h2>${esc(publicTitle(f))}</h2></div><span class="report-menu-go" aria-hidden="true">→</span></a>`).join('')}</div>`;
   }
   function topicCards(list, publicMode=true) {
     return `<div class="report-topic-grid">${list.map(f=>`<${publicMode ? 'a' : 'article'} ${publicMode ? `href="#/${f.group}/${f.id}"` : ''} class="report-topic topic-${esc(f.icon)}"><span class="report-symbol">${svg(f.icon)}</span><div><h3>${esc(f.title)}</h3><p>${esc(f.description)}</p><span class="report-workflow">${f.workflow === 'kaizen' ? '↗ Automatic Kaizen work order' : 'SHE review & follow-up'}</span></div>${publicMode ? '<span aria-hidden="true">→</span>' : `<div class="report-topic-actions"><button class="secondary-button" data-edit-form="${f.id}">Edit</button><button class="report-danger" data-delete-form="${f.id}">Delete</button></div>`}</${publicMode ? 'a' : 'article'}>`).join('')}</div>`;
   }
-  function field(q) {
+  function field(q, simple=false, area='environment') {
     const id='answer-'+q.id, attrs=`id="${esc(id)}" name="${esc(q.id)}" ${q.required?'required':''}`;
     let control;
     if (q.type === 'textarea') control=`<textarea ${attrs} rows="4" maxlength="2000"></textarea>`;
     else if (q.type === 'select') control=`<select ${attrs}><option value="">Choose an answer</option>${q.options.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;
     else control=`<input ${attrs} type="${esc(q.type)}" ${q.type==='number'?'step="any"':'maxlength="2000"'} />`;
-    return `<label for="${esc(id)}">${esc(q.label)} ${q.required?'<span class="required-mark">*</span>':'<small>Optional</small>'}</label>${control}`;
+    const label = simple===true ? ({
+      'What did you notice?':area==='kaizen'?'Your idea':area==='hiyari-hatto'?'What almost happened?':'What happened?',
+      'Any immediate action or suggestion?':area==='kaizen'?'How will it help?':'What did you do?'
+    }[q.label] || q.label) : q.label;
+    return `<label for="${esc(id)}">${esc(label)} ${q.required?'<span class="required-mark">*</span>':'<small>Optional</small>'}</label>${control}`;
   }
   function renderPublic() {
     if (!publicData || submitting) return;
     const [area,id] = location.hash.replace(/^#\/?/,'').split('/');
     const selected=publicData.forms.find(f=>String(f.id)===id && f.group===area);
     publicRoot.dataset.view=selected ? 'form' : groups[area] ? 'topics' : 'home';
-    document.title = `${selected?.title || groups[area] || 'Report it. Improve it.'} · SHE Digital`;
+    document.title = `${selected ? publicTitle(selected) : publicGroups[area] || 'Report to SHE'} · SHE Digital`;
     if (selected) {
       requestKey=crypto.randomUUID(); publicPayload=null;
-      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← ${groups[area]}</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><span class="report-kicker">${groups[area]} / REPORT A FINDING</span><h1>${esc(selected.title)}</h1><p>${esc(selected.description)}</p></div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'This report automatically requests a Kaizen work order. SHE will follow up if CMMS is unavailable.' : 'Your report goes to the SHE department for review and action.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Where & who</h2><div class="report-two-col"><div><label for="reporter">Your name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact / department <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Plant <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose a plant</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Exact location <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="e.g. Production, Line 2, beside wash area" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>Tell us what happened</h2>${selected.questions.map(field).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Add evidence <small>Optional</small></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>Up to 3 JPEG, PNG or WebP photos · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">Your name, contact details and photos are shared with authorized SHE staff for follow-up. If a work order is required, your name and report details are also shared with CMMS.</p>${errorBox()}<button type="submit" class="primary-button full-width">Submit report <span>→</span></button><p class="report-urgent">For immediate danger, notify your supervisor or site emergency contact right away.</p></form></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← Back</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><h1>${esc(publicTitle(selected))}</h1>${publicDescription(selected)}</div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'SHE will arrange repairs.' : 'SHE will check your report.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Your details</h2><div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Where is it? <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>The problem</h2>${selected.questions.map(q=>field(q,true,area)).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Photos <small>Optional</small></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">SHE staff can see your details and photos. Repair reports also go to the maintenance system.</p>${errorBox()}<button type="submit" class="primary-button full-width">Send report <span>→</span></button><p class="report-urgent">Danger now? Tell your supervisor.</p></form></div>`;
       publicRoot.querySelector('#photos').addEventListener('change', e=>{
         const output=publicRoot.querySelector('#photoPreview');
         output.textContent=Array.from(e.target.files).map(f=>f.name).join(' · ');
@@ -68,9 +86,9 @@ const SHEReporting = (() => {
       publicRoot.querySelector('#findingForm').addEventListener('submit', e=>submitPublic(e,selected));
     } else if (groups[area]) {
       const list=publicData.forms.filter(f=>f.group===area);
-      publicRoot.innerHTML=`<div class="report-wrap report-menu"><a class="back-link" href="#/">← All reporting areas</a><div class="report-menu-heading"><span class="report-kicker">SEE IT. REPORT IT. IMPROVE IT.</span><h1>${esc(groups[area])}<span>${svg(area==='environment'?'leaf':area==='kaizen'?'idea':'alert',32)}</span></h1><p>${area==='environment'?'What did you notice? Choose a topic below.':'Choose a form and share your finding with SHE.'}</p></div>${list.length ? menuTopics(list) : '<p class="report-empty">No forms available in this area yet. Please contact SHE.</p>'}<p class="report-menu-note">${area==='environment'?'Water leakage → automatic Kaizen order. Other findings → SHE review.':'Your report goes to SHE for review and follow-up.'}</p></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-menu"><a class="back-link" href="#/">← Back</a><div class="report-menu-heading"><h1>${esc(publicGroups[area])}<span>${svg(area==='environment'?'leaf':area==='kaizen'?'idea':'alert',32)}</span></h1><p>Choose one.</p></div>${list.length ? menuTopics(list) : '<p class="report-empty">No forms yet. Ask SHE.</p>'}</div>`;
     } else {
-      publicRoot.innerHTML=`<div class="report-wrap report-home"><section class="report-welcome"><span class="report-open-pill"><i></i> EMPLOYEES & GUESTS WELCOME</span><h1>See it. Report it.<br /><em>Make a difference.</em></h1><p>A safer, greener workplace starts with you.<br class="report-mobile-break" /> Choose a reporting area to get started.</p></section>${choices()}<div class="report-home-trust"><span>${svg('leaf',16)} No account needed</span><span class="report-trust-dot">·</span><span>Every report reaches SHE</span></div></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-home"><section class="report-welcome"><h1>Report to <em>SHE</em></h1><p>Choose one.</p></section>${choices()}<div class="report-home-trust"><span>No login needed</span></div></div>`;
     }
     window.scrollTo(0,0);
   }
@@ -78,12 +96,12 @@ const SHEReporting = (() => {
     event.preventDefault();
     if (submitting) return;
     const root=event.currentTarget, button=root.querySelector('[type=submit]');
-    submitting=true; button.disabled=true; button.textContent='Submitting…';
+    submitting=true; button.disabled=true; button.textContent='Sending…';
     root.querySelector('#reportError').hidden=true;
     try {
       if (!publicPayload) {
         const files=Array.from(root.querySelector('#photos').files);
-        if (files.length>3 || files.some(f=>f.size>2000000 || !['image/jpeg','image/png','image/webp'].includes(f.type))) throw new Error('Choose up to three JPEG, PNG or WebP photos, each smaller than 2 MB.');
+        if (files.length>3 || files.some(f=>f.size>2000000 || !['image/jpeg','image/png','image/webp'].includes(f.type))) throw new Error('Use up to 3 JPG, PNG or WebP photos. Each must be under 2 MB.');
         const photos=await Promise.all(files.map(async f=>({name:f.name,mime:f.type,content:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=()=>reject(new Error('Could not read photo.'));r.readAsDataURL(f);})})));
         const values=Object.fromEntries(new FormData(root));
         publicPayload={token:publicData.token, request_key:requestKey, form_id:form.id, revision:form.revision, reporter:values.reporter, contact:values.contact, plant:values.plant, location:values.location, answers:Object.fromEntries(form.questions.map(q=>[q.id,values[q.id] || ''])), photos};
@@ -92,7 +110,7 @@ const SHEReporting = (() => {
       if (button.dataset.retry==='true') publicPayload.token=(await publicApi('/api/reporting/public')).token;
       const result=await publicApi('/api/reporting/submit','POST',publicPayload);
       publicRoot.dataset.view='success';
-      publicRoot.innerHTML=`<div class="report-wrap report-success"><span class="report-success-icon">✓</span><span class="report-kicker">THANK YOU / TERIMA KASIH</span><h1>You made a difference.</h1><p>Your report has been received by SHE.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this reference for follow-up with SHE.</p>${result.order_state==='issued' ? `<div class="report-flow-note">Kaizen work order issued: ${esc(result.order_id)}</div>` : result.order_state !== 'none' ? '<div class="report-flow-note">Your report is saved. SHE will follow up on the Kaizen work order connection.</div>' : ''}<a class="primary-button" href="/report">Report another finding →</a></div>`;
+      publicRoot.innerHTML=`<div class="report-wrap report-success"><span class="report-success-icon">✓</span><span class="report-kicker">THANK YOU</span><h1>Report sent.</h1><p>SHE will check it.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this report number.</p>${result.order_state==='issued' ? `<div class="report-flow-note">Work order: ${esc(result.order_id)}</div>` : result.order_state !== 'none' ? '<div class="report-flow-note">Report saved. SHE will arrange the work order.</div>' : ''}<a class="primary-button" href="/report">New report →</a></div>`;
       publicPayload=null;
       window.scrollTo(0,0);
     } catch(error) {
@@ -102,9 +120,9 @@ const SHEReporting = (() => {
       if (publicPayload) {
         root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);
         const output=root.querySelector('#reportError');
-        output.append(document.createTextNode(' Retry sends the same report. To correct a rejected form, return to the topic list and reopen it.'));
+        output.append(document.createTextNode(' Tap Retry to send the same report.'));
       }
-    } finally { submitting=false; button.disabled=false;button.dataset.retry=String(Boolean(publicPayload)); button.textContent=publicPayload ? 'Retry same report →' : 'Submit report →'; }
+    } finally { submitting=false; button.disabled=false;button.dataset.retry=String(Boolean(publicPayload)); button.textContent=publicPayload ? 'Retry →' : 'Send report →'; }
   }
   const date = value => new Date(value*1000).toLocaleString('en-MY');
   const stateLabel = state => ({none:'SHE review',pending:'Work order pending',sending:'Check CMMS before linking',failed:'Work order needs retry',uncertain:'Check CMMS before linking',issued:'Kaizen work order issued'}[state] || state);

@@ -40,3 +40,9 @@ Validate the deployment by linking a test PIC account, submitting a finding, upl
 Backend checks: `python -m unittest -v test_server test_reporting.ReportingTests test_redtag.GenbaTests`. The new genba tests use an in-memory HTTP transport to test authenticated routes without external network access. The browser QA script covers desktop/mobile form submission, restricted PIC navigation, camera/gallery controls, image optimization, and a failed-send retry.
 
 Browser checks: install Playwright for development, then run `node test_genba_ui.cjs`. Optional `SHE_QA_BROWSER` selects an installed Chrome/Chromium executable; `SHE_QA_PYTHON` selects Python and `SHE_QA_PLAYWRIGHT` selects the Playwright package. Screenshots are written to the ignored `.qa-temp` directory. Production runs without these development dependencies. The PIC inbox shows the latest 500 assigned findings.
+
+## Executive statistics
+
+The main Dashboard has concise Red Tag and Environmental totals. Detailed Red Tag statistics are on its genba page; Environmental statistics are on the Environmental page, with reporting-area filters. Statistical endpoints are restricted to Executives/Admins with access to the relevant module. Regular committee users and PICs do not receive these chart datasets. Charts use the month, year, or all-date selection; statuses are current statuses of findings recorded during that period, not counts of closure events during the period. The backlog always covers all dates. All-date activity charts show the 12 months ending at the selected trend month. No data produces an empty chart and no invented completion percentage.
+
+Run statistics checks with `python -m unittest test_statistics.StatisticsTests` and `node test_statistics_ui.cjs` (using the same optional Playwright/browser/Python variables as genba UI tests). Browser fixtures are synthetic test data and are not inserted into the production database.

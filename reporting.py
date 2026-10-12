@@ -7,6 +7,7 @@ import re
 import secrets
 import sqlite3
 import time
+import she_statistics
 from threading import Lock
 
 from cmms_bridge import bridge, CmmsError
@@ -159,6 +160,9 @@ def get(h, db, path):
     if not session:
         return
     user = session[0]
+    if path == '/api/reporting/statistics':
+        she_statistics.get(h, db, user, 'environment')
+        return
     if path == '/api/reporting/forms' and user['role'] not in ('executive', 'admin'):
         h.error_json(403, 'Executive access required.')
         return

@@ -391,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.cmms_get(path)
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
+        assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
         assets.update({"/redtag-ui.js": ROOT / "redtag-ui.js", "/redtag.css": ROOT / "redtag.css"})
         assets.update({'/report': ROOT / 'report.html', '/report/': ROOT / 'report.html',
                        '/report.html': ROOT / 'report.html', '/reporting-ui.js': ROOT / 'reporting-ui.js',

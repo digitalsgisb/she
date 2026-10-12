@@ -10,6 +10,7 @@ const printFixture=require('child_process').execFileSync(process.env.SHE_QA_PYTH
   const req=route.request(),url=new URL(req.url()),path=url.pathname;
   const json=data=>route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   if(path==='/api/session')return json({user,csrf_token:'test'});
+  if(path==='/api/red-tags/statistics')return json({kind:'red-tag',selection:{mode:'month',month:'2026-10',label:'October 2026'},summary:{total:0,to_do:0,awaiting_review:0,completed:0,outstanding:0,completion_rate:null},backlog:{total:0,to_do:0,awaiting_review:0,completed:0,outstanding:0},statuses:[],trend:{title:'Daily activity',note:'October 2026',points:[]},sections:[],ranks:[],stops:[],pic_workload:[],unassigned:0});
   if(path==='/api/red-tags/settings') {if(req.method()==='PATCH'){config={...config,...req.postDataJSON(),revision:config.revision+1};}return json(config);}
   if(path==='/api/red-tags'){if(req.method()==='POST'){const data=req.postDataJSON();const row={...data,id:rows.length+1,red_tag_id:'RT2610-001',user_id:user.id,issued_by:user.display_name,revision:1,assigned_user_id:3};rows.push(row);return json({finding:row});}return json({findings:rows});}
   if(path==='/api/red-tags/print')return route.fulfill({contentType:'text/html',body:printFixture});

@@ -239,6 +239,7 @@ function renderHealth() {
 }
 
 async function loadSafetyPulse(targetId) {
+  if(!SHEStats.allowed()){const target=document.getElementById(targetId);if(target)target.textContent='Open the tools available to your account.';return;}
   if (!canAccessRoute('daily-safety-patrol')) { const target=document.getElementById(targetId); if(target) target.textContent='Open Red Tag to record and review safety genba findings.'; return; }
   const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
@@ -441,6 +442,11 @@ function render() {
   else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   if(key==='safety' && canAccessRoute('red-tag-pic'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/red-tag-pic"><span class="module-icon">'+icon('tag',23)+'</span><span class="module-copy"><strong>My Red Tag Actions</strong><span>Receive assigned findings and upload action notes and after pictures.</span></span></a>');
+  if(key==='dashboard'&&SHEStats.allowed()){
+    const summary=document.createElement('div');summary.className='she-main-summaries';content.querySelector('.dashboard-page').append(summary);
+    if(canAccessRoute('red-tag')){const target=document.createElement('section');summary.append(target);SHEStats.mainSummary(target,'red-tag');}
+    if(canAccessRoute('reporting-inbox')){const target=document.createElement('section');summary.append(target);SHEStats.mainSummary(target,'environment');}
+  }
   filterFeatureLinks(content);
   filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');

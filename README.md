@@ -2,6 +2,10 @@
 
 SHE Digital is Sugihara's SHE workspace. The Dashboard summarizes Safety, Health, and Environmental in one place. Safety has the Daily Safety Patrol Checklist and Patrol Overview & History. Health has a landing page ready for future modules. Environmental includes public Environment, Hiyari Hatto and Kaizen reporting, Executive form management and a SHE follow-up inbox. Safety also includes Red Tag / Safety genba and a phone-focused PIC action inbox. Waste remains a planned module.
 
+## Executive dashboards
+
+Only **Executives and Admins** can view the statistical dashboards and access their data endpoints, subject to their feature permissions. The main Dashboard shows compact Red Tag and Environmental summaries. **Red Tag** has status and rank pie charts, section and stop-type bars, daily/monthly activity, and PIC follow-up. **Environmental** has status and factory pies, topic/location/workflow bars, and activity charts, with filters for Environment, Hiyari Hatto, Kaizen, or all areas. Month, Year, and All dates views use Kuala Lumpur dates; selected-period totals are separate from the all-date outstanding backlog. Totals include the complete database rather than the inbox's latest 500 rows. Statistics refresh every 30 seconds while visible. PIC screens keep their simple action workflow.
+
 ## Red Tag / Tuesday safety genba
 
 Record genba hazards with before pictures, assign section/PIC accounts, print dated physical forms, and export finding details for Google Sheets. PICs receive assigned findings in **My Red Tag Actions**, take or select after photos on their phone, and send completed actions for SHE verification. Executives/Admins control each user's feature access. See [setup, PIC workflow, printing and export](docs/red-tag-genba.md). Deploy the updated server before using these features.

@@ -5,6 +5,7 @@ import csv
 import html
 import hashlib
 import access
+import she_statistics
 import io
 import json
 import re
@@ -83,6 +84,9 @@ def can_view(row, user):
 
 def get(h, db, path, user):
     try:
+        if path == '/api/red-tags/statistics':
+            she_statistics.get(h, db, user, 'red-tag')
+            return
         if path == '/api/red-tags/settings':
             h.send_json(200, settings(db, user))
             return

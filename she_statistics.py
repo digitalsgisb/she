@@ -73,29 +73,37 @@ def build(rows, selection, kind):
                       locations=counts(selected,'location'), areas=counts(selected,'area'), work_orders=counts(selected,'order'))
     return result
 
-def red_tags(db, user, selection):
+def red_tag_rows(db, user):
     full = 'red-tag' in access.features(user)
-    rows = db.execute('SELECT finding_date,section,pic,status,rank,type_of_stop,assigned_user_id FROM redtag_findings' +
+    rows = db.execute('SELECT id,red_tag_id,machine,hazard,finding_date,section,pic,status,rank,type_of_stop,assigned_user_id FROM redtag_findings' +
                       ('' if full else ' WHERE assigned_user_id=?'), () if full else (user['id'],)).fetchall()
-    normalized = [dict(date=r['finding_date'],section=r['section'],pic=r['pic'],
+    normalized = [dict(id=r['id'],reference=r['red_tag_id'],title=r['machine'],description=r['hazard'],date=r['finding_date'],section=r['section'],pic=r['pic'],
                        status=REVIEW if r['status']=='Action taken · awaiting review' else r['status'],
                        rank=r['rank'],stop=r['type_of_stop'],assigned_user_id=r['assigned_user_id']) for r in rows]
-    return build(normalized,selection,'red-tag')
+    return normalized
 
-def reports(db, selection, group):
+def red_tags(db, user, selection):
+    return build(red_tag_rows(db,user),selection,'red-tag')
+
+def report_rows(db, group):
     if group not in ('environment','hiyari-hatto','kaizen','all'): raise ValueError('Choose a valid reporting area.')
     rows=[]
     labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen'}
     orders={'none':'SHE review','issued':'Work order issued','pending':'Work order pending',
             'sending':'Work order needs checking','failed':'Work order needs retry','uncertain':'Work order needs checking'}
-    for row in db.execute('SELECT snapshot_json,status,created_at,plant,location,order_state FROM finding_reports'):
+    for row in db.execute('SELECT id,reporter,snapshot_json,status,created_at,plant,location,order_state FROM finding_reports'):
         original=json.loads(row['snapshot_json'])
         area=original.get('group','environment')
         if group!='all' and area!=group: continue
-        rows.append(dict(date=datetime.fromtimestamp(row['created_at'],TZ).date().isoformat(),
+        rows.append(dict(id=row['id'],reference=f"SHE-{row['id']:06d}",title=original.get('title','Other'),reporter=row['reporter'],date=datetime.fromtimestamp(row['created_at'],TZ).date().isoformat(),
                          category=original.get('title','Other'), status=row['status'].replace('_',' ').capitalize(),
                          plant={'port-klang':'Port Klang','sendayan':'Sendayan'}.get(row['plant'],row['plant']),
                          location=row['location'],area=labels.get(area,area),order=orders.get(row['order_state'],row['order_state'])))
+    return rows
+
+def reports(db, selection, group):
+    rows=report_rows(db,group)
+    labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen'}
     result=build(rows,selection,'environment')
     result['group']=group
     result['group_label']=labels.get(group,'All reporting areas')
@@ -110,11 +118,11 @@ def patrol_summary(rows):
     result['ok_rate']=round(ok/checked*100,1) if checked else None
     return result
 
-def patrols(db, selection):
+def patrol_rows(db):
     groups={'general':'General observations','machinery':'Machinery / equipment','ppe':'PPE',
             'hazards':'Hazards','others':'Other observations'}
     rows=[]
-    for row in db.execute('SELECT inspector_name,answers_json,rating,created_at,template_json,followup_status FROM patrols WHERE completed=1'):
+    for row in db.execute('SELECT id,inspector_name,answers_json,rating,created_at,template_json,followup_status FROM patrols WHERE completed=1'):
         answers=json.loads(row['answers_json'])
         template=json.loads(row['template_json'])
         keys=[q['id'] for q in template['questions'] if q['type']=='status'] if template else list(answers)
@@ -126,10 +134,14 @@ def patrols(db, selection):
                 sections[groups[match[1]] if match else 'Custom checklists']+=1
         not_ok=checked['not_ok']
         status='No findings' if not not_ok else {'open':'Open','action_taken':REVIEW,'resolved':'Resolved'}[row['followup_status']]
-        rows.append(dict(date=datetime.fromtimestamp(row['created_at'],TZ).date().isoformat(),
+        rows.append(dict(id=row['id'],reference='Patrol #'+str(row['id']),title=template['title'] if template else 'Daily Safety Patrol Checklist',date=datetime.fromtimestamp(row['created_at'],TZ).date().isoformat(),
                          status=status,inspector=row['inspector_name'],checklist=template['title'] if template else 'Daily Safety Patrol Checklist',
                          rating=str(row['rating'])+' star'+('s' if row['rating']!=1 else ''),
                          ok=checked['ok'],not_ok=not_ok,na=checked['na'],sections=sections))
+    return rows
+
+def patrols(db, selection):
+    rows=patrol_rows(db)
     selected=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
     section_counts=Counter()
     for row in selected: section_counts.update(row['sections'])
@@ -143,6 +155,63 @@ def patrols(db, selection):
                 sections=[dict(label=label,count=count) for label,count in sorted(section_counts.items(),key=lambda x:(-x[1],x[0]))],
                 inspectors=counts(selected,'inspector'),checklists=counts(selected,'checklist'),ratings=counts(selected,'rating'),trend=activity)
 
+FIELDS={
+    'red-tag':{'status','section','rank','stop','pic','date','unassigned'},
+    'environment':{'status','category','plant','location','order','area','date'},
+    'patrol':{'status','section','answer','inspector','checklist','rating','date','with_findings'}
+}
+
+def filtered_records(db,user,kind,selection,query):
+    rows=patrol_rows(db) if kind=='patrol' else red_tag_rows(db,user) if kind=='red-tag' else report_rows(db,query.get('group',['environment'])[0])
+    rows=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
+    field=query.get('field',[''])[0]
+    if field and field not in FIELDS[kind]: raise ValueError('Choose a valid chart filter.')
+    exclude='exclude' in query
+    values=json.loads(query.get('exclude' if exclude else 'values',['[]'])[0])
+    if not isinstance(values,list) or len(values)>100 or any(not isinstance(v,str) or len(v)>500 for v in values):
+        raise ValueError('Invalid chart filter values.')
+    if field and not values and field not in ('with_findings','unassigned'): raise ValueError('Select chart filter values.')
+    if field=='date' and any(not re.fullmatch(r'20\d{2}-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?',v) for v in values):
+        raise ValueError('Choose a valid chart date.')
+    wanted=set(values)
+    section=query.get('section',[''])[0]
+    if section and (kind!='red-tag' or len(section)>100): raise ValueError('Invalid PIC section.')
+    selected=[]
+    for row in rows:
+        if section and row['section']!=section: continue
+        matched=1
+        if field:
+            if field=='section' and kind=='patrol':
+                matched=sum(count for name,count in row['sections'].items() if (name not in wanted if exclude else name in wanted))
+            elif field=='answer':
+                labels={'OK':'ok','NOT OK':'not_ok','N/A':'na'}
+                matched=sum(row[key] for label,key in labels.items() if (label not in wanted if exclude else label in wanted))
+            elif field=='with_findings': matched=int(row['not_ok']>0)
+            elif field=='unassigned': matched=int(row['assigned_user_id'] is None and row['status'] not in DONE)
+            elif field=='date':
+                belongs=any(row['date'].startswith(v) for v in values)
+                matched=int(not belongs if exclude else belongs)
+            else:
+                label=row.get(field) or 'Unspecified'
+                matched=int(label not in wanted if exclude else label in wanted)
+        if matched: selected.append(dict(row,matched_count=matched))
+    try: page=int(query.get('page',['1'])[0])
+    except ValueError: raise ValueError('Choose a valid results page.')
+    if not 1<=page<=100000: raise ValueError('Choose a valid results page.')
+    selected.sort(key=lambda r:(r['date'],r['id']),reverse=True)
+    total=len(selected);page=min(page,max(1,(total+24)//25))
+    records=[]
+    for row in selected[(page-1)*25:page*25]:
+        result={key:value for key,value in row.items() if key not in ('sections','assigned_user_id')}
+        if kind=='patrol': result['detail_url']='/#/daily-safety-patrol/'+str(row['id'])
+        elif kind=='red-tag': result['detail_url']='/#/red-tag/'+str(row['id'])
+        else: result['detail_url']='/#/reporting-inbox/'+str(row['id'])
+        records.append(result)
+    return dict(kind=kind,selection=selection,field=field,values=values,exclude=exclude,section=section,
+                total=total,matched_items=sum(r['matched_count'] for r in selected),page=page,page_size=25,
+                pages=max(1,(total+24)//25),records=records)
+
+
 def get(h, db, user, kind):
     if user['role'] not in ('executive','admin'):
         h.error_json(403,'Statistics are available to Executives and Admins only.')
@@ -150,6 +219,9 @@ def get(h, db, user, kind):
     query=parse_qs(urlsplit(h.path).query)
     try:
         selection=period(query)
+        if urlsplit(h.path).path.endswith('/records'):
+            h.send_json(200,filtered_records(db,user,kind,selection,query))
+            return
         result=patrols(db,selection) if kind=='patrol' else red_tags(db,user,selection) if kind=='red-tag' else reports(db,selection,query.get('group',['environment'])[0])
         h.send_json(200,result)
     except ValueError as error:

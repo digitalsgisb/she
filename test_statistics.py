@@ -38,7 +38,7 @@ class StatisticsTests(unittest.TestCase):
                            (str(i),'hash',json.dumps(dict(title=title,group=group)),'{}','Guest','','port-klang','Production','[]',status,timestamp,order))
     def test_role_and_feature_checks_on_both_statistic_endpoints(self):
         self.accounts()
-        for path in ['/api/patrols/statistics','/api/red-tags/statistics','/api/reporting/statistics']:
+        for path in ['/api/patrols/statistics','/api/red-tags/statistics','/api/reporting/statistics','/api/patrols/statistics/records','/api/red-tags/statistics/records','/api/reporting/statistics/records']:
             self.assertEqual(self.request(path)[0],401)
             self.assertEqual(self.request(path,cookie=self.operator)[0],403)
             self.assertEqual(self.request(path,cookie=self.restricted)[0],403)
@@ -73,6 +73,16 @@ class StatisticsTests(unittest.TestCase):
         response=self.request('/api/reporting/statistics?period=all&month=2026-10',cookie=self.admin)[1]
         self.assertEqual(response['summary']['total'],514)
         self.assertEqual(sum(x['count'] for x in response['categories']),514)
+        from urllib.parse import urlencode
+        params=urlencode(dict(period='all',month='2026-10',field='category',values=json.dumps(['Oil / chemical spillage']),page=2))
+        records=self.request('/api/reporting/statistics/records?'+params,cookie=self.admin)[1]
+        self.assertEqual(records['total'],512)
+        self.assertEqual(records['pages'],21)
+        self.assertEqual(records['page'],2)
+        self.assertEqual(len(records['records']),25)
+        self.assertTrue(all(r['category']=='Oil / chemical spillage' for r in records['records']))
+        others=self.request('/api/reporting/statistics/records?'+urlencode(dict(period='all',field='category',exclude=json.dumps(['Water leakage']))),cookie=self.admin)[1]
+        self.assertEqual(others['total'],512)
     def test_redtag_period_backlog_rank_and_pic_workload(self):
         self.accounts()
         with server.database() as db:
@@ -95,6 +105,12 @@ class StatisticsTests(unittest.TestCase):
         scoped=self.request('/api/red-tags/statistics?month=2026-10',cookie=self.executive)[1]
         self.assertEqual(scoped['summary']['total'],3)
         self.assertEqual(scoped['backlog']['total'],3)
+        from urllib.parse import urlencode
+        records=self.request('/api/red-tags/statistics/records?'+urlencode(dict(month='2026-10',field='pic',values=json.dumps(['Fareez']),section='FG Store')),cookie=self.executive)[1]
+        self.assertEqual(records['total'],3)
+        self.assertTrue(all(r['section']=='FG Store' and r['pic']=='Fareez' for r in records['records']))
+        wrong_section=self.request('/api/red-tags/statistics/records?'+urlencode(dict(month='2026-10',field='pic',values=json.dumps(['Fareez']),section='Maintenance')),cookie=self.executive)[1]
+        self.assertEqual(wrong_section['total'],0)
     def test_empty_period_has_no_fabricated_completion_rate(self):
         self.accounts()
         for path in ['/api/red-tags/statistics','/api/reporting/statistics']:
@@ -131,5 +147,32 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(response['checklists'][0]['count'],2)
         self.assertEqual(sum(x['count'] for x in response['trend']['points']),4)
         self.assertEqual(self.request('/api/patrols/statistics',cookie=self.operator)[0],403)
+
+    def test_chart_drilldown_matches_period_category_and_answer_counts(self):
+        from urllib.parse import urlencode
+        self.accounts();self.seed_reports()
+        params=urlencode(dict(month='2026-10',field='status',values=json.dumps(['Resolved'])))
+        result=self.request('/api/reporting/statistics/records?'+params,cookie=self.admin)[1]
+        self.assertEqual(result['total'],1)
+        self.assertEqual(result['records'][0]['title'],'Water leakage')
+        self.assertEqual(result['records'][0]['reference'],'SHE-000002')
+        self.assertEqual(result['records'][0]['detail_url'],'/#/reporting-inbox/2')
+        daily=self.request('/api/reporting/statistics/records?'+urlencode(dict(month='2026-10',field='date',values=json.dumps(['2026-10-31']))),cookie=self.admin)[1]
+        self.assertEqual(daily['total'],1)
+        self.assertEqual(daily['records'][0]['status'],'In progress')
+        self.assertEqual(self.request('/api/reporting/statistics/records?field=unknown&values=[]',cookie=self.admin)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics/records?page=0',cookie=self.admin)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics/records?values={}',cookie=self.admin)[0],400)
+        with server.database() as db:
+            template=dict(title='Custom',questions=[dict(id='q_a',type='status'),dict(id='q_b',type='status'),dict(id='q_note',type='text')])
+            stamp=int(datetime(2026,10,13,12,tzinfo=stats.TZ).timestamp())
+            for answers in [{'q_a':'not_ok','q_b':'not_ok','q_note':'not_ok'},{'q_a':'ok','q_b':'na','q_note':'not_ok'}]:
+                db.execute('INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json) VALUES(1,?,?,?,?,?,?)',('Sara',json.dumps(answers),3,'',stamp,json.dumps(template)))
+        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='answer',values=json.dumps(['NOT OK']))),cookie=self.admin)[1]
+        self.assertEqual(result['total'],1)
+        self.assertEqual(result['matched_items'],2)
+        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='section',values=json.dumps(['Custom checklists']))),cookie=self.admin)[1]
+        self.assertEqual(result['total'],1)
+        self.assertEqual(result['matched_items'],2)
 
 if __name__=='__main__': unittest.main()

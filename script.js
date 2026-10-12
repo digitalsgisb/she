@@ -23,6 +23,7 @@ const icon = (name, size = 20) => {
 
 const routes = {
   dashboard: { title: 'Main Dashboard', icon: 'grid' },
+  'dashboard-records': { title: 'Filtered Dashboard Records', icon: 'clipboard' },
   'patrol-dashboard': { title: 'Patrol Dashboard', icon: 'grid' },
   'red-tag-dashboard': { title: 'Red Tag Dashboard', icon: 'tag' },
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
@@ -50,6 +51,7 @@ const workspaceFeatures = {'patrol':'Safety patrol & history','red-tag':'Red Tag
 function canAccessRoute(key) {
   if (!currentUser) return false;
   const has = feature => currentUser.role === 'admin' || (currentUser.features || Object.keys(workspaceFeatures)).includes(feature);
+  if(key==='dashboard-records'){const kind=location.hash.split('?')[0].split('/')[2],feature={patrol:'patrol','red-tag':'red-tag',environment:'reporting'}[kind];return Boolean(feature)&&SHEStats.allowed()&&has(feature);}
   if(key.endsWith('-dashboard')){const feature={'patrol-dashboard':'patrol','red-tag-dashboard':'red-tag','environment-dashboard':'reporting'}[key];return SHEStats.allowed()&&has(feature);}
   if (['dashboard','account'].includes(key)) return true;
   if (key === 'users') return ['admin','executive'].includes(currentUser.role);
@@ -436,10 +438,27 @@ function toggleMenu() {
   if (open) sidebarClose.focus();
 }
 
+let dashboardTransition=null;
+let lastRenderedHash='';
 function render() {
+  if(!currentUser)return;
+  const hash=location.hash;
+  const dashboardRoute=value=>/^#\/(?:dashboard(?:$|[/?])|(?:patrol|red-tag|environment)-dashboard|dashboard-records)/.test(value);
+  const changing=lastRenderedHash&&lastRenderedHash!==hash&&(dashboardRoute(hash)||dashboardRoute(lastRenderedHash));
+  lastRenderedHash=hash;SHEStats.hideTooltip();
+  if(dashboardTransition)dashboardTransition.skipTransition();
+  if(changing&&document.startViewTransition&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.body.classList.add('dashboard-transition-active');
+    const transition=document.startViewTransition(()=>{if(location.hash===hash)renderPage();});dashboardTransition=transition;
+    transition.ready.catch(()=>{});transition.finished.catch(()=>{}).finally(()=>{if(dashboardTransition===transition){dashboardTransition=null;document.body.classList.remove('dashboard-transition-active');}});
+  }else renderPage();
+}
+
+function renderPage() {
   if (!currentUser) return;
   const key = currentRoute();
-  dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard');
+  SHEStats.hideTooltip();
+  dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
   safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(key);
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/dashboard'; return; }
@@ -448,8 +467,9 @@ function render() {
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
   if (key === 'users') renderUsers();
+  else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key.endsWith('-dashboard'))renderStatsDashboard(key);
-  else if (['red-tag','red-tag-pic'].includes(key)) renderGenba();
+  else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);});
   else if (key === 'work-orders') renderWorkOrders();
   else if (key === 'checklist-builder') renderChecklistBuilder();
   else if (key === 'patrol-overview') renderPatrolOverview();

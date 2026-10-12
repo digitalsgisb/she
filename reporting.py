@@ -160,7 +160,7 @@ def get(h, db, path):
     if not session:
         return
     user = session[0]
-    if path == '/api/reporting/statistics':
+    if path in ('/api/reporting/statistics','/api/reporting/statistics/records'):
         she_statistics.get(h, db, user, 'environment')
         return
     if path == '/api/reporting/forms' and user['role'] not in ('executive', 'admin'):

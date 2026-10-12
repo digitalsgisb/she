@@ -84,7 +84,7 @@ def can_view(row, user):
 
 def get(h, db, path, user):
     try:
-        if path == '/api/red-tags/statistics':
+        if path in ('/api/red-tags/statistics','/api/red-tags/statistics/records'):
             she_statistics.get(h, db, user, 'red-tag')
             return
         if path == '/api/red-tags/settings':

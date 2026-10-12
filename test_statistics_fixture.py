@@ -12,10 +12,10 @@ def patrol_fixture():
     import sqlite3
     from datetime import datetime
     db=sqlite3.connect(':memory:');db.row_factory=sqlite3.Row
-    db.execute('CREATE TABLE patrols(inspector_name TEXT,answers_json TEXT,rating INTEGER,created_at INTEGER,template_json TEXT,followup_status TEXT,completed INTEGER)')
+    db.execute('CREATE TABLE patrols(id INTEGER PRIMARY KEY,inspector_name TEXT,answers_json TEXT,rating INTEGER,created_at INTEGER,template_json TEXT,followup_status TEXT,completed INTEGER)')
     for i in range(20):
         answers={'general_0':'not_ok' if i%3 else 'ok','general_1':'ok','ppe_0':'na'}
-        db.execute('INSERT INTO patrols VALUES(?,?,?,?,?,?,1)',(['Sara','Aman'][i%2],json.dumps(answers),1+i%3,int(datetime(2026,10,1+i%20,12,tzinfo=s.TZ).timestamp()),'null',['open','action_taken','resolved'][i%3]))
+        db.execute('INSERT INTO patrols(inspector_name,answers_json,rating,created_at,template_json,followup_status,completed) VALUES(?,?,?,?,?,?,1)',(['Sara','Aman'][i%2],json.dumps(answers),1+i%3,int(datetime(2026,10,1+i%20,12,tzinfo=s.TZ).timestamp()),'null',['open','action_taken','resolved'][i%3]))
     result=s.patrols(db,selection);db.close();return result
 
 if __name__ == '__main__': print(json.dumps(dict(patrol=patrol_fixture(),red=s.build(red,selection,'red-tag'),environment=dict(s.build(env,selection,'environment'),group='environment',group_label='Environment'))))

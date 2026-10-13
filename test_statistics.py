@@ -175,4 +175,27 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(result['total'],1)
         self.assertEqual(result['matched_items'],2)
 
+    def test_record_photo_previews_keep_authenticated_access(self):
+        import base64
+        from urllib.request import Request
+        self.accounts()
+        self.seed_reports()
+        payload=b'photo-preview-test'
+        with server.database() as db:
+            db.execute('UPDATE finding_reports SET photos_json=?,answers_json=? WHERE id=2',
+                       (json.dumps([dict(mime='image/png',content=base64.b64encode(payload).decode())]),json.dumps({'issue':'Leak at the pump'})))
+        records=self.request('/api/reporting/statistics/records?month=2026-10',cookie=self.admin)[1]['records']
+        record=next(r for r in records if r['id']==2)
+        self.assertEqual(record['description'],'Leak at the pump')
+        self.assertEqual(record['photo_url'],'/api/reporting/reports/2/photos/0')
+        self.assertIsNone(next(r for r in records if r['id']==3)['photo_url'])
+        response=urlopen(Request(self.base+record['photo_url'],headers={'Cookie':self.admin}))
+        self.assertEqual(response.status,200)
+        self.assertEqual(response.read(),payload)
+        self.assertEqual(response.headers['Content-Type'],'image/png')
+        self.assertEqual(response.headers['Cache-Control'],'private, no-store')
+        self.assertEqual(self.request(record['photo_url'])[0],401)
+        self.assertEqual(self.request(record['photo_url'],cookie=self.restricted)[0],403)
+        self.assertEqual(self.request('/api/reporting/reports/2/photos/1',cookie=self.admin)[0],404)
+
 if __name__=='__main__': unittest.main()

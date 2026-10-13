@@ -173,6 +173,22 @@ def get(h, db, path):
         h.send_json(200, dict(reports=[dict(id=r['id'], **receipt(r), title=json.loads(r['snapshot_json'])['title'],
             group=json.loads(r['snapshot_json'])['group'], reporter=r['reporter'], plant=r['plant'], location=r['location'],
             status=r['status'], created_at=r['created_at']) for r in rows]))
+    elif re.fullmatch(r'/api/reporting/reports/\d+/photos/[0-2]', path):
+        row=db.execute('SELECT photos_json FROM finding_reports WHERE id=?',(int(path.split('/')[-3]),)).fetchone()
+        photos=json.loads(row['photos_json']) if row else []
+        index=int(path.split('/')[-1])
+        if index>=len(photos):
+            h.error_json(404,'Photo not found.')
+            return
+        photo=photos[index]
+        content=base64.b64decode(photo['content'])
+        h.send_response(200)
+        h.send_header('Content-Type',photo['mime'])
+        h.send_header('Content-Length',str(len(content)))
+        h.send_header('Cache-Control','private, no-store')
+        h.send_header('X-Content-Type-Options','nosniff')
+        h.end_headers()
+        h.wfile.write(content)
     elif re.fullmatch(r'/api/reporting/reports/\d+', path):
         row = db.execute('SELECT * FROM finding_reports WHERE id=?', (int(path.split('/')[-1]),)).fetchone()
         if not row:

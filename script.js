@@ -22,7 +22,9 @@ const icon = (name, size = 20) => {
 };
 
 const routes = {
-  dashboard: { title: 'Main Dashboard', icon: 'grid' },
+  dashboard: { title: 'Dashboards', icon: 'grid' },
+  'safety-dashboard': { title: 'Safety Dashboard', icon: 'shield' },
+  'health-dashboard': { title: 'Health Dashboard', icon: 'heart' },
   'dashboard-records': { title: 'Filtered Dashboard Records', icon: 'clipboard' },
   'patrol-dashboard': { title: 'Patrol Dashboard', icon: 'grid' },
   'red-tag-dashboard': { title: 'Red Tag Dashboard', icon: 'tag' },
@@ -52,6 +54,8 @@ function canAccessRoute(key) {
   if (!currentUser) return false;
   const has = feature => currentUser.role === 'admin' || (currentUser.features || Object.keys(workspaceFeatures)).includes(feature);
   if(key==='dashboard-records'){const kind=location.hash.split('?')[0].split('/')[2],feature={patrol:'patrol','red-tag':'red-tag',environment:'reporting'}[kind];return Boolean(feature)&&SHEStats.allowed()&&has(feature);}
+  if(key==='health-dashboard')return has('health');
+  if(key==='safety-dashboard')return SHEStats.allowed()&&(has('patrol')||has('red-tag'));
   if(key.endsWith('-dashboard')){const feature={'patrol-dashboard':'patrol','red-tag-dashboard':'red-tag','environment-dashboard':'reporting'}[key];return SHEStats.allowed()&&has(feature);}
   if (['dashboard','account'].includes(key)) return true;
   if (key === 'users') return ['admin','executive'].includes(currentUser.role);
@@ -182,7 +186,7 @@ function renderMobileNavigation(active) {
 function renderNav(active) {
   const previousSubnavs = [...nav.querySelectorAll('.subnav')];
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div><div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
-    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['patrol-dashboard','red-tag-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol History</a><a class="subnav-link" href="#/red-tag"><span class="subnav-dot"></span>Red Tag · Safety genba</a><a class="subnav-link" href="#/red-tag-pic"><span class="subnav-dot"></span>My Red Tag Actions</a></div></div>
@@ -226,7 +230,9 @@ function renderNav(active) {
 }
 
 function sectionCard(key, number, description) {
-  return `<a class="section-card" href="#/${key}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>Open ${routes[key].title} overview</span>${icon('arrow', 18)}</span></a>`;
+  const dashboard={safety:'safety-dashboard',health:'health-dashboard',environmental:'environment-dashboard'}[key];
+  const destination=SHEStats.allowed()&&canAccessRoute(dashboard)?dashboard:key;
+  return `<a class="section-card" href="#/${destination}"><div class="section-card-top"><span class="section-icon ${key}">${icon(routes[key].icon, 25)}</span><span class="section-index">0${number} / 03</span></div><div><h3>${routes[key].title}</h3><p>${description}</p></div><span class="section-card-bottom"><span>Open ${routes[key].title} overview</span>${icon('arrow', 18)}</span></a>`;
 }
 
 function moduleCard(key, index) {
@@ -234,18 +240,31 @@ function moduleCard(key, index) {
 }
 
 function renderStatsDashboard(key) {
+  if(key==='safety-dashboard')key=canAccessRoute('patrol-dashboard')?'patrol-dashboard':'red-tag-dashboard';
+  if(key==='health-dashboard'){
+    content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('health','Health Dashboard','Health and wellbeing monitoring.')+'<section class="category-empty">No health modules have been added yet.</section></div>';
+    bindDashboardHeader();return;
+  }
   const config={
     'patrol-dashboard':{kind:'patrol',detail:'Monitor completed inspections, checklist findings, and patrol follow-up.',link:'patrol-overview',action:'Open patrol history'},
     'red-tag-dashboard':{kind:'red-tag',detail:'Monitor genba findings, section priorities, and PIC follow-up.',link:'red-tag',action:'Open genba findings'},
     'environment-dashboard':{kind:'environment',detail:'Monitor reporting topics, locations, activity, and work-order follow-up.',link:'reporting-inbox',action:'Open SHE reporting inbox'}
   }[key];
-  content.innerHTML='<div class="page inner-page focused-dashboard-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">DASHBOARDS / EXECUTIVE OVERVIEW</span><h1>'+routes[key].title+'</h1><p>'+config.detail+'</p></div><a class="secondary-button" href="#/'+config.link+'">'+config.action+' →</a></div><section id="focusStatistics"></section></div>';
+  const area=config.kind==='environment'?'environment':'safety';
+  content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader(area,area==='safety'?'Safety Dashboard':'Environment Dashboard',config.detail,key)+'<section id="focusStatistics"></section></div>';
   SHEStats.mount(document.getElementById('focusStatistics'),config.kind);
+  const controls=content.querySelector('.she-stat-controls');content.querySelector('[data-dashboard-controls]').append(controls);
+  bindDashboardHeader();
 }
 
+function dashboardHeader(area,title,detail,key='') {
+  const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
+  return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><span class="eyebrow">SUGIHARA · SHE MONITORING</span><h1>'+title+'</h1><p>'+detail+'</p><div class="dashboard-hero-controls">'+(area==='safety'?'<label>Safety module<select data-dashboard-module>'+['patrol-dashboard','red-tag-dashboard'].filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+(route==='patrol-dashboard'?'Safety Patrol':'Red Tag / Safety genba')+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
+}
+function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
+
 function renderDashboard() {
-  const elevated=SHEStats.allowed();
-  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>Main Dashboard</h1><p>${elevated?'Your SHE overview. Open a focused dashboard for charts and follow-up.':'Open a section to continue your SHE work.'}</p></div><span class="main-dashboard-symbol" aria-hidden="true">${icon('shield',40)}</span></section><div class="intro-row"><div><h2>One dashboard. Three areas.</h2><p>Open the tools available to your account.</p></div></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, genba findings, and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div>${elevated?'<div class="main-summary-heading"><span class="eyebrow dark-eyebrow">THIS MONTH & OUTSTANDING ACTIONS</span></div>':''}</div>`;
+  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>Choose your area</h1><p>Safety, Health and Environment each have their own dashboard.</p></div></section><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, genba findings, and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
 }
 
 function renderSafetyHome() {
@@ -481,12 +500,6 @@ function renderPage() {
   else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   if(key==='safety' && canAccessRoute('red-tag-pic'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/red-tag-pic"><span class="module-icon">'+icon('tag',23)+'</span><span class="module-copy"><strong>My Red Tag Actions</strong><span>Receive assigned findings and upload action notes and after pictures.</span></span></a>');
-  if(key==='dashboard'&&SHEStats.allowed()){
-    const summary=document.createElement('div');summary.className='she-main-summaries';content.querySelector('.dashboard-page').append(summary);
-    if(canAccessRoute('patrol-dashboard')){const target=document.createElement('section');summary.append(target);SHEStats.mainSummary(target,'patrol');}
-    if(canAccessRoute('red-tag')){const target=document.createElement('section');summary.append(target);SHEStats.mainSummary(target,'red-tag');}
-    if(canAccessRoute('reporting-inbox')){const target=document.createElement('section');summary.append(target);SHEStats.mainSummary(target,'environment');}
-  }
   filterFeatureLinks(content);
   filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');

@@ -203,9 +203,22 @@ def filtered_records(db,user,kind,selection,query):
     records=[]
     for row in selected[(page-1)*25:page*25]:
         result={key:value for key,value in row.items() if key not in ('sections','assigned_user_id')}
-        if kind=='patrol': result['detail_url']='/#/daily-safety-patrol/'+str(row['id'])
-        elif kind=='red-tag': result['detail_url']='/#/red-tag/'+str(row['id'])
-        else: result['detail_url']='/#/reporting-inbox/'+str(row['id'])
+        result['photo_url']=None
+        if kind=='patrol':
+            result['detail_url']='/#/daily-safety-patrol/'+str(row['id'])
+            attachment=db.execute("SELECT id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at,id LIMIT 1",(row['id'],)).fetchone()
+            if attachment: result['photo_url']=f"/api/patrols/{row['id']}/attachments/{attachment['id']}"
+            remarks=db.execute('SELECT remarks FROM patrols WHERE id=?',(row['id'],)).fetchone()
+            result['description']=remarks['remarks'][:240]
+        elif kind=='red-tag':
+            result['detail_url']='/#/red-tag/'+str(row['id'])
+            result['photo_url']=f"/api/red-tags/{row['id']}/photo"
+            result['description']=result['description'][:240]
+        else:
+            result['detail_url']='/#/reporting-inbox/'+str(row['id'])
+            report=db.execute('SELECT photos_json,answers_json FROM finding_reports WHERE id=?',(row['id'],)).fetchone()
+            if json.loads(report['photos_json']): result['photo_url']=f"/api/reporting/reports/{row['id']}/photos/0"
+            result['description']=' · '.join(str(v) for v in json.loads(report['answers_json']).values() if v is not None)[:240]
         records.append(result)
     return dict(kind=kind,selection=selection,field=field,values=values,exclude=exclude,section=section,
                 total=total,matched_items=sum(r['matched_count'] for r in selected),page=page,page_size=25,

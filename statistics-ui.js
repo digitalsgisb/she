@@ -123,26 +123,32 @@ const SHEStats = (() => {
     const saved=views.get(kind);const selection=saved?{...saved.selection}:{period:'month',month:month(),...(kind==='environment'?{group:'environment'}:{})};
     target.className='she-statistics';if(saved)target.dataset.activeStatisticsTab=saved.tab;
     target.innerHTML='<div class="she-stat-heading"><div><h2>'+(kind==='patrol'?'Patrol statistics':kind==='red-tag'?'Red Tag statistics':'Environmental statistics')+'</h2></div><div class="she-stat-controls"><label>Period<select data-stat-period><option value="month">Month</option><option value="year">Year</option><option value="all">All dates</option></select></label><label data-stat-month-label>Month<input type="month" data-stat-month value="'+selection.month+'" min="2000-01" max="2099-12"></label>'+(kind==='environment'?'<label>Reporting area<select data-stat-group><option value="environment">Environment</option><option value="hiyari-hatto">Hiyari Hatto</option><option value="kaizen">Kaizen</option><option value="all">All areas</option></select></label>':'')+'<button type="button" class="secondary-button" data-stat-refresh>Refresh statistics</button><span class="she-refresh-status" data-stat-refresh-status role="status"></span></div></div><div data-stat-body aria-live="polite"></div>';
+    const controlsRoot=target.closest('.focused-dashboard-page')||target;
     const body=target.querySelector('[data-stat-body]');let version=0,inflight=false,lastData='';
     const load=async(quiet=false)=>{
       if(!target.isConnected||!allowed())return;
       const current=++version;inflight=true;
-      if(!quiet&&!lastData)body.innerHTML='<p class="she-chart-empty" role="status">Loading statistics…</p>';body.setAttribute('aria-busy','true');target.querySelector('[data-stat-refresh-status]').textContent=lastData?'Updating…':'';
+      if(!quiet&&!lastData)body.innerHTML='<p class="she-chart-empty" role="status">Loading statistics…</p>';body.setAttribute('aria-busy','true');controlsRoot.querySelector('[data-stat-refresh-status]').textContent=lastData?'Updating…':'';
       try{const data=await api(endpoint(kind,selection));if(current===version&&target.isConnected&&allowed()){const serialized=JSON.stringify(data);if(!quiet||serialized!==lastData){target.statsData=data;const focused=document.activeElement?.dataset.statHit;hideTooltip();body.innerHTML=focus(data);bindTabs(body,target);bindInteractive(body,target,data,selection);rememberView(kind,target,selection);lastData=serialized;if(quiet&&focused)body.querySelector('[data-stat-hit="'+focused+'"]')?.focus();}}}
       catch(error){if(current===version&&target.isConnected)body.innerHTML='<p role="alert" class="form-error">'+esc(error.message)+'</p>';}
-      finally{if(current===version){inflight=false;body.setAttribute('aria-busy','false');target.querySelector('[data-stat-refresh-status]').textContent='';}}
+      finally{if(current===version){inflight=false;body.setAttribute('aria-busy','false');controlsRoot.querySelector('[data-stat-refresh-status]').textContent='';}}
     };
     if(saved?.data&&saved.user_id===currentUser.id){target.statsData=saved.data;body.innerHTML=focus(saved.data);bindTabs(body,target);bindInteractive(body,target,saved.data,selection);lastData=JSON.stringify(saved.data);}
-    target.querySelector('[data-stat-period]').value=selection.period;
-    const anchor=target.querySelector('[data-stat-month]');anchor.type=selection.period==='year'?'number':'month';anchor.min=selection.period==='year'?'2000':'2000-01';anchor.max=selection.period==='year'?'2099':'2099-12';anchor.value=selection.period==='year'?selection.month.slice(0,4):selection.month;target.querySelector('[data-stat-month-label]').firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';
-    if(kind==='environment')target.querySelector('[data-stat-group]').value=selection.group;
-    target.querySelector('[data-stat-period]').onchange=e=>{selection.period=e.target.value;const label=target.querySelector('[data-stat-month-label]'),input=target.querySelector('[data-stat-month]');label.firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';input.type=selection.period==='year'?'number':'month';input.min=selection.period==='year'?'2000':'2000-01';input.max=selection.period==='year'?'2099':'2099-12';input.value=selection.period==='year'?selection.month.slice(0,4):selection.month;load();};
-    target.querySelector('[data-stat-month]').onchange=e=>{if(e.target.value&&e.target.checkValidity()){selection.month=selection.period==='year'?e.target.value+'-'+selection.month.slice(5):e.target.value;load();}};
-    target.querySelector('[data-stat-group]')?.addEventListener('change',e=>{selection.group=e.target.value;load();});
-    target.querySelector('[data-stat-refresh]').onclick=()=>load();
+    controlsRoot.querySelector('[data-stat-period]').value=selection.period;
+    const anchor=controlsRoot.querySelector('[data-stat-month]');anchor.type=selection.period==='year'?'number':'month';anchor.min=selection.period==='year'?'2000':'2000-01';anchor.max=selection.period==='year'?'2099':'2099-12';anchor.value=selection.period==='year'?selection.month.slice(0,4):selection.month;controlsRoot.querySelector('[data-stat-month-label]').firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';
+    if(kind==='environment')controlsRoot.querySelector('[data-stat-group]').value=selection.group;
+    controlsRoot.querySelector('[data-stat-period]').onchange=e=>{selection.period=e.target.value;const label=controlsRoot.querySelector('[data-stat-month-label]'),input=controlsRoot.querySelector('[data-stat-month]');label.firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';input.type=selection.period==='year'?'number':'month';input.min=selection.period==='year'?'2000':'2000-01';input.max=selection.period==='year'?'2099':'2099-12';input.value=selection.period==='year'?selection.month.slice(0,4):selection.month;load();};
+    controlsRoot.querySelector('[data-stat-month]').onchange=e=>{if(e.target.value&&e.target.checkValidity()){selection.month=selection.period==='year'?e.target.value+'-'+selection.month.slice(5):e.target.value;load();}};
+    controlsRoot.querySelector('[data-stat-group]')?.addEventListener('change',e=>{selection.group=e.target.value;load();});
+    controlsRoot.querySelector('[data-stat-refresh]').onclick=()=>load();
     const refresh=()=>{if(target.isConnected&&!document.hidden&&!inflight)load(true);};
     target.refreshStatistics=refresh;
     load();
+  }
+
+  function recordCard(r,kind,answerCount) {
+    const details=kind==='patrol'?[['Inspector',r.inspector],['Checklist findings',number(r.not_ok)+' NOT OK']]:kind==='red-tag'?[['Section',r.section],['PIC',r.pic],['Rank',r.rank]]:[['Factory',r.plant],['Location',r.location],['Reporter',r.reporter]];
+    return '<a class="she-record-row she-record-card" href="'+esc(r.detail_url)+'"><div class="she-record-photo">'+(r.photo_url?'<img src="'+esc(r.photo_url)+'" alt="Photo for '+esc(r.reference)+'" loading="lazy">':'<span>No photo attached</span>')+'</div><div class="she-record-copy"><div class="she-record-top"><strong>'+esc(r.reference)+'</strong><span class="she-record-badge">'+esc(r.status)+'</span></div><h2>'+esc(r.title)+'</h2><small>'+esc(r.date)+'</small><dl>'+details.map(([label,value])=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value||'—')+'</dd></div>').join('')+'</dl>'+(r.description?'<p>'+esc(r.description)+'</p>':'')+(answerCount?'<small>'+number(r.matched_count)+' matching checklist answers</small>':'')+'<span class="she-record-open">View full details →</span></div></a>';
   }
 
   async function renderRecords() {
@@ -167,11 +173,12 @@ const SHEStats = (() => {
         content.querySelector('[data-record-period]').textContent=data.selection.label+(query.get('section')?' · '+query.get('section'):'');
         const answerCount=kind==='patrol'&&['answer','section'].includes(data.field);
         const countNote=number(data.total)+' matching '+(kind==='patrol'?'patrols':kind==='red-tag'?'findings':'reports')+(answerCount?' · '+number(data.matched_items)+' matching checklist answers':'');
-        target.innerHTML='<div class="she-record-heading"><strong>'+countNote+'</strong><span>Page '+data.page+' of '+data.pages+'</span></div>'+(data.records.length?'<div class="she-record-list">'+data.records.map(r=>'<a class="she-record-row" href="'+esc(r.detail_url)+'"><div><strong>'+esc(r.reference)+'</strong><span>'+esc(r.title)+'</span><small>'+esc(r.date)+' · '+esc(kind==='patrol'?r.inspector:kind==='red-tag'?r.section+' · PIC '+r.pic:r.plant+' · '+r.location)+'</small>'+(r.description?'<p>'+esc(r.description)+'</p>':'')+'</div><div class="she-record-state"><span>'+esc(r.status)+'</span>'+(answerCount?'<small>'+r.matched_count+' matching answers</small>':'')+'<strong>Open record →</strong></div></a>').join('')+'</div><div class="she-record-paging"><button class="secondary-button" data-record-prev '+(data.page===1?'disabled':'')+'>Previous</button><span>'+number((data.page-1)*25+1)+'–'+number(Math.min(data.page*25,data.total))+' of '+number(data.total)+'</span><button class="secondary-button" data-record-next '+(data.page===data.pages?'disabled':'')+'>Next</button></div>':'<div class="she-chart-empty">No records match this chart selection.</div>');
+        target.innerHTML='<div class="she-record-heading"><strong>'+countNote+'</strong><span>Page '+data.page+' of '+data.pages+'</span></div>'+(data.records.length?'<div class="she-record-list">'+data.records.map(r=>recordCard(r,kind,answerCount)).join('')+'</div><div class="she-record-paging"><button class="secondary-button" data-record-prev '+(data.page===1?'disabled':'')+'>Previous</button><span>'+number((data.page-1)*25+1)+'–'+number(Math.min(data.page*25,data.total))+' of '+number(data.total)+'</span><button class="secondary-button" data-record-next '+(data.page===data.pages?'disabled':'')+'>Next</button></div>':'<div class="she-chart-empty">No records match this chart selection.</div>');
         target.querySelector('[data-record-prev]')?.addEventListener('click',()=>{page--;load();});
         target.querySelector('[data-record-next]')?.addEventListener('click',()=>{page++;load();});
       }catch(error){if(current===version&&target.isConnected)target.innerHTML='<p role="alert" class="form-error">'+esc(error.message)+'</p><button class="secondary-button" data-record-retry>Try again</button>';target.querySelector('[data-record-retry]')?.addEventListener('click',load);}
     };
+    target.addEventListener('error',e=>{if(e.target.tagName==='IMG'){const fallback=document.createElement('span');fallback.textContent='Photo unavailable';e.target.replaceWith(fallback);}},true);
     load();
   }
 

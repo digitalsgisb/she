@@ -13,6 +13,8 @@ def validate(value):
     return json.dumps(value)
 
 def route_feature(path):
+    if path.startswith('/api/she-monitoring/'):
+        return 'patrol' if path.endswith('/accident') else 'reporting'
     if path.startswith(('/api/patrols', '/api/patrol-templates')): return 'patrol'
     if path.startswith('/api/red-tags'): return 'red-tag'
     if path.startswith('/api/cmms/'): return 'work-orders'

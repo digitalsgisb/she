@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import time
 import she_statistics
+import she_monitoring
 from threading import Lock
 
 from cmms_bridge import bridge, CmmsError
@@ -200,6 +201,8 @@ def get(h, db, path):
         for key in ('snapshot', 'answers', 'photos'):
             result[key] = json.loads(result.pop(key + '_json'))
         result['updates'] = [dict(r) for r in db.execute('SELECT * FROM finding_updates WHERE report_id=? ORDER BY id', (row['id'],))]
+        review = db.execute('SELECT payload_json FROM hiyari_reviews WHERE report_id=?', (row['id'],)).fetchone()
+        result['hiyari_review'] = json.loads(review['payload_json']) if review else {}
         result.update(receipt(row))
         h.send_json(200, dict(report=result))
     else:
@@ -320,7 +323,7 @@ def change(h, db, path, method, data, user):
             db.commit()
             h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Form changed. Reload it.'))
         else:
-            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|retry-order|link-order)', path)
+            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|retry-order|link-order|hiyari-review)', path)
             if not match or method != 'POST':
                 h.error_json(404, 'Not found.')
                 return
@@ -328,7 +331,10 @@ def change(h, db, path, method, data, user):
             if not row:
                 h.error_json(404, 'Report not found.')
                 return
-            if match[2] == 'retry-order':
+            if match[2] == 'hiyari-review':
+                changed = she_monitoring.save_review(db, row, data, user)
+                h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Report changed. Reload before saving.'))
+            elif match[2] == 'retry-order':
                 if row['order_state'] not in ('failed', 'pending'):
                     h.error_json(409, 'Check CMMS and link an existing order if its creation is uncertain.')
                     return
@@ -347,6 +353,8 @@ def change(h, db, path, method, data, user):
                 db.commit()
                 h.send_json(200, dict(ok=True))
             else:
+                if json.loads(row['snapshot_json']).get('group')=='hiyari-hatto' and data.get('status') in ('resolved','closed'):
+                    raise ValueError('Use the FR-SH-12 review to verify and close Hiyari Hatto reports.')
                 note = text(data.get('note', ''), 2000, True)
                 status = data.get('status')
                 if status not in STATUSES:

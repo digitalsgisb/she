@@ -28,6 +28,10 @@ const routes = {
   'dashboard-records': { title: 'Filtered Dashboard Records', icon: 'clipboard' },
   'patrol-dashboard': { title: 'Patrol Dashboard', icon: 'grid' },
   'red-tag-dashboard': { title: 'Red Tag Dashboard', icon: 'tag' },
+  'accident-dashboard': { title: 'Monthly accident statistic', icon: 'shield' },
+  'hiyari-dashboard': { title: 'Hiyari Hatto Summary', icon: 'alert' },
+  'compound-dashboard': { title: 'No. of compound', icon: 'leaf' },
+  'environmental-findings-dashboard': { title: 'No. of environmental findings', icon: 'leaf' },
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
@@ -55,11 +59,12 @@ function canAccessRoute(key) {
   const has = feature => currentUser.role === 'admin' || (currentUser.features || Object.keys(workspaceFeatures)).includes(feature);
   if(key==='dashboard-records'){const kind=location.hash.split('?')[0].split('/')[2],feature={patrol:'patrol','red-tag':'red-tag',environment:'reporting'}[kind];return Boolean(feature)&&SHEStats.allowed()&&has(feature);}
   if(key==='health-dashboard')return has('health');
-  if(key==='safety-dashboard')return SHEStats.allowed()&&(has('patrol')||has('red-tag'));
+  if(key==='safety-dashboard')return SHEStats.allowed()&&(has('patrol')||has('red-tag')||has('reporting'));
+  if(['accident-dashboard','hiyari-dashboard','compound-dashboard','environmental-findings-dashboard'].includes(key))return SHEStats.allowed()&&has(key==='accident-dashboard'?'patrol':'reporting');
   if(key.endsWith('-dashboard')){const feature={'patrol-dashboard':'patrol','red-tag-dashboard':'red-tag','environment-dashboard':'reporting'}[key];return SHEStats.allowed()&&has(feature);}
   if (['dashboard','account'].includes(key)) return true;
   if (key === 'users') return ['admin','executive'].includes(currentUser.role);
-  if (key === 'safety') return has('patrol') || has('red-tag') || has('red-tag-pic');
+  if (key === 'safety') return has('patrol') || has('red-tag') || has('red-tag-pic') || has('reporting');
   if (key === 'environmental') return has('reporting') || has('waste');
   if (['daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return has('patrol');
   if (['findings','hiyari-hatto','kaizen','reporting-inbox','reporting-forms'].includes(key)) return has('reporting') && (key !== 'reporting-forms' || currentUser.role !== 'user');
@@ -79,7 +84,7 @@ function featurePermissions(user) {
   return '<fieldset class="feature-permissions"><legend>Feature access</legend><p class="field-hint">Select what this account can open. Admins have all features.</p>'+Object.entries(workspaceFeatures).map(([key,label])=>'<label><input type="checkbox" name="feature" value="'+key+'" '+(selected.includes(key)?'checked':'')+'>'+label+'</label>').join('')+'</fieldset>';
 }
 
-const envItems = ['findings', 'hiyari-hatto', 'kaizen', 'waste'];
+const envItems = ['findings', 'kaizen', 'waste'];
 const featureDescriptions = {
   'red-tag': 'A space for Red Tag records and follow-up.',
   'hiyari-hatto': 'A space to capture near misses and early warnings.',
@@ -240,14 +245,16 @@ function moduleCard(key, index) {
 }
 
 function renderStatsDashboard(key) {
-  if(key==='safety-dashboard')key=canAccessRoute('patrol-dashboard')?'patrol-dashboard':'red-tag-dashboard';
+  if(key==='safety-dashboard')key=['accident-dashboard','red-tag-dashboard','hiyari-dashboard'].find(canAccessRoute);
+  if(key==='environment-dashboard')key='environmental-findings-dashboard';
+  if(SHEMonitoring.configs[key]){SHEMonitoring.mount(key);return;}
   if(key==='health-dashboard'){
     content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('health','Health Dashboard','Health and wellbeing monitoring.')+'<section class="category-empty">No health modules have been added yet.</section></div>';
     bindDashboardHeader();return;
   }
   const config={
     'patrol-dashboard':{kind:'patrol',detail:'Monitor completed inspections, checklist findings, and patrol follow-up.',link:'patrol-overview',action:'Open patrol history'},
-    'red-tag-dashboard':{kind:'red-tag',detail:'Monitor genba findings, section priorities, and PIC follow-up.',link:'red-tag',action:'Open genba findings'},
+    'red-tag-dashboard':{kind:'red-tag',detail:'SSFM (Redtag) Gemba summary: findings, rank, STOP 6, section and PIC follow-up.',link:'red-tag',action:'Open genba findings'},
     'environment-dashboard':{kind:'environment',detail:'Monitor reporting topics, locations, activity, and work-order follow-up.',link:'reporting-inbox',action:'Open SHE reporting inbox'}
   }[key];
   const area=config.kind==='environment'?'environment':'safety';
@@ -259,12 +266,15 @@ function renderStatsDashboard(key) {
 
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
-  return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><span class="eyebrow">SUGIHARA · SHE MONITORING</span><h1>'+title+'</h1><p>'+detail+'</p><div class="dashboard-hero-controls">'+(area==='safety'?'<label>Safety module<select data-dashboard-module>'+['patrol-dashboard','red-tag-dashboard'].filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+(route==='patrol-dashboard'?'Safety Patrol':'Red Tag / Safety genba')+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
+  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['compound-dashboard','environmental-findings-dashboard']:[];
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'No. of compound','environmental-findings-dashboard':'No. of environmental findings'};
+  return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><span class="eyebrow">SUGIHARA · SHE MONITORING</span><h1>'+title+'</h1><p>'+detail+'</p><div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
 
 function renderDashboard() {
-  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>Choose your area</h1><p>Safety, Health and Environment each have their own dashboard.</p></div></section><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, genba findings, and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
+  const monitoring=[['accident-dashboard','Safety'],['red-tag-dashboard','Safety'],['hiyari-dashboard','Safety'],['compound-dashboard','Environment'],['environmental-findings-dashboard','Environment']];
+  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>SHE dashboards</h1><p>Three Safety dashboards and two Environment dashboards.</p></div></section><div class="module-grid">${monitoring.filter(([route])=>canAccessRoute(route)).map(([route,area])=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><small>${area}</small><strong>${route==='red-tag-dashboard'?'SSFM (Redtag) Gemba summary':routes[route].title}</strong></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div><div class="content-heading"><h2>Workspace tools</h2></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, Hiyari Hatto, genba findings and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
 }
 
 function renderSafetyHome() {
@@ -482,6 +492,7 @@ function renderPage() {
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/dashboard'; return; }
   renderNav(key);
+  if(canAccessRoute('hiyari-hatto'))nav.querySelector('#safetySubnav .subnav-content')?.insertAdjacentHTML('beforeend','<a class="subnav-link" href="#/hiyari-hatto"><span class="subnav-dot"></span>Hiyari Hatto form</a>');
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
@@ -501,6 +512,7 @@ function renderPage() {
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   if(key==='safety' && canAccessRoute('red-tag-pic'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/red-tag-pic"><span class="module-icon">'+icon('tag',23)+'</span><span class="module-copy"><strong>My Red Tag Actions</strong><span>Receive assigned findings and upload action notes and after pictures.</span></span></a>');
   filterFeatureLinks(content);
+  if(key==='safety'&&canAccessRoute('hiyari-hatto'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/hiyari-hatto"><span class="module-icon">'+icon('alert',23)+'</span><span class="module-copy"><strong>Hiyari Hatto</strong><span>FR-SH-12 form, near-miss reporting and SHE review.</span></span></a>');
   filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');
   if (key === 'safety') loadSafetyPulse('safetyHomePulse');

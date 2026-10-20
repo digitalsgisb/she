@@ -28,6 +28,7 @@ from cmms_bridge import CmmsError, bridge
 import reporting
 import access
 import she_statistics
+import she_monitoring
 import redtag
 
 
@@ -133,6 +134,7 @@ def init_db() -> None:
         db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
+        she_monitoring.init(db)
         redtag.init(db)
         for table, column, definition in [
             ('patrols', 'template_json', "TEXT NOT NULL DEFAULT 'null'"),
@@ -336,6 +338,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith('/api/she-monitoring/'):
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    she_monitoring.get(self, db, path, session[0])
+            return
         if path.startswith("/api/red-tags"):
             with database() as db:
                 session = self.authorize(db)
@@ -399,6 +407,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
+        assets.update({'/monitoring-ui.js': ROOT / 'monitoring-ui.js', '/monitoring.css': ROOT / 'monitoring.css',
+                       '/templates/hiyari-hatto.pdf': ROOT / 'public' / 'templates' / 'hiyari-hatto.pdf'})
         assets.update({"/redtag-ui.js": ROOT / "redtag-ui.js", "/redtag.css": ROOT / "redtag.css"})
         assets.update({'/report': ROOT / 'report.html', '/report/': ROOT / 'report.html',
                        '/report.html': ROOT / 'report.html', '/reporting-ui.js': ROOT / 'reporting-ui.js',
@@ -510,6 +520,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path.startswith('/api/she-monitoring/'):
+                she_monitoring.change(self, db, path, method, data, user)
+                return
             if path.startswith("/api/red-tags"):
                 redtag.change(self, db, path, method, data, user)
                 return

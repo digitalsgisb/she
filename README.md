@@ -4,6 +4,8 @@ SHE Digital is Sugihara's SHE workspace. Dashboards are separated into Safety, H
 
 ## Executive dashboards
 
+The Safety department's five requested dashboards and FR-SH-12 Hiyari Hatto form are now available. See [dashboard data entry, template workflow and deployment](docs/five-dashboards.md). Historical spreadsheet rows have not been imported; checked monthly figures can be entered in the new registers.
+
 The dashboard entry lets users choose **Safety**, **Health**, or **Environment**. The Safety header includes a **Safety module** selector for Patrol and Red Tag / Safety genba. The Environment header includes reporting-area, period and date filters. Health has its own dashboard with an empty state until health modules are added. Statistical dashboards remain Executive/Admin only and respect each account's module permissions.
 
 Dashboard headers use the SHE green theme with area navigation and filters above the figures and charts. Charts retain Overview and secondary tabs, period filters and automatic refresh. Layouts adapt to desktop and phones; scrolling is available for longer content. Selecting a chart opens matching records as **dark green photo cards** with a status badge, date, short description and key details. Each card opens the original full record. Missing photos show a clear empty state. Photos use authenticated endpoints and are loaded only for the current result page.

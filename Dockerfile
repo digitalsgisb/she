@@ -4,6 +4,7 @@ WORKDIR /app
 COPY server.py cmms_bridge.py index.html styles.css script.js patrol.js patrol-default.json cmms-ui.js favicon.svg manifest.webmanifest sw.js ./
 COPY public ./public
 COPY she_statistics.py statistics-ui.js statistics.css ./
+COPY she_monitoring.py monitoring-ui.js monitoring.css ./
 COPY access.py redtag.py redtag-ui.js redtag.css ./
 COPY reporting.py report.html reporting-ui.js reporting.css ./
 RUN mkdir -p /data && addgroup -S safety && adduser -S -G safety safety && chown -R safety:safety /data /app

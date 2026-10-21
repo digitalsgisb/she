@@ -70,11 +70,11 @@ class AirLeakTests(unittest.TestCase):
             row=db.execute('SELECT * FROM finding_reports').fetchone()
             self.assertEqual(json.loads(row['answers_json'])['machine'],'Packing machine')
 
-    def test_dashboards_only_allow_executive_and_features_are_shared(self):
+    def test_dashboards_allow_admin_and_executive_and_features_are_shared(self):
         cookie, _=self.account()
         self.assertEqual(self.request('/api/patrols/statistics',cookie=cookie)[0],403)
         admin,_=self.login('admin','AdminPassword123!')
-        self.assertEqual(self.request('/api/patrols/statistics',cookie=admin)[0],403)
+        self.assertEqual(self.request('/api/patrols/statistics',cookie=admin)[0],200)
         with server.database() as db: db.execute("UPDATE users SET role='executive' WHERE username='member'")
         self.assertEqual(self.request('/api/patrols/statistics',cookie=cookie)[0],200)
         self.assertEqual(self.request('/api/she-monitoring/accident',cookie=cookie)[0],200)

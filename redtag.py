@@ -8,10 +8,12 @@ import access
 import she_statistics
 import io
 import json
+import os
 import re
 import time
 from datetime import date, datetime, timezone, timedelta
 from urllib.parse import parse_qs, urlsplit
+from qrcodegen import QrCode
 
 TZ = timezone(timedelta(hours=8))
 DEFAULT_SECTIONS = [
@@ -297,19 +299,41 @@ def create(h, db, data, user):
     db.commit()
     h.send_json(201, dict(finding=finding(db.execute('SELECT * FROM redtag_findings WHERE id=?', (cursor.lastrowid,)).fetchone())))
 
+def finding_link(finding_id):
+    base = os.environ.get('SHE_PUBLIC_URL', 'https://she.sugidigital.org').strip().rstrip('/')
+    parsed = urlsplit(base)
+    if (parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.username or
+            parsed.password or parsed.query or parsed.fragment or len(base) > 512):
+        raise ValueError('Set SHE_PUBLIC_URL to the public SHE Digital address before printing.')
+    return base + '/#/red-tag/' + str(int(finding_id))
+
+
+def qr_svg(url):
+    qr = QrCode.encode_text(url, QrCode.Ecc.MEDIUM)
+    # Four blank modules on every side keep the code readable on printed cards.
+    border = 4
+    size = qr.get_size() + border * 2
+    path = ''.join(f'M{x+border},{y+border}h1v1h-1z' for y in range(qr.get_size())
+                   for x in range(qr.get_size()) if qr.get_module(x, y))
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
+            'shape-rendering="crispEdges" role="img" aria-label="QR code to open this red tag">'
+            f'<rect width="{size}" height="{size}" fill="#fff"/><path d="{path}" fill="#000"/></svg>')
+
+
 def print_html(rows, day):
     esc = lambda value: html.escape(str(value))
     cards = []
     for r in rows:
+        url = finding_link(r['id'])
         fields = [('Date', r['finding_date']), ('Section', r['section']), ('Machine / Equipment', r['machine']),
                   ('PIC', r['pic']), ('Type of stop', r['type_of_stop']), ('Rank', r['rank']),
                   ('Status', r['status']), ('Issue by', r['issued_by'])]
-        cards.append('<article class="genba-card"><h2>RED TAG · ' + esc(r['red_tag_id']) + '</h2><img class="genba-photo" src="/api/red-tags/' + str(r['id']) + '/photo" alt="Before picture"><dl>' +
+        cards.append('<article class="genba-card"><h2>RED TAG · ' + esc(r['red_tag_id']) + '</h2><div class="genba-print-media"><img class="genba-photo" src="/api/red-tags/' + str(r['id']) + '/photo" alt="Before picture"><div class="genba-qr"><a href="' + esc(url) + '">' + qr_svg(url) + '</a><strong>Scan to open this finding</strong><small>Sign in with your SHE account.</small><a class="genba-finding-url" href="' + esc(url) + '">' + esc(url) + '</a></div></div><dl>' +
                      ''.join('<dt>' + label + '</dt><dd>' + esc(value) + '</dd>' for label, value in fields) +
                      '</dl><h3>Hazard identified</h3><p>' + esc(r['hazard']) + '</p><h3>Recommendation</h3><p>' + esc(r['recommendation']) +
                      '</p><div class="genba-signatures">Action taken: __________________________________<br>Verified by: __________________ Date: ______________</div></article>')
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css"></head><body class="genba-print">'
+            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css?v=20261021-qr1"></head><body class="genba-print">'
             '<div class="genba-print-toolbar"><h1>Safety genba findings · ' + esc(day) + '</h1><p>' + str(len(rows)) +
             ' finding(s). Use your browser Print command or Ctrl+P to print / save PDF. Return to SHE Digital to confirm printing.</p></div>' +
             ''.join(cards) + ('<p>No findings for this date.</p>' if not rows else '') + '</body></html>')

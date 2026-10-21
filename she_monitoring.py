@@ -64,7 +64,7 @@ def init(db):
 
 
 def authorized(user, kind):
-    return user['role'] == 'executive' and kind in KINDS
+    return user['role'] in ('admin', 'executive') and kind in KINDS
 
 
 def clean_month(value):

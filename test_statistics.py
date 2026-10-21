@@ -1,4 +1,4 @@
-"""Full-dataset totals, local date boundaries, and Executive-only statistics."""
+"""Full-dataset totals, local date boundaries, and Administrator/Executive statistics."""
 import json
 import unittest
 from datetime import datetime
@@ -43,7 +43,7 @@ class StatisticsTests(unittest.TestCase):
             self.assertEqual(self.request(path,cookie=self.operator)[0],403)
             self.assertEqual(self.request(path,cookie=self.restricted)[0],200)
             self.assertEqual(self.request(path,cookie=self.executive)[0],200)
-            self.assertEqual(self.request(path,cookie=self.admin)[0],403)
+            self.assertEqual(self.request(path,cookie=self.admin)[0],200)
             self.assertEqual(self.request(path+'?month=not-a-month',cookie=self.executive)[0],400)
             self.assertEqual(self.request(path+'?period=invalid',cookie=self.executive)[0],400)
     def test_environment_period_local_midnight_and_area_filters(self):

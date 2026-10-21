@@ -59,7 +59,7 @@ const routes = {
 
 function canAccessRoute(key) {
   if (!currentUser) return false;
-  if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records') return currentUser.role === 'executive';
+  if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records') return ['admin','executive'].includes(currentUser.role);
   if (['users','reporting-forms'].includes(key)) return ['admin','executive'].includes(currentUser.role);
   return Boolean(routes[key]);
 }
@@ -224,7 +224,7 @@ function renderNav(active) {
 function renderHome() {
   if(currentUser.role==='safety_committee')return renderCommitteeHome();
   const links = [['red-tag','Record a hazard and follow up on findings.'],['air-leak','Report a leak and issue a maintenance work order.'],['red-tag-pic','View findings assigned to you.'],['daily-safety-patrol','Complete a safety inspection.'],['patrol-overview','Review your submitted patrols.'],['hiyari-hatto','Report a near miss.'],['work-orders','Follow up on SHE work orders.']];
-  return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${currentUser.role==='executive'?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
+  return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${['admin','executive'].includes(currentUser.role)?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
 }
 
 function renderCommitteeHome() {
@@ -442,7 +442,7 @@ function openUserModal(kind, user = null) {
 }
 
 function currentRoute() {
-  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'home';
+  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || (['admin','executive'].includes(currentUser?.role)?'dashboard':'home');
   return routes[key] ? key : 'home';
 }
 

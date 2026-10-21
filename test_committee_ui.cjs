@@ -4,7 +4,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  const browser=await chromium.launch({headless:true,executablePath:process.env.SHE_QA_BROWSER});
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
- let role='safety_committee',submissions=[],findings=[],signedIn=true;
+ let role='safety_committee',submissions=[],findings=[],signedIn=true,deleteRequests=[],failDelete=true;
  const user=()=>({id:role==='user'?3:2,username:'member',display_name:'Committee Member',role,features:[]});
  await page.route('**/*',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname;
@@ -18,7 +18,10 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
    if(req.method()==='POST'){const finding={...req.postDataJSON(),id:1,user_id:2,red_tag_id:'RT2610-001',issued_by:'Committee Member',revision:1};findings.push(finding);return json({finding});}
    return json({findings});
   }
-  if(path==='/api/red-tags/1')return json({finding:findings[0],updates:[]});
+  if(path==='/api/red-tags/1'){
+   if(req.method()==='DELETE'){deleteRequests.push(req.postDataJSON());if(failDelete){failDelete=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Please try deletion again.'})});}findings=[];return json({ok:true});}
+   return json({finding:findings[0],updates:[]});
+  }
   if(path==='/api/reporting/air-leak')return json({form:{id:11,revision:1},token:'test',reports:[]});
   if(path==='/api/reporting/submit'){submissions.push(req.postDataJSON());return json({reference:'SHE-000001',order_state:'issued',order_id:'wo-1'});}
   if(path.startsWith('/api/'))return json({configured:false,plants:[],patrols:[],forms:[],findings:[]});
@@ -89,5 +92,11 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  role='user';signedIn=false;await page.goto('https://she.test/#/red-tag/1');await page.reload();await page.locator('#loginScreen').waitFor({state:'visible'});
  await page.locator('#loginUsername').fill('member');await page.locator('#loginPassword').fill('TestingPassword123!');await page.locator('#loginForm button[type=submit]').click();await page.locator('.genba-details').waitFor();
  assert.equal(new URL(page.url()).hash,'#/red-tag/1');assert.equal(await page.locator('#modalTitle').textContent(),'RT2610-001');
+ assert.equal(await page.locator('#genbaDelete').count(),0);
+ role='executive';await page.reload();await page.locator('#genbaDelete').waitFor();
+ page.once('dialog',dialog=>dialog.dismiss());await page.locator('#genbaDelete').click();assert.equal(deleteRequests.length,0);
+ page.once('dialog',dialog=>{assert(dialog.message().includes('RT2610-001'));dialog.accept();});await page.locator('#genbaDelete').click();await page.getByText('Please try deletion again.',{exact:true}).waitFor();assert(await page.locator('#genbaDelete').isEnabled());
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#genbaDelete').click();await page.waitForURL('**/#/red-tag');await page.locator('#genbaNew').waitFor();
+ assert.equal(deleteRequests.length,2);assert.equal(deleteRequests[1].revision,1);assert.equal(await page.locator('[data-genba-id="1"]').count(),0);assert(await page.locator('#modalBackdrop').isHidden());
  assert.deepEqual(errors,[]);await browser.close();console.log('Committee mobile navigation, More, dashboard restriction, finding layout, feature removal and Air Leak submission passed.');
 })().catch(error=>{console.error(error);process.exit(1)});

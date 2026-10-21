@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-redtag-print-button-v28';
+const CACHE = 'she-shell-redtag-delete-v29';
 const ASSETS = ['/', '/styles.css', '/script.js', '/air-leak-ui.js', '/patrol.js', '/cmms-ui.js', '/report', '/reporting-ui.js', '/reporting.css', '/redtag-ui.js', '/redtag.css', '/statistics-ui.js', '/statistics.css', '/monitoring-ui.js', '/monitoring.css', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

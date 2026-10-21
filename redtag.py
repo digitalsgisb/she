@@ -38,6 +38,10 @@ def init(db):
             revision INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL,
             printed_at INTEGER, printed_by TEXT);
         CREATE INDEX IF NOT EXISTS redtag_date ON redtag_findings(finding_date,id);
+        CREATE TABLE IF NOT EXISTS redtag_deletions (
+            finding_id INTEGER PRIMARY KEY, red_tag_id TEXT UNIQUE NOT NULL,
+            request_key TEXT UNIQUE NOT NULL, deleted_by INTEGER NOT NULL REFERENCES users(id),
+            deleted_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS redtag_updates (
             id INTEGER PRIMARY KEY AUTOINCREMENT, finding_id INTEGER NOT NULL REFERENCES redtag_findings(id),
             actor TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -146,6 +150,26 @@ def get(h, db, path, user):
 
 def change(h, db, path, method, data, user):
     try:
+        match = re.fullmatch(r'/api/red-tags/(\d+)', path)
+        if method == 'DELETE' and match:
+            if user['role'] not in ('admin', 'executive'):
+                h.error_json(403, 'Only Executives and Administrators can delete red tags.')
+                return
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM redtag_findings WHERE id=?', (int(match[1]),)).fetchone()
+            if not row:
+                h.error_json(404, 'Finding not found.')
+                return
+            if type(data.get('revision')) is not int or data['revision'] != row['revision']:
+                h.error_json(409, 'This finding changed. Reload it before deleting.')
+                return
+            db.execute('INSERT INTO redtag_deletions(finding_id,red_tag_id,request_key,deleted_by,deleted_at) VALUES(?,?,?,?,?)',
+                       (row['id'], row['red_tag_id'], row['request_key'], user['id'], int(time.time())))
+            db.execute('DELETE FROM redtag_updates WHERE finding_id=?', (row['id'],))
+            db.execute('DELETE FROM redtag_findings WHERE id=?', (row['id'],))
+            db.commit()
+            h.send_json(200, dict(ok=True))
+            return
         if path == '/api/red-tags/settings' and method == 'PATCH':
             if user['role'] not in ('admin', 'executive'):
                 h.error_json(403, 'Executive or Admin access required.')
@@ -262,6 +286,9 @@ def create(h, db, data, user):
         else:
             h.send_json(200, dict(finding=finding(previous)))
         return
+    if db.execute('SELECT 1 FROM redtag_deletions WHERE request_key=?', (request_key,)).fetchone():
+        h.error_json(409, 'This finding was deleted. Start a new finding.')
+        return
     day = date_key(data.get('finding_date'))
     clean = {}
     for key, maximum in [('section', 100), ('pic', 80), ('machine', 200), ('hazard', 4000),
@@ -285,7 +312,7 @@ def create(h, db, data, user):
     # The unique ID is allocated inside the same transaction as the finding.
     period = day[2:7].replace('-', '')
     prefix = 'RT' + period + '-'
-    existing = db.execute('SELECT red_tag_id FROM redtag_findings WHERE red_tag_id LIKE ?', (prefix + '%',)).fetchall()
+    existing = db.execute('SELECT red_tag_id FROM redtag_findings WHERE red_tag_id LIKE ? UNION SELECT red_tag_id FROM redtag_deletions WHERE red_tag_id LIKE ?', (prefix + '%', prefix + '%')).fetchall()
     number = max([int(r[0].split('-')[-1]) for r in existing] or [0]) + 1
     tag = prefix + str(number).zfill(3)
     cursor = db.execute('''INSERT INTO redtag_findings(red_tag_id,user_id,finding_date,section,pic,machine,hazard,

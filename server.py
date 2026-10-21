@@ -504,6 +504,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self) -> None:
         self.change_request("PATCH")
 
+    def do_DELETE(self) -> None:
+        if not re.fullmatch(r'/api/red-tags/\d+', urlsplit(self.path).path):
+            self.error_json(404, 'Not found.')
+            return
+        self.change_request('DELETE')
+
     def change_request(self, method: str) -> None:
         path = urlsplit(self.path).path
         if not self.same_origin():

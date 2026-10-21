@@ -172,6 +172,23 @@ async function genbaDetail(id) {
     }
     modalBackdrop.hidden=false;
     document.getElementById('genbaDetailClose').onclick=closeModal;
+    if(genbaManager()){
+      document.getElementById('genbaDetailClose').insertAdjacentHTML('beforebegin','<button type="button" id="genbaDelete" class="genba-delete-button">Delete red tag</button>');
+      document.getElementById('genbaDelete').onclick=async event=>{
+        if(!window.confirm('Delete '+r.red_tag_id+' from '+r.section+'?\n\nThis permanently removes the finding, its photos and action history.'))return;
+        const button=event.currentTarget,buttons=[...modalBackdrop.querySelectorAll('button')].map(node=>[node,node.disabled]);
+        buttons.forEach(([node])=>node.disabled=true);button.textContent='Deleting…';
+        try{
+          await api('/api/red-tags/'+r.id,'DELETE',{revision:r.revision});
+          closeModal();notify('Red tag deleted: '+r.red_tag_id);
+          if(currentRoute()===route){
+            if(location.hash.split('/')[2])location.hash='#/'+route;
+            else await renderGenba();
+          }
+        }catch(error){genbaError(error,modalBody);}
+        finally{buttons.forEach(([node,disabled])=>node.disabled=disabled);button.textContent='Delete red tag';}
+      };
+    }
     if(document.getElementById('genbaPrinted'))document.getElementById('genbaPrinted').onclick=async e=>{e.target.disabled=true;try{await api('/api/red-tags/printed','POST',{ids:[r.id]});notify('Printing confirmed.');await renderGenba();}catch(error){genbaError(error,modalBody);}finally{e.target.disabled=false;}};
     document.getElementById('genbaUpdate')?.addEventListener('submit',async e=>{
       e.preventDefault();const form=e.target,button=e.submitter||form.querySelector('[type=submit]');if(form.dataset.sending)return;form.dataset.sending='1';const originalLabel=button.textContent;form.querySelectorAll('[type=submit]').forEach(b=>b.disabled=true);button.textContent='Sending…';

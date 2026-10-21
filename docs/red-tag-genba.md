@@ -48,3 +48,9 @@ Browser checks: install Playwright for development, then run `node test_genba_ui
 The main Dashboard has concise Red Tag and Environmental totals. Detailed statistics have their own routes under the automatically expanding Dashboards menu: Patrol Dashboard, Red Tag Dashboard, and Environmental Dashboard. The main dashboard has summaries for all three. Forms and action pages remain separate. Statistical endpoints are restricted to Executives/Admins with access to the relevant module. Regular committee users and PICs do not receive these chart datasets. Charts use the month, year, or all-date selection; statuses are current statuses of findings recorded during that period, not counts of closure events during the period. The backlog always covers all dates. All-date activity charts show the 12 months ending at the selected trend month. No data produces an empty chart and no invented completion percentage.
 
 Run statistics checks with `python -m unittest test_statistics.StatisticsTests` and `node test_statistics_ui.cjs` (using the same optional Playwright/browser/Python variables as genba UI tests). Browser fixtures are synthetic test data and are not inserted into the production database.
+
+## Delete a red tag
+
+Executives and Administrators can open a finding and choose **Delete red tag**. The confirmation names the finding and section. Deletion permanently removes the finding, its before/after photos, and its action history. It disappears from lists, print/export output, and statistics; its existing QR link returns finding not found. Regular Users and Safety Committee accounts cannot delete findings.
+
+A changed finding must be reloaded before deletion. Deleted tag numbers and submission keys are reserved in a small deletion record (including who deleted it and when), so printed references are never assigned to a new finding and an old submission retry cannot recreate a deleted tag.

@@ -175,7 +175,7 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
         self.assertIn('/styles.css?v=20261021-refine3', html)
-        self.assertIn('/script.js?v=20261021-refine3', html)
+        self.assertIn('/script.js?v=20261021-sidebar4', html)
         self.assertIn('/statistics-ui.js?v=20261021-mobile2', html)
         self.assertIn('/statistics.css?v=20261013-area-cards1', html)
         self.assertIn('/patrol.js?v=20261021-mobile2', html)

@@ -1,6 +1,6 @@
 # Red Tag / Safety genba
 
-Open **Safety → Red Tag · Safety genba** to record the Tuesday committee inspection. Inspections can also be saved on other dates. Each finding has a date, section, machine/equipment, hazard, before picture, type of stop, rank, recommendation, PIC, status, and the signed-in issuer. Stop types and ranks use your existing classifications as text. IDs use RTyyMM-001 and increment per month within SHE Digital. This is a separate sequence from the old AppSheet sheet.
+Open **Safety → Red Tag · Safety genba** to record the Tuesday committee inspection. Inspections can also be saved on other dates. Each finding has a date, section, machine/equipment, hazard, before picture, type of stop, rank, recommendation, PIC, status, and the signed-in issuer. New findings use STOP 1–6 and A/B/C dropdowns with the supplied hazard and risk descriptions. Section and PIC are linked dropdowns; the initial section/PIC mapping follows the supplied 17 pairs. Historical findings retain their saved classifications. IDs use RTyyMM-001 and increment per month within SHE Digital. This is a separate sequence from the old AppSheet sheet.
 
 ## Set up committee and PIC accounts
 

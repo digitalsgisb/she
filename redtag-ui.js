@@ -9,6 +9,19 @@ const genbaInbox = () => currentRoute()==='red-tag-pic';
 const genbaRouteActive = () => ['red-tag','red-tag-pic'].includes(currentRoute());
 const genbaManager = () => ['admin','executive'].includes(currentUser.role);
 const genbaField = (name,label,max=200) => '<label>'+label+'<input name="'+name+'" maxlength="'+max+'" required></label>';
+const genbaStops = [
+  ['STOP 1','Caught by Machine'],['STOP 2','Caught by heavy object'],
+  ['STOP 3','Contact with Moving vehicle'],['STOP 4','Fall from different height level'],
+  ['STOP 5','Electrocution'],['STOP 6','Fire, contact with sharp, hot object, etc.']
+];
+const genbaRanks = [
+  ['A','Serious accident risk','May cause disability or permanent injury.'],
+  ['B','Medical treatment risk','May cause injury requiring medical leave.'],
+  ['C','Minor injury risk','Light injury or unsafe condition with low severity.']
+];
+function genbaClassification(name,label,choices) {
+  return `<label>${label}<select name="${name}" required><option value="">Choose ${name==='rank'?'a rank':'a STOP type'}</option>${choices.map(([value,title])=>`<option value="${value}">${value} — ${title}</option>`).join('')}</select><small class="field-hint" data-classification-hint="${name}">${name==='rank'?'Choose the level of injury risk.':'Choose the hazard category.'}</small></label>`;
+}
 function genbaError(error, target=content) {
   let box=target.querySelector('[data-genba-error]');
   if(!box){box=document.createElement('p');box.className='form-error';box.dataset.genbaError='';target.prepend(box);}
@@ -100,6 +113,11 @@ function genbaNew() {
   modalBody.innerHTML='<h2 id="modalTitle">New genba finding</h2><form id="genbaForm" class="genba-form stacked-form"><div class="genba-fields"><label>Date<input name="finding_date" type="date" value="'+genbaDate+'" required></label><label>Section<select name="section" id="genbaSection" required>'+config.sections.map(s=>'<option>'+escapeHtml(s.name)+'</option>').join('')+'</select></label><label>PIC<select name="pic" id="genbaPic" required></select><small id="genbaAssignmentHint" class="field-hint"></small></label>'+genbaField('machine','Machine / Equipment')+'</div><label>Hazard identified<textarea name="hazard" maxlength="4000" rows="3" required></textarea></label><label>Before picture<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required><small>Phone photos are resized automatically.</small></label><img id="genbaPhotoPreview" class="genba-preview" hidden alt="Selected before picture"><div class="genba-fields">'+genbaField('type_of_stop','Type of stop',100)+genbaField('rank','Rank',100)+'<label>Status<select name="status">'+(genbaManager()?['Open','In progress','Resolved','Closed']:['Open','In progress']).map(s=>'<option>'+s+'</option>').join('')+'</select></label><label>Issue by<input value="'+escapeHtml(currentUser.display_name)+'" readonly></label></div><p class="field-hint">Use your existing stop and rank classifications. The signed-in account is recorded as the issuer.</p><label>Recommendation<textarea name="recommendation" maxlength="4000" rows="3" required></textarea></label><p class="form-error" data-genba-error hidden></p><div class="modal-actions"><button type="button" class="secondary-button" id="genbaCancel">Cancel</button><button class="primary-button" type="submit">Save finding</button></div></form>';
   modalBackdrop.hidden=false;
   const form=document.getElementById('genbaForm');
+  for(const [name,label,choices] of [['type_of_stop','Type of stop',genbaStops],['rank','Rank',genbaRanks]]){
+    form.elements.namedItem(name).closest('label').outerHTML=genbaClassification(name,label,choices);
+    const select=form.elements.namedItem(name);
+    select.onchange=()=>{const choice=choices.find(row=>row[0]===select.value);form.querySelector(`[data-classification-hint="${name}"]`).textContent=choice?choice.slice(1).join(' — '):(name==='rank'?'Choose the level of injury risk.':'Choose the hazard category.');};
+  }
   const guide=genbaCommittee()?genbaFindingGuide(form):null;
   const section=form.elements.section, pic=form.elements.pic;
   const pics=()=>{pic.innerHTML=config.sections.find(s=>s.name===section.value).pics.map(p=>'<option>'+escapeHtml(p)+'</option>').join('');};

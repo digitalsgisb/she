@@ -175,9 +175,50 @@ function renderMobileNavigation(active) {
 }
 
 function renderNav(active) {
-  const links = ['home','red-tag','air-leak','red-tag-pic','daily-safety-patrol','patrol-overview','checklist-builder','safety','health','environmental','findings','hiyari-hatto','kaizen','waste','reporting-inbox','reporting-forms','work-orders','users','account'];
-  const dashboards = ['dashboard','safety-dashboard','health-dashboard','environment-dashboard'];
-  nav.innerHTML = (currentUser.role==='executive' ? '<div class="nav-label">DASHBOARDS</div>'+dashboards.map(key=>routeLink(key,`nav-link ${active===key?'active':''}`)).join('') : '')+'<div class="nav-label nav-label-spaced">WORKSPACE</div>'+links.filter(canAccessRoute).map(key=>routeLink(key,`nav-link ${active===key?'active':''}`)).join('');
+  const previousSubnavs = [...nav.querySelectorAll('.subnav')];
+  nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
+    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
+    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol History</a><a class="subnav-link ${active === 'red-tag' ? 'active' : ''}" href="#/red-tag"><span class="subnav-dot"></span>Red Tag · Safety genba</a><a class="subnav-link ${active === 'red-tag-pic' ? 'active' : ''}" href="#/red-tag-pic"><span class="subnav-dot"></span>My Red Tag Actions</a><a class="subnav-link ${active === 'air-leak' ? 'active' : ''}" href="#/air-leak"><span class="subnav-dot"></span>Air Leak</a><a class="subnav-link ${active === 'checklist-builder' ? 'active' : ''}" href="#/checklist-builder"><span class="subnav-dot"></span>Checklist Builder</a><a class="subnav-link ${active === 'hiyari-hatto' ? 'active' : ''}" href="#/hiyari-hatto"><span class="subnav-dot"></span>Hiyari Hatto</a></div></div>
+    ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
+    <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${[...envItems, 'reporting-inbox', ...(['admin','executive'].includes(currentUser?.role) ? ['reporting-forms'] : [])].map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="nav-label nav-label-spaced">WORKSPACE</div>
+    ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
+    ${['admin','executive'].includes(currentUser?.role) ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
+    ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
+  previousSubnavs.forEach(previous => {
+    const replacement = document.getElementById(previous.id);
+    if (!replacement) return;
+    previous.innerHTML = replacement.innerHTML;
+    replacement.replaceWith(previous);
+  });
+  [['dashboardSubnav', dashboardsExpanded], ['safetySubnav', safetyExpanded], ['environmentSubnav', envExpanded]].forEach(([id, expanded]) => {
+    const submenu = document.getElementById(id);
+    if (!submenu) return;
+    submenu.getBoundingClientRect();
+    submenu.classList.toggle('expanded', expanded);
+    submenu.inert = !expanded;
+    submenu.setAttribute('aria-hidden', String(!expanded));
+  });
+  document.getElementById('dashboardToggle').addEventListener('click',()=>{dashboardsExpanded=!dashboardsExpanded;renderNav(currentRoute());});
+  nav.querySelector('.nav-parent a[href="#/dashboard"]').addEventListener('click',()=>{if(!dashboardsExpanded){dashboardsExpanded=true;renderNav(active);}});
+  document.getElementById('envToggle').addEventListener('click', () => {
+    envExpanded = !envExpanded;
+    renderNav(currentRoute());
+  });
+  document.getElementById('safetyToggle').addEventListener('click', () => {
+    safetyExpanded = !safetyExpanded;
+    renderNav(currentRoute());
+  });
+  nav.querySelector('a[href="#/environmental"]').addEventListener('click', () => {
+    if (active === 'environmental' && !envExpanded) { envExpanded = true; renderNav(active); }
+  });
+  nav.querySelector('a[href="#/safety"]').addEventListener('click', () => {
+    if (active === 'safety' && !safetyExpanded) { safetyExpanded = true; renderNav(active); }
+  });
+  filterFeatureLinks(nav);
 }
 
 function renderHome() {
@@ -444,11 +485,10 @@ function renderPage() {
   const key = currentRoute();
   SHEStats.hideTooltip();
   dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
-  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(key);
+  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(key);
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/home'; return; }
   renderNav(key);
-  if(canAccessRoute('hiyari-hatto'))nav.querySelector('#safetySubnav .subnav-content')?.insertAdjacentHTML('beforeend','<a class="subnav-link" href="#/hiyari-hatto"><span class="subnav-dot"></span>Hiyari Hatto form</a>');
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;

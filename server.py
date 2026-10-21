@@ -134,6 +134,7 @@ def init_db() -> None:
         db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
+        reporting.init_air_leak(db)
         she_monitoring.init(db)
         redtag.init(db)
         for table, column, definition in [
@@ -410,6 +411,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
+        assets["/air-leak-ui.js"] = ROOT / "air-leak-ui.js"
         assets.update({'/monitoring-ui.js': ROOT / 'monitoring-ui.js', '/monitoring.css': ROOT / 'monitoring.css',
                        '/templates/hiyari-hatto.pdf': ROOT / 'public' / 'templates' / 'hiyari-hatto.pdf'})
         assets.update({"/redtag-ui.js": ROOT / "redtag-ui.js", "/redtag.css": ROOT / "redtag.css"})

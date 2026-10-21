@@ -16,7 +16,7 @@ from cmms_bridge import bridge, CmmsError
 TOKEN_SECRET = secrets.token_bytes(32)
 RATE_LOCK = Lock()
 ATTEMPTS = {}
-GROUPS = ('environment', 'hiyari-hatto', 'kaizen')
+GROUPS = ('environment', 'hiyari-hatto', 'kaizen', 'air-leak')
 STATUSES = ('open', 'in_progress', 'resolved', 'closed')
 
 
@@ -61,6 +61,19 @@ def init(db):
         db.execute('INSERT INTO reporting_forms(id,definition_json) VALUES(?,?)', (i, json.dumps(definition)))
 
 
+def init_air_leak(db):
+    db.execute('CREATE TABLE IF NOT EXISTS reporting_migrations (name TEXT PRIMARY KEY)')
+    if db.execute("SELECT 1 FROM reporting_migrations WHERE name='air-leak-v1'").fetchone():
+        return
+    form = dict(title='Air Leak', description='Report a compressed air leak and automatically issue a maintenance work order.',
+                icon='tool', group='air-leak', workflow='maintenance', questions=[
+                    dict(id='machine', label='Machine / Equipment', type='text', required=True, options=[]),
+                    dict(id='description', label='Where is the leak and what did you notice?', type='textarea', required=True, options=[]),
+                    dict(id='action', label='Immediate action taken', type='textarea', required=False, options=[])])
+    db.execute('INSERT INTO reporting_forms(definition_json) VALUES(?)', (json.dumps(form),))
+    db.execute("INSERT INTO reporting_migrations VALUES('air-leak-v1')")
+
+
 def token():
     value = f'{int(time.time())}:{secrets.token_hex(16)}'
     return value + ':' + hmac.new(TOKEN_SECRET, value.encode(), hashlib.sha256).hexdigest()
@@ -87,8 +100,10 @@ def text(value, maximum, required=False):
 def definition(data):
     title = text(data.get('title'), 120, True)
     description = text(data.get('description', ''), 1000)
-    if data.get('group') not in GROUPS or data.get('workflow') not in ('she', 'kaizen'):
+    if data.get('group') not in GROUPS or data.get('workflow') not in ('she', 'kaizen', 'maintenance'):
         raise ValueError('Choose a reporting area and workflow.')
+    if data['group'] == 'air-leak' and data['workflow'] != 'maintenance':
+        raise ValueError('Air Leak reports must issue maintenance work orders.')
     questions = data.get('questions')
     if not isinstance(questions, list) or not 1 <= len(questions) <= 30:
         raise ValueError('Add between 1 and 30 questions.')
@@ -136,11 +151,11 @@ def issue_order(db, row):
         actor = bridge.identity()
         attempted = True
         order = bridge.call('/api/work-orders', 'POST', dict(
-            requesterId=actor['id'], type='kaizen', priority='medium',
+            requesterId=actor['id'], type='maintenance' if snapshot['workflow'] == 'maintenance' else 'kaizen', priority='medium',
             responsibleDepartment='SHE', reportedByDepartment='SHE', reportedByName=row['reporter'],
             title=f"SHE-{row['id']:06d} · {snapshot['title']}",
             issueDescription=f"SHE-{row['id']:06d}\n{snapshot['title']}\nLocation: {row['location']}\n{detail}"[:5000],
-            machineName='Others', area=row['location'][:100], location=row['location'][:100],
+            machineName=answers.get('machine', 'Others')[:100], area=row['location'][:100], location=row['location'][:100],
             issueCategoryName=snapshot['title'][:100]), row['plant'])
         if not isinstance(order, dict) or not order.get('id'):
             raise CmmsError(502, 'CMMS response did not include an order ID. Check CMMS before linking this report.')
@@ -155,12 +170,17 @@ def issue_order(db, row):
 
 def get(h, db, path):
     if path == '/api/reporting/public':
-        h.send_json(200, dict(forms=forms(db), token=token()))
+        h.send_json(200, dict(forms=[f for f in forms(db) if f['group'] != 'air-leak'], token=token()))
         return
     session = h.authorize(db)
     if not session:
         return
     user = session[0]
+    if path == '/api/reporting/air-leak':
+        form = next((f for f in forms(db) if f['group'] == 'air-leak'), None)
+        rows = db.execute("SELECT * FROM finding_reports WHERE (user_id=? OR ? IN ('admin','executive')) ORDER BY id DESC LIMIT 500", (user['id'], user['role'])).fetchall()
+        h.send_json(200, dict(form=form, token=token(), reports=[dict(**receipt(r), plant=r['plant'], location=r['location'], created_at=r['created_at']) for r in rows if json.loads(r['snapshot_json'])['group'] == 'air-leak']))
+        return
     if path in ('/api/reporting/statistics','/api/reporting/statistics/records'):
         she_statistics.get(h, db, user, 'environment')
         return
@@ -219,6 +239,13 @@ def submit(h, db, data):
         raise ValueError('Invalid submission reference. Reload and try again.')
     previous = db.execute('SELECT * FROM finding_reports WHERE request_key=?', (key,)).fetchone()
     if previous:
+        if json.loads(previous['snapshot_json'])['group'] == 'air-leak':
+            session = h.authorize(db, csrf=True)
+            if not session:
+                return
+            if previous['user_id'] != session[0]['id']:
+                h.error_json(403, 'This report belongs to another account.')
+                return
         if previous['request_hash'] != fingerprint:
             h.error_json(409, 'This submission reference was already used. Start a new report.')
         else:
@@ -243,6 +270,8 @@ def submit(h, db, data):
         h.error_json(409, 'This form changed. Reload it before submitting.')
         return
     form = json.loads(row['definition_json'])
+    if form['group'] == 'air-leak' and not h.authorize(db, csrf=True):
+        return
     answers = data.get('answers')
     if not isinstance(answers, dict) or set(answers) - {q['id'] for q in form['questions']}:
         raise ValueError('Check the form answers.')
@@ -282,7 +311,7 @@ def submit(h, db, data):
     session = h.session(db)
     try:
         cursor = db.execute('INSERT INTO finding_reports(request_key,request_hash,user_id,snapshot_json,answers_json,reporter,contact,plant,location,photos_json,created_at,order_state) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
-            (key, fingerprint, session[0]['id'] if session else None, json.dumps(form), json.dumps(clean), reporter, contact, plant, location, json.dumps(clean_photos), int(time.time()), 'pending' if form['workflow'] == 'kaizen' else 'none'))
+            (key, fingerprint, session[0]['id'] if session else None, json.dumps(form), json.dumps(clean), session[0]['display_name'] if form['group'] == 'air-leak' else reporter, contact, plant, location, json.dumps(clean_photos), int(time.time()), 'pending' if form['workflow'] in ('kaizen', 'maintenance') else 'none'))
         db.commit()
     except sqlite3.IntegrityError:
         previous = db.execute('SELECT * FROM finding_reports WHERE request_key=?', (key,)).fetchone()
@@ -347,8 +376,9 @@ def change(h, db, path, method, data, user):
                     return
                 order = bridge.she_order(order_id, row['plant'])
                 reference = f"SHE-{row['id']:06d}"
-                if order.get('type') != 'kaizen' or reference not in (order.get('title', '') + order.get('issueDescription', '')):
-                    raise ValueError('Choose the SHE Kaizen order containing this report reference.')
+                expected_type = 'maintenance' if json.loads(row['snapshot_json'])['workflow'] == 'maintenance' else 'kaizen'
+                if order.get('type') != expected_type or reference not in (order.get('title', '') + order.get('issueDescription', '')):
+                    raise ValueError('Choose the SHE work order containing this report reference.')
                 db.execute("UPDATE finding_reports SET order_id=?,order_state='issued',order_error='' WHERE id=? AND order_state IN ('uncertain','sending')", (order_id, row['id']))
                 db.commit()
                 h.send_json(200, dict(ok=True))

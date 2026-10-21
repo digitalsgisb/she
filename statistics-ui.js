@@ -3,7 +3,7 @@ const SHEStats = (() => {
   const palette=['#237d59','#d18c27','#3876ab','#9963a4','#df705b','#6a9690','#a1aa67','#697a94'];
   const stateColors={'Open':'#cf6657','In progress':'#d69a33','Awaiting verification':'#4782b8','Resolved':'#4e9a72','Closed':'#21654d','No findings':'#83b89f','OK':'#237d59','NOT OK':'#cf6657','N/A':'#7d8992','1 star':'#cf6657','2 stars':'#d69a33','3 stars':'#4e9a72'};
   const esc=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const allowed=()=>currentUser && ['executive','admin'].includes(currentUser.role);
+  const allowed=()=>currentUser && currentUser.role === 'executive';
   const month=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit'}).format(new Date());
   const number=value=>Number(value||0).toLocaleString('en-MY');
   const empty=()=>'<div class="she-chart-empty">No findings in this period.</div>';

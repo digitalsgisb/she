@@ -226,8 +226,8 @@ def filtered_records(db,user,kind,selection,query):
 
 
 def get(h, db, user, kind):
-    if user['role'] not in ('executive','admin'):
-        h.error_json(403,'Statistics are available to Executives and Admins only.')
+    if user['role'] != 'executive':
+        h.error_json(403,'Statistics are available to Executives only.')
         return
     query=parse_qs(urlsplit(h.path).query)
     try:

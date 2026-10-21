@@ -22,6 +22,8 @@ const icon = (name, size = 20) => {
 };
 
 const routes = {
+  home: { title: 'Home', icon: 'grid' },
+  'air-leak': { title: 'Air Leak', icon: 'droplet' },
   dashboard: { title: 'Dashboards', icon: 'grid' },
   'safety-dashboard': { title: 'Safety Dashboard', icon: 'shield' },
   'health-dashboard': { title: 'Health Dashboard', icon: 'heart' },
@@ -53,22 +55,11 @@ const routes = {
 };
 
 
-const workspaceFeatures = {'patrol':'Safety patrol & history','red-tag':'Red Tag / Safety genba','red-tag-pic':'PIC actions — assigned red tags only','reporting':'Environmental reporting & inbox','work-orders':'SHE Work Orders','health':'Health','waste':'Waste'};
 function canAccessRoute(key) {
   if (!currentUser) return false;
-  const has = feature => currentUser.role === 'admin' || (currentUser.features || Object.keys(workspaceFeatures)).includes(feature);
-  if(key==='dashboard-records'){const kind=location.hash.split('?')[0].split('/')[2],feature={patrol:'patrol','red-tag':'red-tag',environment:'reporting'}[kind];return Boolean(feature)&&SHEStats.allowed()&&has(feature);}
-  if(key==='health-dashboard')return has('health');
-  if(key==='safety-dashboard')return SHEStats.allowed()&&(has('patrol')||has('red-tag')||has('reporting'));
-  if(['accident-dashboard','hiyari-dashboard','compound-dashboard','environmental-findings-dashboard'].includes(key))return SHEStats.allowed()&&has(key==='accident-dashboard'?'patrol':'reporting');
-  if(key.endsWith('-dashboard')){const feature={'patrol-dashboard':'patrol','red-tag-dashboard':'red-tag','environment-dashboard':'reporting'}[key];return SHEStats.allowed()&&has(feature);}
-  if (['dashboard','account'].includes(key)) return true;
-  if (key === 'users') return ['admin','executive'].includes(currentUser.role);
-  if (key === 'safety') return has('patrol') || has('red-tag') || has('red-tag-pic') || has('reporting');
-  if (key === 'environmental') return has('reporting') || has('waste');
-  if (['daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return has('patrol');
-  if (['findings','hiyari-hatto','kaizen','reporting-inbox','reporting-forms'].includes(key)) return has('reporting') && (key !== 'reporting-forms' || ['admin','executive'].includes(currentUser.role));
-  return has(key);
+  if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records') return currentUser.role === 'executive';
+  if (['users','reporting-forms'].includes(key)) return ['admin','executive'].includes(currentUser.role);
+  return Boolean(routes[key]);
 }
 function filterFeatureLinks(root) {
   root.querySelectorAll('a[href^="#/"]').forEach(link => {
@@ -79,11 +70,6 @@ function filterFeatureLinks(root) {
     }
   });
 }
-function featurePermissions(user) {
-  const selected=user?.features || Object.keys(workspaceFeatures);
-  return '<fieldset class="feature-permissions"><legend>Feature access</legend><p class="field-hint">Select what this account can open. Admins have all features.</p>'+Object.entries(workspaceFeatures).map(([key,label])=>'<label><input type="checkbox" name="feature" value="'+key+'" '+(selected.includes(key)?'checked':'')+'>'+label+'</label>').join('')+'</fieldset>';
-}
-
 const envItems = ['findings', 'kaizen', 'waste'];
 const featureDescriptions = {
   'red-tag': 'A space for Red Tag records and follow-up.',
@@ -179,59 +165,22 @@ function mobileTab(key, label, symbol, active) {
 
 function renderMobileNavigation(active) {
   mobileTabbar.classList.remove('pic-navigation');
-  if(canAccessRoute('red-tag-pic')&&!canAccessRoute('daily-safety-patrol')) {
-    mobileTabbar.classList.add('pic-navigation');
-    mobileTabbar.innerHTML=mobileTab('dashboard','Home','grid',active==='dashboard')+mobileTab('red-tag-pic','My Actions','tag',active==='red-tag-pic')+'<button class="mobile-tab" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">'+icon('menu',20)+'<span>More</span></button>';
-    return;
-  }
-  const tab = active === 'dashboard' ? 'dashboard' : active === 'daily-safety-patrol' ? 'daily-safety-patrol' : active === 'patrol-overview' ? 'patrol-overview' : active === 'work-orders' ? 'work-orders' : 'more';
-  mobileTabbar.innerHTML = `${mobileTab('dashboard', 'Home', 'grid', tab === 'dashboard')}${mobileTab('daily-safety-patrol', 'Patrol', 'clipboard', tab === 'daily-safety-patrol')}${mobileTab('patrol-overview', 'History', 'clock', tab === 'patrol-overview')}${mobileTab('work-orders', 'Orders', 'briefcase', tab === 'work-orders')}<button class="mobile-tab ${tab === 'more' ? 'active' : ''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu', 20)}<span>More</span></button>`;
+  const committee = currentUser.role === 'safety_committee';
+  mobileTabbar.classList.toggle('committee-navigation', committee);
+  const tabs = committee ? [['home','Home','grid'],['red-tag','Red Tag','tag'],['air-leak','Air Leak','droplet']] : [['home','Home','grid'],['daily-safety-patrol','Patrol','clipboard'],['patrol-overview','History','clock'],['work-orders','Orders','briefcase']];
+  const more = !tabs.some(([key])=>key===active);
+  mobileTabbar.innerHTML = tabs.map(([key,label,symbol])=>mobileTab(key,label,symbol,active===key)).join('')+`<button class="mobile-tab ${more?'active':''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu',20)}<span>More</span></button>`;
 }
 
 function renderNav(active) {
-  const previousSubnavs = [...nav.querySelectorAll('.subnav')];
-  nav.innerHTML = `<div class="nav-label">OVERVIEW</div><div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
-    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
-    <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol History</a><a class="subnav-link" href="#/red-tag"><span class="subnav-dot"></span>Red Tag · Safety genba</a><a class="subnav-link" href="#/red-tag-pic"><span class="subnav-dot"></span>My Red Tag Actions</a></div></div>
-    ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
-    <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${[...envItems, 'reporting-inbox', ...(['admin','executive'].includes(currentUser?.role) ? ['reporting-forms'] : [])].map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
-    <div class="nav-label nav-label-spaced">WORKSPACE</div>
-    ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
-    ${['admin','executive'].includes(currentUser?.role) ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
-    ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
-  previousSubnavs.forEach(previous => {
-    const replacement = document.getElementById(previous.id);
-    previous.innerHTML = replacement.innerHTML;
-    replacement.replaceWith(previous);
-  });
-  [['dashboardSubnav', dashboardsExpanded], ['safetySubnav', safetyExpanded], ['environmentSubnav', envExpanded]].forEach(([id, expanded]) => {
-    const submenu = document.getElementById(id);
-    if (!submenu) return;
-    submenu.getBoundingClientRect();
-    submenu.classList.toggle('expanded', expanded);
-    submenu.inert = !expanded;
-    submenu.setAttribute('aria-hidden', String(!expanded));
-  });
-  document.getElementById('dashboardToggle').addEventListener('click',()=>{dashboardsExpanded=!dashboardsExpanded;renderNav(currentRoute());});
-  nav.querySelector('.nav-parent a[href="#/dashboard"]').addEventListener('click',()=>{if(!dashboardsExpanded){dashboardsExpanded=true;renderNav(active);}});
-  document.getElementById('envToggle').addEventListener('click', () => {
-    envExpanded = !envExpanded;
-    renderNav(currentRoute());
-  });
-  document.getElementById('safetyToggle').addEventListener('click', () => {
-    safetyExpanded = !safetyExpanded;
-    renderNav(currentRoute());
-  });
-  nav.querySelector('a[href="#/environmental"]').addEventListener('click', () => {
-    if (active === 'environmental' && !envExpanded) { envExpanded = true; renderNav(active); }
-  });
-  nav.querySelector('a[href="#/safety"]').addEventListener('click', () => {
-    if (active === 'safety' && !safetyExpanded) { safetyExpanded = true; renderNav(active); }
-  });
-  filterFeatureLinks(nav);
+  const links = ['home','red-tag','air-leak','red-tag-pic','daily-safety-patrol','patrol-overview','checklist-builder','safety','health','environmental','findings','hiyari-hatto','kaizen','waste','reporting-inbox','reporting-forms','work-orders','users','account'];
+  const dashboards = ['dashboard','safety-dashboard','health-dashboard','environment-dashboard'];
+  nav.innerHTML = (currentUser.role==='executive' ? '<div class="nav-label">DASHBOARDS</div>'+dashboards.map(key=>routeLink(key,`nav-link ${active===key?'active':''}`)).join('') : '')+'<div class="nav-label nav-label-spaced">WORKSPACE</div>'+links.filter(canAccessRoute).map(key=>routeLink(key,`nav-link ${active===key?'active':''}`)).join('');
+}
+
+function renderHome() {
+  const links = [['red-tag','Record a hazard and follow up on findings.'],['air-leak','Report a leak and issue a maintenance work order.'],['red-tag-pic','View findings assigned to you.'],['daily-safety-patrol','Complete a safety inspection.'],['patrol-overview','Review your submitted patrols.'],['hiyari-hatto','Report a near miss.'],['work-orders','Follow up on SHE work orders.']];
+  return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${currentUser.role==='executive'?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
 }
 
 function sectionCard(key, number, description) {
@@ -382,7 +331,7 @@ function showApp(session) {
   appShell.hidden = false;
   loginForm.reset();
   headerUser.textContent = currentUser.display_name;
-  if(currentUser.role!=='admin' && currentUser.features?.length===1 && currentUser.features[0]==='red-tag-pic' && currentRoute()==='dashboard') location.hash='#/red-tag-pic';
+  if (!canAccessRoute(currentRoute())) location.hash='#/home';
   render();
 }
 
@@ -411,7 +360,6 @@ function openUserModal(kind, user = null) {
     title = `Reset password`;
     fields = `<p class="modal-description">Set a new password for ${escapeHtml(user.display_name)}. All current sessions for this user will end.</p><label for="userPassword">New password</label><input id="userPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />`;
   }
-  if (kind !== 'reset') fields += featurePermissions(user);
   modalBody.innerHTML = `<span class="eyebrow dark-eyebrow">USER MANAGEMENT</span><h2 id="modalTitle">${escapeHtml(title)}</h2><form id="userModalForm" class="stacked-form">${fields}<div class="form-error" id="modalError" role="alert" hidden></div><div class="modal-actions"><button class="secondary-button" type="button" id="cancelModal">Cancel</button><button class="primary-button" type="submit">${kind === 'create' ? 'Create user' : kind === 'edit' ? 'Save changes' : 'Reset password'}</button></div></form>`;
   if(currentUser.role === 'executive') { modalBody.querySelectorAll('#userRole option').forEach(o => { if(o.value !== 'user') o.remove(); }); }
   addPasswordToggles(modalBody);
@@ -422,7 +370,6 @@ function openUserModal(kind, user = null) {
     const form = event.currentTarget;
     const submit = form.querySelector('button[type="submit"]');
     const data = Object.fromEntries(new FormData(form));
-    if (kind !== 'reset') { data.features = [...form.querySelectorAll('[name=feature]:checked')].map(x => x.value); delete data.feature; }
     if (kind === 'edit') data.active = data.active === 'true';
     submit.disabled = true;
     try {
@@ -445,8 +392,8 @@ function openUserModal(kind, user = null) {
 }
 
 function currentRoute() {
-  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'dashboard';
-  return routes[key] ? key : 'dashboard';
+  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'home';
+  return routes[key] ? key : 'home';
 }
 
 function closeMenu() {
@@ -490,13 +437,15 @@ function renderPage() {
   dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
   safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic'].includes(key);
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
-  if (!canAccessRoute(key)) { location.hash = '#/dashboard'; return; }
+  if (!canAccessRoute(key)) { location.hash = '#/home'; return; }
   renderNav(key);
   if(canAccessRoute('hiyari-hatto'))nav.querySelector('#safetySubnav .subnav-content')?.insertAdjacentHTML('beforeend','<a class="subnav-link" href="#/hiyari-hatto"><span class="subnav-dot"></span>Hiyari Hatto form</a>');
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
-  if (key === 'users') renderUsers();
+  if (key === 'home') content.innerHTML = renderHome();
+  else if (key === 'air-leak') renderAirLeak();
+  else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key.endsWith('-dashboard'))renderStatsDashboard(key);
   else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);});

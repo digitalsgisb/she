@@ -174,11 +174,11 @@ class AccountFlowTests(unittest.TestCase):
         status, html, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
-        self.assertIn('/styles.css?v=20261012-cards5', html)
-        self.assertIn('/script.js?v=20261021-committee1', html)
-        self.assertIn('/statistics-ui.js?v=20261013-area-cards1', html)
+        self.assertIn('/styles.css?v=20261021-mobile2', html)
+        self.assertIn('/script.js?v=20261021-mobile2', html)
+        self.assertIn('/statistics-ui.js?v=20261021-mobile2', html)
         self.assertIn('/statistics.css?v=20261013-area-cards1', html)
-        self.assertIn('/patrol.js?v=20261021-committee1', html)
+        self.assertIn('/patrol.js?v=20261021-mobile2', html)
         self.assertIn('/monitoring-ui.js?v=20261020-five1', html)
         self.assertIn('/cmms-ui.js?v=20261007-history-clear1', html)
         self.assertIn('id="mobileTabbar"', html)
@@ -403,7 +403,7 @@ class AccountFlowTests(unittest.TestCase):
             status, data, _ = self.request(f'/api/users/{account_id}', 'PATCH', {'role': role}, admin_cookie, admin_csrf)
             self.assertEqual(status, 200)
             self.assertEqual(data['user']['role'], role)
-            self.assertEqual(data['user']['features'], ['patrol', 'reporting'])
+            self.assertEqual(data['user']['features'], list(server.access.FEATURES))
 
     def test_she_work_orders_are_scoped_and_verification_requires_a_resolved_job(self):
         class FakeCmms:

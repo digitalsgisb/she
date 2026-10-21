@@ -41,14 +41,14 @@ class StatisticsTests(unittest.TestCase):
         for path in ['/api/patrols/statistics','/api/red-tags/statistics','/api/reporting/statistics','/api/patrols/statistics/records','/api/red-tags/statistics/records','/api/reporting/statistics/records']:
             self.assertEqual(self.request(path)[0],401)
             self.assertEqual(self.request(path,cookie=self.operator)[0],403)
-            self.assertEqual(self.request(path,cookie=self.restricted)[0],403)
+            self.assertEqual(self.request(path,cookie=self.restricted)[0],200)
             self.assertEqual(self.request(path,cookie=self.executive)[0],200)
-            self.assertEqual(self.request(path,cookie=self.admin)[0],200)
-            self.assertEqual(self.request(path+'?month=not-a-month',cookie=self.admin)[0],400)
-            self.assertEqual(self.request(path+'?period=invalid',cookie=self.admin)[0],400)
+            self.assertEqual(self.request(path,cookie=self.admin)[0],403)
+            self.assertEqual(self.request(path+'?month=not-a-month',cookie=self.executive)[0],400)
+            self.assertEqual(self.request(path+'?period=invalid',cookie=self.executive)[0],400)
     def test_environment_period_local_midnight_and_area_filters(self):
         self.accounts();self.seed_reports()
-        response=self.request('/api/reporting/statistics?month=2026-10',cookie=self.admin)[1]
+        response=self.request('/api/reporting/statistics?month=2026-10',cookie=self.executive)[1]
         self.assertEqual(response['summary']['total'],2)
         self.assertEqual(response['summary']['completed'],1)
         self.assertEqual(response['summary']['completion_rate'],50)
@@ -57,12 +57,12 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(response['trend']['points'][0]['count'],1)
         self.assertEqual(response['trend']['points'][-1]['count'],1)
         self.assertEqual(sum(x['count'] for x in response['statuses']),2)
-        all_areas=self.request('/api/reporting/statistics?month=2026-10&group=all',cookie=self.admin)[1]
+        all_areas=self.request('/api/reporting/statistics?month=2026-10&group=all',cookie=self.executive)[1]
         self.assertEqual(all_areas['summary']['total'],3)
-        year=self.request('/api/reporting/statistics?period=year&month=2026-10',cookie=self.admin)[1]
+        year=self.request('/api/reporting/statistics?period=year&month=2026-10',cookie=self.executive)[1]
         self.assertEqual(year['summary']['total'],4)
         self.assertEqual(len(year['trend']['points']),12)
-        self.assertEqual(self.request('/api/reporting/statistics?group=wrong',cookie=self.admin)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics?group=wrong',cookie=self.executive)[0],400)
     def test_environment_totals_are_not_limited_to_inbox_500(self):
         self.accounts();self.seed_reports()
         with server.database() as db:
@@ -70,18 +70,18 @@ class StatisticsTests(unittest.TestCase):
             for i in range(510):
                 db.execute('INSERT INTO finding_reports(request_key,request_hash,snapshot_json,answers_json,reporter,contact,plant,location,photos_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                            ('extra'+str(i),'hash',template['snapshot_json'],'{}','Guest','','port-klang','Production','[]','open',template['created_at']))
-        response=self.request('/api/reporting/statistics?period=all&month=2026-10',cookie=self.admin)[1]
+        response=self.request('/api/reporting/statistics?period=all&month=2026-10',cookie=self.executive)[1]
         self.assertEqual(response['summary']['total'],514)
         self.assertEqual(sum(x['count'] for x in response['categories']),514)
         from urllib.parse import urlencode
         params=urlencode(dict(period='all',month='2026-10',field='category',values=json.dumps(['Oil / chemical spillage']),page=2))
-        records=self.request('/api/reporting/statistics/records?'+params,cookie=self.admin)[1]
+        records=self.request('/api/reporting/statistics/records?'+params,cookie=self.executive)[1]
         self.assertEqual(records['total'],512)
         self.assertEqual(records['pages'],21)
         self.assertEqual(records['page'],2)
         self.assertEqual(len(records['records']),25)
         self.assertTrue(all(r['category']=='Oil / chemical spillage' for r in records['records']))
-        others=self.request('/api/reporting/statistics/records?'+urlencode(dict(period='all',field='category',exclude=json.dumps(['Water leakage']))),cookie=self.admin)[1]
+        others=self.request('/api/reporting/statistics/records?'+urlencode(dict(period='all',field='category',exclude=json.dumps(['Water leakage']))),cookie=self.executive)[1]
         self.assertEqual(others['total'],512)
     def test_redtag_period_backlog_rank_and_pic_workload(self):
         self.accounts()
@@ -96,25 +96,25 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(response['ranks'],[dict(label='A',count=4)])
         self.assertEqual(response['unassigned'],2)
         self.assertEqual(sum(x['count'] for x in response['trend']['points']),4)
-        year=self.request('/api/red-tags/statistics?period=year&month=2026-10',cookie=self.admin)[1]
+        year=self.request('/api/red-tags/statistics?period=year&month=2026-10',cookie=self.executive)[1]
         self.assertEqual(year['summary']['total'],6)
         with server.database() as db:
             executive_id=db.execute("SELECT id FROM users WHERE username='executive'").fetchone()[0]
             db.execute("UPDATE users SET feature_access='[\"red-tag-pic\"]' WHERE id=?",(executive_id,))
             db.execute("UPDATE redtag_findings SET assigned_user_id=? WHERE finding_date='2026-10-13'",(executive_id,))
         scoped=self.request('/api/red-tags/statistics?month=2026-10',cookie=self.executive)[1]
-        self.assertEqual(scoped['summary']['total'],3)
-        self.assertEqual(scoped['backlog']['total'],3)
+        self.assertEqual(scoped['summary']['total'],4)
+        self.assertEqual(scoped['backlog']['total'],6)
         from urllib.parse import urlencode
         records=self.request('/api/red-tags/statistics/records?'+urlencode(dict(month='2026-10',field='pic',values=json.dumps(['Fareez']),section='FG Store')),cookie=self.executive)[1]
-        self.assertEqual(records['total'],3)
+        self.assertEqual(records['total'],4)
         self.assertTrue(all(r['section']=='FG Store' and r['pic']=='Fareez' for r in records['records']))
         wrong_section=self.request('/api/red-tags/statistics/records?'+urlencode(dict(month='2026-10',field='pic',values=json.dumps(['Fareez']),section='Maintenance')),cookie=self.executive)[1]
         self.assertEqual(wrong_section['total'],0)
     def test_empty_period_has_no_fabricated_completion_rate(self):
         self.accounts()
         for path in ['/api/red-tags/statistics','/api/reporting/statistics']:
-            response=self.request(path+'?month=2026-10',cookie=self.admin)[1]
+            response=self.request(path+'?month=2026-10',cookie=self.executive)[1]
             self.assertEqual(response['summary']['total'],0)
             self.assertIsNone(response['summary']['completion_rate'])
             self.assertTrue(all(p['count']==0 for p in response['trend']['points']))
@@ -152,26 +152,26 @@ class StatisticsTests(unittest.TestCase):
         from urllib.parse import urlencode
         self.accounts();self.seed_reports()
         params=urlencode(dict(month='2026-10',field='status',values=json.dumps(['Resolved'])))
-        result=self.request('/api/reporting/statistics/records?'+params,cookie=self.admin)[1]
+        result=self.request('/api/reporting/statistics/records?'+params,cookie=self.executive)[1]
         self.assertEqual(result['total'],1)
         self.assertEqual(result['records'][0]['title'],'Water leakage')
         self.assertEqual(result['records'][0]['reference'],'SHE-000002')
         self.assertEqual(result['records'][0]['detail_url'],'/#/reporting-inbox/2')
-        daily=self.request('/api/reporting/statistics/records?'+urlencode(dict(month='2026-10',field='date',values=json.dumps(['2026-10-31']))),cookie=self.admin)[1]
+        daily=self.request('/api/reporting/statistics/records?'+urlencode(dict(month='2026-10',field='date',values=json.dumps(['2026-10-31']))),cookie=self.executive)[1]
         self.assertEqual(daily['total'],1)
         self.assertEqual(daily['records'][0]['status'],'In progress')
-        self.assertEqual(self.request('/api/reporting/statistics/records?field=unknown&values=[]',cookie=self.admin)[0],400)
-        self.assertEqual(self.request('/api/reporting/statistics/records?page=0',cookie=self.admin)[0],400)
-        self.assertEqual(self.request('/api/reporting/statistics/records?values={}',cookie=self.admin)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics/records?field=unknown&values=[]',cookie=self.executive)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics/records?page=0',cookie=self.executive)[0],400)
+        self.assertEqual(self.request('/api/reporting/statistics/records?values={}',cookie=self.executive)[0],400)
         with server.database() as db:
             template=dict(title='Custom',questions=[dict(id='q_a',type='status'),dict(id='q_b',type='status'),dict(id='q_note',type='text')])
             stamp=int(datetime(2026,10,13,12,tzinfo=stats.TZ).timestamp())
             for answers in [{'q_a':'not_ok','q_b':'not_ok','q_note':'not_ok'},{'q_a':'ok','q_b':'na','q_note':'not_ok'}]:
                 db.execute('INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json) VALUES(1,?,?,?,?,?,?)',('Sara',json.dumps(answers),3,'',stamp,json.dumps(template)))
-        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='answer',values=json.dumps(['NOT OK']))),cookie=self.admin)[1]
+        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='answer',values=json.dumps(['NOT OK']))),cookie=self.executive)[1]
         self.assertEqual(result['total'],1)
         self.assertEqual(result['matched_items'],2)
-        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='section',values=json.dumps(['Custom checklists']))),cookie=self.admin)[1]
+        result=self.request('/api/patrols/statistics/records?'+urlencode(dict(month='2026-10',field='section',values=json.dumps(['Custom checklists']))),cookie=self.executive)[1]
         self.assertEqual(result['total'],1)
         self.assertEqual(result['matched_items'],2)
 
@@ -184,7 +184,7 @@ class StatisticsTests(unittest.TestCase):
         with server.database() as db:
             db.execute('UPDATE finding_reports SET photos_json=?,answers_json=? WHERE id=2',
                        (json.dumps([dict(mime='image/png',content=base64.b64encode(payload).decode())]),json.dumps({'issue':'Leak at the pump'})))
-        records=self.request('/api/reporting/statistics/records?month=2026-10',cookie=self.admin)[1]['records']
+        records=self.request('/api/reporting/statistics/records?month=2026-10',cookie=self.executive)[1]['records']
         record=next(r for r in records if r['id']==2)
         self.assertEqual(record['description'],'Leak at the pump')
         self.assertEqual(record['photo_url'],'/api/reporting/reports/2/photos/0')
@@ -195,7 +195,7 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(response.headers['Content-Type'],'image/png')
         self.assertEqual(response.headers['Cache-Control'],'private, no-store')
         self.assertEqual(self.request(record['photo_url'])[0],401)
-        self.assertEqual(self.request(record['photo_url'],cookie=self.restricted)[0],403)
-        self.assertEqual(self.request('/api/reporting/reports/2/photos/1',cookie=self.admin)[0],404)
+        self.assertEqual(self.request(record['photo_url'],cookie=self.restricted)[0],200)
+        self.assertEqual(self.request('/api/reporting/reports/2/photos/1',cookie=self.executive)[0],404)
 
 if __name__=='__main__': unittest.main()

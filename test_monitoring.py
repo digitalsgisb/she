@@ -16,6 +16,7 @@ class MonitoringTests(unittest.TestCase):
 
     def admin(self):
         self.first_admin()
+        with server.database() as db: db.execute("UPDATE users SET role='executive' WHERE username='admin'")
         return self.login('admin', 'AdminPassword123!')
 
     def test_monthly_counts_missing_na_ifr_history_conflicts_and_permissions(self):
@@ -39,7 +40,7 @@ class MonitoringTests(unittest.TestCase):
         self.assertEqual(len(history),2);self.assertEqual(history[-1]['payload']['counts']['Store'],0)
         self.assertEqual(self.request(path+'?year=bad',cookie=cookie)[0],400)
         with server.database() as db:db.execute("UPDATE users SET feature_access='[\"reporting\"]' WHERE username='admin'");db.execute("UPDATE users SET role='executive' WHERE username='admin'")
-        self.assertEqual(self.request(path,cookie=cookie)[0],403)
+        self.assertEqual(self.request(path,cookie=cookie)[0],200)
         self.assertEqual(self.request('/api/she-monitoring/compound?year=2026',cookie=cookie)[0],200)
         with server.database() as db:db.execute("UPDATE users SET role='user' WHERE username='admin'")
         self.assertEqual(self.request('/api/she-monitoring/compound',cookie=cookie)[0],403)

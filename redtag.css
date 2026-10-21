@@ -8,3 +8,21 @@
 .genba-record-body{grid-template-columns:minmax(0,1fr)}.genba-record .state-badge{grid-column:auto}.genba-photo-picker{border:0;padding:0;display:grid;gap:12px}.genba-photo-picker legend{font-weight:700;margin-bottom:10px}.genba-photo-choice{display:block;padding:16px;background:#edf5ef;border:1px solid #c8dece;border-radius:12px;position:relative;text-align:center;cursor:pointer;min-height:52px}.genba-photo-choice input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}.genba-photo-picker small{color:#6b8273}.genba-pic-action textarea{font-size:16px!important}.mobile-tabbar.pic-navigation{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:760px){.genba-pic-action .primary-button,.genba-pic-action .secondary-button{min-height:52px;width:100%;font-size:15px}.modal-backdrop:has(.genba-pic-action){padding:0}.modal-card:has(.genba-pic-action){width:100%;max-width:none;height:100dvh;max-height:100dvh;border-radius:0;padding:24px 20px calc(100px + env(safe-area-inset-bottom));overscroll-behavior:contain}.genba-detail-photo{width:100%;max-height:210px}.genba-record-body{padding:18px}.genba-record img{height:150px}.genba-toolbar .secondary-button{min-height:48px}.genba-form input,.genba-form select,.genba-form textarea,.genba-pic-action textarea{font-size:16px!important}}
 
 .genba-form label,#genbaUpdate>label{display:grid;gap:8px}.genba-form textarea,#genbaUpdate textarea{width:100%;min-height:110px;resize:vertical;border:1px solid #cbdcd0;border-radius:10px;padding:12px;font:inherit;line-height:1.5}.genba-pic-action>label,.genba-pic-action legend{font-size:14px;font-weight:700}.genba-pic-action .genba-photo-choice{font-size:15px}.genba-pic-action .genba-preview{width:100%;border-radius:12px}.genba-pic-action{gap:18px}.genba-record:focus-visible,.genba-photo-choice:focus-within{outline:3px solid #9ac6aa;outline-offset:3px}
+
+/* Keep nested labels, native date controls and file inputs inside the form. */
+.genba-form{gap:20px}.genba-form label{min-width:0;margin:0!important;font-size:14px}.genba-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.genba-form .field-hint{font-size:12px;font-weight:400;line-height:1.5;margin:0}.genba-form input,.genba-form select,.genba-form textarea{min-width:0;max-width:100%;min-height:46px}
+.genba-form input[type=file]{height:auto;padding:12px;font-size:14px}.genba-form input[type=file]::file-selector-button{border:0;border-radius:6px;background:#e5eee8;color:#244c3a;padding:8px;margin-right:8px;font:inherit}
+.modal-card:has(#genbaForm){width:min(680px,100%)}.modal-card:has(#genbaForm) h2{padding-right:28px}.genba-form .modal-actions{margin:0;padding-top:14px;border-top:1px solid #e6eee8;background:#fff}
+.genba-form .genba-preview[hidden]{display:none}
+@media(max-width:760px){
+ .modal-backdrop:has(#genbaForm){padding:0;align-items:stretch}
+ .modal-card:has(#genbaForm){width:100%;height:100dvh;max-height:100dvh;border-radius:0;padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+ .modal-card:has(#genbaForm) .modal-close{top:calc(12px + env(safe-area-inset-top));right:12px;min-width:44px;min-height:44px}
+ .modal-card:has(#genbaForm) h2{font-size:24px;margin:0 32px 24px 0}
+ .genba-form .genba-fields{grid-template-columns:minmax(0,1fr);gap:18px}.genba-form input,.genba-form select{height:48px}
+ .genba-form input[type=date]{display:block;width:100%;appearance:none;-webkit-appearance:none;text-align:left}
+ .genba-form input::-webkit-date-and-time-value{text-align:left;min-width:0}
+ .genba-form .modal-actions{position:sticky;bottom:calc(-24px - env(safe-area-inset-bottom));padding:16px 0 calc(12px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1fr}
+ .genba-form .modal-actions button{min-height:48px;padding:12px}.genba-form textarea{min-height:110px}
+}

@@ -1,5 +1,5 @@
-const CACHE = 'she-shell-safety-committee-v22';
-const ASSETS = ['/', '/styles.css', '/script.js', '/patrol.js', '/cmms-ui.js', '/report', '/reporting-ui.js', '/reporting.css', '/redtag-ui.js', '/redtag.css', '/statistics-ui.js', '/statistics.css', '/monitoring-ui.js', '/monitoring.css', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
+const CACHE = 'she-shell-committee-mobile-v23';
+const ASSETS = ['/', '/styles.css', '/script.js', '/air-leak-ui.js', '/patrol.js', '/cmms-ui.js', '/report', '/reporting-ui.js', '/reporting.css', '/redtag-ui.js', '/redtag.css', '/statistics-ui.js', '/statistics.css', '/monitoring-ui.js', '/monitoring.css', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

@@ -3,9 +3,8 @@ import json
 FEATURES = ('patrol', 'red-tag', 'red-tag-pic', 'reporting', 'work-orders', 'health', 'waste')
 
 def features(user):
-    if user['role'] == 'admin' or user['feature_access'] is None:
-        return list(FEATURES)
-    return json.loads(user['feature_access'])
+    # Roles govern privileged actions; workspace features are shared.
+    return list(FEATURES)
 
 def validate(value):
     if not isinstance(value, list) or any(not isinstance(x, str) or x not in FEATURES for x in value) or len(set(value)) != len(value):

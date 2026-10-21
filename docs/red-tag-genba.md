@@ -5,9 +5,9 @@ Open **Safety → Red Tag · Safety genba** to record the Tuesday committee insp
 ## Set up committee and PIC accounts
 
 1. In **User Management**, create each account. Keep PICs as the **User** role.
-2. Give committee accounts **Red Tag / Safety genba** access. Give PIC accounts only **PIC actions — assigned red tags only** when they should see only their assigned work.
+2. Give committee members the **Safety Committee** role. Workspace tools are shared by all accounts; no feature checkboxes are needed.
 3. In **Red Tag → Manage sections & PICs**, link each section/PIC name to the corresponding login account. Unlinked PIC names can still be recorded, but no account receives that finding until linked.
-4. Share the same deployed SHE Digital URL with each PIC. They can install it to their phone's Home Screen using the existing installation instructions. PIC-only accounts open directly into **My Red Tag Actions**.
+4. Share the same deployed SHE Digital URL with each PIC. They can install it to their phone's Home Screen using the existing installation instructions. PICs open **My Red Tag Actions** from Home or More.
 
 The initial section/PIC list contains all 17 pairs supplied, across 10 sections. Executives and Admins can add, rename, or remove section and PIC names. Editing names preserves the original text on historical findings. Changing the account for an unchanged section/PIC pair reassigns unresolved findings for that pair. Removing or renaming a pair leaves existing assigned findings with their current owner; create the desired current mapping before recording new findings. Closed/resolved findings retain their assignee.
 
@@ -17,7 +17,7 @@ PICs see their pending assigned findings across dates, with an optional **Show c
 
 Phone JPEG, PNG and WebP originals up to 30 MB are resized to at most 1,600 pixels on the longest side and compressed as needed before sending. Stored pictures are limited to 2 MB. Unsupported photo formats need conversion or a fresh JPEG camera photo. Notes and optimized after photos are saved as a draft on the current device when local storage is available; successful sending clears the draft. Drafts are separated by account and finding. A failed send retains the composer and photo so the PIC can retry. Submissions require an internet connection; this is not an offline upload queue. The inbox updates inside the app; no email or operating-system push notifications are sent.
 
-The workflow is **Open → In progress → Action taken · awaiting review → Resolved / Closed**. Only Executives/Admins can verify and resolve/close. Regular users can update their own or assigned findings. PIC-only access restricts lists, details, before/after photos, printing and exports to the account's assigned findings. Committee access allows reading all genba findings and creating new ones. All writes require an authenticated session and CSRF token, with revision checks for conflicting updates.
+The workflow is **Open → In progress → Action taken · awaiting review → Resolved / Closed**. Only Executives/Admins can verify and resolve/close. Regular users can update their own or assigned findings. My Red Tag Actions lists assigned findings. All accounts can read genba findings and create new ones; only Executives/Admins can change section/PIC settings or verify completed actions. All writes require an authenticated session and CSRF token, with revision checks for conflicting updates.
 
 ## Print and Google Sheets export
 
@@ -25,9 +25,9 @@ Select a date, then **Print findings / Save PDF**. The physical form includes al
 
 **Export for Google Sheets** downloads that date's findings as CSV, with column names matching the existing red-tag terminology. In Google Sheets, use **File → Import → Upload → Insert new sheet(s)**. Keep the native export in a separate tab; the old Apps Script has positional photo columns, and its print routine expects Drive picture paths. Photos remain authenticated inside SHE Digital and are not copied to Drive or included as public image URLs in the CSV. The original Apps Script remains unchanged. CSV imports do not sync later status or photo changes; export again when needed. Native printing includes the photos directly.
 
-## Feature permissions and existing installations
+## Roles and existing installations
 
-Admins retain all features. Executives can create/manage regular user accounts and their feature access, but cannot create Admin/Executive accounts or modify privileged accounts. Admins manage all accounts. Existing accounts keep their previous access on migration; review their checkbox selections when limiting access. Permissions apply to server endpoints, not only navigation, and changes take effect on the next API request. Public reporting remains available independently of signed-in module permissions.
+All accounts share workspace features; per-account feature selections are no longer used. Roles still control privileged actions. Only Executives can open dashboards. Executives can manage regular User accounts, and Admins manage all accounts, including Safety Committee. Safety Committee phone navigation is Home, Red Tag, Air Leak and More.
 
 Database migration runs automatically on application startup. Findings, photo evidence, PIC assignments, and action history live in the existing SQLite database volume. Back up the database before upgrading. Deploy with the normal rebuild command:
 

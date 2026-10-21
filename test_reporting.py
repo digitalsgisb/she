@@ -34,7 +34,7 @@ class ReportingTests(unittest.TestCase):
     def test_public_categories_privacy_tokens_origin_and_validation(self):
         public = self.request('/api/reporting/public')[1]
         self.assertEqual(len(public['forms']), 10)
-        self.assertEqual({f['group'] for f in public['forms']}, set(reporting.GROUPS))
+        self.assertEqual({f['group'] for f in public['forms']}, set(reporting.GROUPS) - {'air-leak'})
         self.assertEqual(self.request('/report')[0], 200)
         self.assertEqual(self.request('/api/reporting/reports')[0], 401)
         data = self.payload()

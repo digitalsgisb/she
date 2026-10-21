@@ -1,5 +1,7 @@
 const icon = (name, size = 20) => {
   const paths = {
+    camera: '<path d="M14 4h-4L8 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-4l-2-3Z"/><circle cx="12" cy="13" r="4"/>',
+    refresh: '<path d="M20 7v5h-5M4 17v-5h5M5.5 7a7.5 7.5 0 0 1 12.4-2L20 8M4 16l2.1 3A7.5 7.5 0 0 0 18.5 17"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><rect x="14" y="14" width="7" height="7" rx="1.4"/>',
     shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
     heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M4 12h4l2-3 3 6 2-3h5"/>',
@@ -179,8 +181,14 @@ function renderNav(active) {
 }
 
 function renderHome() {
+  if(currentUser.role==='safety_committee')return renderCommitteeHome();
   const links = [['red-tag','Record a hazard and follow up on findings.'],['air-leak','Report a leak and issue a maintenance work order.'],['red-tag-pic','View findings assigned to you.'],['daily-safety-patrol','Complete a safety inspection.'],['patrol-overview','Review your submitted patrols.'],['hiyari-hatto','Report a near miss.'],['work-orders','Follow up on SHE work orders.']];
   return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${currentUser.role==='executive'?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
+}
+
+function renderCommitteeHome() {
+  const day=new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',weekday:'long',day:'numeric',month:'short'}).format(new Date());
+  return `<div class="page inner-page home-page committee-page committee-home"><header class="committee-home-heading"><span class="committee-kicker">SAFETY STARTS WITH US</span><h1>Hello, ${escapeHtml(currentUser.display_name.split(' ')[0])}<span class="committee-wave" aria-hidden="true">✦</span></h1><p>${escapeHtml(day)} <span>·</span> Let’s look out for each other.</p></header><div class="home-actions committee-home-actions"><a class="committee-home-feature" href="#/red-tag"><span class="committee-feature-top"><span class="committee-kicker">SEE SOMETHING? SAY SOMETHING.</span>${icon('shield',32)}</span><h2>A small finding.<br>A safer tomorrow.</h2><p>Spot a hazard, add a photo,<br>and get the right person involved.</p><span class="committee-feature-cta">${icon('tag',19)} Open Red Tag ${icon('arrow',19)}</span></a><a class="committee-air-card" href="#/air-leak"><span class="committee-air-symbol">${icon('droplet',28)}</span><span><small>KEEP THE ENERGY IN</small><strong>Hear an air leak?</strong><span>Report it. We’ll issue the work order.</span></span>${icon('arrow',21)}</a></div><section class="committee-quick-section"><div class="committee-list-heading"><h2>Keep things moving</h2><span class="committee-kicker">YOUR TOOLS</span></div><div class="committee-quick-grid"><a href="#/red-tag-pic">${icon('tag',23)}<strong>My actions</strong><span>Follow up on assigned findings</span>${icon('arrow',16)}</a><a href="#/daily-safety-patrol">${icon('clipboard',23)}<strong>Safety patrol</strong><span>Take a closer look around</span>${icon('arrow',16)}</a></div></section><section class="committee-how"><span>${icon('shield',21)}</span><div><strong>Good observations make a difference.</strong><p>Notice it. Share it. Follow it through.<br>Everything else is a tap away in More.</p></div></section></div>`;
 }
 
 function sectionCard(key, number, description) {
@@ -324,6 +332,7 @@ async function showLogin(message = '') {
 
 function showApp(session) {
   currentUser = session.user;
+  document.body.classList.toggle('committee-app',currentUser.role==='safety_committee');
   if (canAccessRoute('work-orders')) cmmsStart();
   csrfToken = session.csrf_token;
   loginScreen.hidden = true;

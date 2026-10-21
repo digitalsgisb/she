@@ -13,6 +13,8 @@ The initial section/PIC list contains all 17 pairs supplied, across 10 sections.
 
 ## Simple phone workflow for PICs
 
+Safety Committee members get an action-focused Home and Red Tag screen with local status filters. New findings follow three steps: **Where**, **What happened**, and **Next action**. Back navigation retains answers and the selected photo; required fields are checked before moving forward. Committee screens hide printing, spreadsheet export, and print confirmation controls.
+
 PICs see their pending assigned findings across dates, with an optional **Show completed** switch. The inbox refreshes every 15 seconds while visible. Open a finding, read the hazard/recommendation and before picture, describe what was fixed, then use **Take a photo** or **Choose from gallery**. Send it with **Send to SHE for verification**. **Save progress for later** keeps the finding in progress without requiring an after photo. Completed submissions require an after photo. The original and after images remain separate in the action history.
 
 Phone JPEG, PNG and WebP originals up to 30 MB are resized to at most 1,600 pixels on the longest side and compressed as needed before sending. Stored pictures are limited to 2 MB. Unsupported photo formats need conversion or a fresh JPEG camera photo. Notes and optimized after photos are saved as a draft on the current device when local storage is available; successful sending clears the draft. Drafts are separated by account and finding. A failed send retains the composer and photo so the PIC can retry. Submissions require an internet connection; this is not an offline upload queue. The inbox updates inside the app; no email or operating-system push notifications are sent.

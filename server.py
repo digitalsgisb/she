@@ -79,7 +79,7 @@ def init_db() -> None:
                 username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 display_name TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user')),
+                role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user', 'safety_committee')),
                 active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
                 created_at INTEGER NOT NULL
             );
@@ -148,17 +148,20 @@ def init_db() -> None:
                 db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
         db.commit()
         schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
-        if "'executive'" not in schema:
-            # Existing installations used a two-role CHECK. Rebuild only that table,
+        if "'safety_committee'" not in schema:
+            # Expand the role CHECK on existing installations. Rebuild only that table,
             # keeping IDs so sessions and patrols continue to refer to the same users.
             db.execute("PRAGMA foreign_keys=OFF")
             try:
                 db.execute("BEGIN IMMEDIATE")
                 db.execute("CREATE TABLE users_new (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE, "
                            "display_name TEXT NOT NULL, password_hash TEXT NOT NULL, "
-                           "role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user')), "
-                           "active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), created_at INTEGER NOT NULL)")
-                db.execute("INSERT INTO users_new SELECT * FROM users")
+                           "role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user', 'safety_committee')), "
+                           "active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), created_at INTEGER NOT NULL, feature_access TEXT)")
+                columns = "id,username,display_name,password_hash,role,active,created_at"
+                if "feature_access" in {r["name"] for r in db.execute("PRAGMA table_info(users)")}:
+                    columns += ",feature_access"
+                db.execute(f"INSERT INTO users_new ({columns}) SELECT {columns} FROM users")
                 db.execute("DROP TABLE users")
                 db.execute("ALTER TABLE users_new RENAME TO users")
                 if db.execute("PRAGMA foreign_key_check").fetchone():
@@ -657,8 +660,8 @@ class Handler(BaseHTTPRequestHandler):
     def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         if path == "/api/patrols":
             query = parse_qs(urlsplit(self.path).query)
-            owner_clause = " AND p.user_id=?" if user["role"] == "user" else ""
-            owner_params = (user["id"],) if user["role"] == "user" else ()
+            owner_clause = " AND p.user_id=?" if user["role"] not in ("admin", "executive") else ""
+            owner_params = (user["id"],) if owner_clause else ()
             if "start" in query or "end" in query:
                 try:
                     start = int(query["start"][0])
@@ -975,7 +978,7 @@ class Handler(BaseHTTPRequestHandler):
         name = str(data.get("display_name", "")).strip()
         role = data.get("role", "user")
         password = data.get("password")
-        if not USERNAME_RE.fullmatch(username) or not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user") or not valid_password(password):
+        if not USERNAME_RE.fullmatch(username) or not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user", "safety_committee") or not valid_password(password):
             self.error_json(400, "Enter a valid username, display name, role and password of at least 12 characters.")
             return
         try:
@@ -1005,7 +1008,7 @@ class Handler(BaseHTTPRequestHandler):
         name = str(data.get("display_name", target["display_name"])).strip()
         role = data.get("role", target["role"])
         active = data.get("active", bool(target["active"]))
-        if not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user") or not isinstance(active, bool):
+        if not 1 <= len(name) <= 80 or role not in ("admin", "executive", "user", "safety_committee") or not isinstance(active, bool):
             self.error_json(400, "Invalid user details.")
             return
         if actor["role"] == "executive" and (target["role"] != "user" or role != "user"):

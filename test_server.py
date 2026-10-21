@@ -44,6 +44,7 @@ class RoleMigrationTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT user_id FROM sessions").fetchone()[0], 1)
                 self.assertEqual(db.execute("SELECT user_id FROM patrols").fetchone()[0], 1)
                 db.execute("UPDATE users SET role='executive' WHERE id=1")
+                db.execute("UPDATE users SET role='safety_committee' WHERE id=1")
                 self.assertFalse(db.execute("PRAGMA foreign_key_check").fetchall())
         finally:
             server.DB_PATH = original_path
@@ -55,6 +56,33 @@ class RoleMigrationTests(unittest.TestCase):
                     if attempt == 4:
                         raise
                     time.sleep(0.1)
+
+
+    def test_three_role_schema_preserves_feature_access(self):
+        original_path = server.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory() as temp:
+                server.DB_PATH = Path(temp) / "existing.db"
+                with server.database() as db:
+                    db.execute("""CREATE TABLE users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                        display_name TEXT NOT NULL, password_hash TEXT NOT NULL,
+                        role TEXT NOT NULL CHECK (role IN ('admin', 'executive', 'user')),
+                        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+                        created_at INTEGER NOT NULL, feature_access TEXT)""")
+                    db.execute("INSERT INTO users VALUES(7,'existing','Existing','hash','executive',1,123,?)",
+                               ('["patrol"]',))
+                server.init_db()
+                server.init_db()
+                with server.database() as db:
+                    user = db.execute("SELECT * FROM users WHERE id=7").fetchone()
+                    self.assertEqual(user['role'], 'executive')
+                    self.assertEqual(user['feature_access'], '["patrol"]')
+                    self.assertEqual(user['password_hash'], 'hash')
+                    db.execute("UPDATE users SET role='safety_committee' WHERE id=7")
+                    self.assertFalse(db.execute("PRAGMA foreign_key_check").fetchall())
+        finally:
+            server.DB_PATH = original_path
 
 
 class AccountFlowTests(unittest.TestCase):
@@ -147,10 +175,10 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('id="appShell" hidden', html)
         self.assertIn('/styles.css?v=20261012-cards5', html)
-        self.assertIn('/script.js?v=20261020-five1', html)
+        self.assertIn('/script.js?v=20261021-committee1', html)
         self.assertIn('/statistics-ui.js?v=20261013-area-cards1', html)
         self.assertIn('/statistics.css?v=20261013-area-cards1', html)
-        self.assertIn('/patrol.js?v=20261013-area-cards1', html)
+        self.assertIn('/patrol.js?v=20261021-committee1', html)
         self.assertIn('/monitoring-ui.js?v=20261020-five1', html)
         self.assertIn('/cmms-ui.js?v=20261007-history-clear1', html)
         self.assertIn('id="mobileTabbar"', html)
@@ -349,6 +377,33 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request(f"/api/patrols/{admin_id}", cookie=user_cookie)[0], 404)
         self.assertEqual(self.request(f"/api/patrols/{admin_id}", cookie=executive_cookie)[0], 200)
         self.assertEqual(self.request("/api/patrols?start=1&end=999999999", cookie=admin_cookie)[0], 400)
+
+    def test_safety_committee_accounts_and_permissions(self):
+        self.first_admin()
+        admin_cookie, admin_csrf = self.login("admin", "AdminPassword123!")
+        status, data, _ = self.request("/api/users", "POST", {
+            "username": "committee", "display_name": "Safety Committee Member",
+            "password": "CommitteePassword123!", "role": "safety_committee",
+            "features": ["patrol", "reporting"]}, admin_cookie, admin_csrf)
+        self.assertEqual(status, 201)
+        account_id = data['user']['id']
+        self.assertEqual(data['user']['role'], 'safety_committee')
+        cookie, csrf = self.login("committee", "CommitteePassword123!")
+        self.assertEqual(self.request('/api/session', cookie=cookie)[1]['user']['role'], 'safety_committee')
+        self.assertEqual(self.request('/api/users', cookie=cookie)[0], 403)
+        self.assertEqual(self.request('/api/reporting/forms', cookie=cookie)[0], 403)
+        answers = {f"{group}_{index}": "ok" for group, count in server.PATROL_GROUPS.items() for index in range(count)}
+        payload = {"inspector_name": "Inspector", "answers": answers, "rating": 3}
+        other_id = self.request('/api/patrols', 'POST', payload, admin_cookie, admin_csrf)[1]['id']
+        own_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        self.assertEqual([row['id'] for row in self.request('/api/patrols', cookie=cookie)[1]['patrols']], [own_id])
+        self.assertEqual(self.request(f'/api/patrols/{other_id}', cookie=cookie)[0], 404)
+        self.assertEqual(self.request(f'/api/patrols/{own_id}', cookie=cookie)[0], 200)
+        for role in ('user', 'safety_committee'):
+            status, data, _ = self.request(f'/api/users/{account_id}', 'PATCH', {'role': role}, admin_cookie, admin_csrf)
+            self.assertEqual(status, 200)
+            self.assertEqual(data['user']['role'], role)
+            self.assertEqual(data['user']['features'], ['patrol', 'reporting'])
 
     def test_she_work_orders_are_scoped_and_verification_requires_a_resolved_job(self):
         class FakeCmms:

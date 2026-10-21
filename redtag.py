@@ -325,18 +325,23 @@ def print_html(rows, day):
     cards = []
     for r in rows:
         url = finding_link(r['id'])
-        fields = [('Date', r['finding_date']), ('Section', r['section']), ('Machine / Equipment', r['machine']),
-                  ('PIC', r['pic']), ('Type of stop', r['type_of_stop']), ('Rank', r['rank']),
-                  ('Status', r['status']), ('Issue by', r['issued_by'])]
-        cards.append('<article class="genba-card"><h2>RED TAG · ' + esc(r['red_tag_id']) + '</h2><div class="genba-print-media"><img class="genba-photo" src="/api/red-tags/' + str(r['id']) + '/photo" alt="Before picture"><div class="genba-qr"><a href="' + esc(url) + '">' + qr_svg(url) + '</a><strong>Scan to open this finding</strong><small>Sign in with your SHE account.</small><a class="genba-finding-url" href="' + esc(url) + '">' + esc(url) + '</a></div></div><dl>' +
-                     ''.join('<dt>' + label + '</dt><dd>' + esc(value) + '</dd>' for label, value in fields) +
-                     '</dl><h3>Hazard identified</h3><p>' + esc(r['hazard']) + '</p><h3>Recommendation</h3><p>' + esc(r['recommendation']) +
-                     '</p><div class="genba-signatures">Action taken: __________________________________<br>Verified by: __________________ Date: ______________</div></article>')
+        fields = [('Area', r['section']), ('Equip', r['machine']), ('PIC', r['pic']),
+                  ('Date', date.fromisoformat(r['finding_date']).strftime('%d/%m/%y')),
+                  ('Status', r['status']), ('Type of stop', r['type_of_stop']), ('Rank', r['rank']),
+                  ('Issue by', r['issued_by']), ('Physical RT', '________')]
+        cards.append('<article class="genba-card"><header class="genba-print-header"><h2>RED TAG ATTACHMENT</h2><strong>' + esc(r['red_tag_id']) + '</strong></header>'
+                     '<div class="genba-print-media"><img class="genba-photo" src="/api/red-tags/' + str(r['id']) + '/photo" alt="Before picture">'
+                     '<div class="genba-print-side"><a class="genba-qr" href="' + esc(url) + '" aria-label="Open ' + esc(r['red_tag_id']) + '">' + qr_svg(url) + '</a>'
+                     '<dl>' + ''.join('<div><dt>' + label + ':</dt><dd>' + esc(value) + '</dd></div>' for label, value in fields) + '</dl></div></div>'
+                     '<div class="genba-print-notes"><p><strong>Issue:</strong> ' + esc(r['hazard']) + '</p><p><strong>Action:</strong> ' + esc(r['recommendation']) + '</p></div>'
+                     '<footer class="genba-print-footer"><span>Staple to physical red tag</span><span>' + esc(r['red_tag_id']) + '</span></footer></article>')
+    sheets = ['<section class="genba-print-sheet">' + ''.join(cards[start:start+6]) + '</section>'
+              for start in range(0, len(cards), 6)]
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css?v=20261021-qr1"></head><body class="genba-print">'
+            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css?v=20261021-compact1"></head><body class="genba-print">'
             '<div class="genba-print-toolbar"><h1>Safety genba findings · ' + esc(day) + '</h1><p>' + str(len(rows)) +
             ' finding(s). Use your browser Print command or Ctrl+P to print / save PDF. Return to SHE Digital to confirm printing.</p></div>' +
-            ''.join(cards) + ('<p>No findings for this date.</p>' if not rows else '') + '</body></html>')
+            ''.join(sheets) + ('<p>No findings for this date.</p>' if not rows else '') + '</body></html>')
 
 
 def decode_photo(photo):

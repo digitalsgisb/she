@@ -338,10 +338,11 @@ def print_html(rows, day):
     sheets = ['<section class="genba-print-sheet">' + ''.join(cards[start:start+6]) + '</section>'
               for start in range(0, len(cards), 6)]
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css?v=20261021-compact1"></head><body class="genba-print">'
-            '<div class="genba-print-toolbar"><h1>Safety genba findings · ' + esc(day) + '</h1><p>' + str(len(rows)) +
-            ' finding(s). Use your browser Print command or Ctrl+P to print / save PDF. Return to SHE Digital to confirm printing.</p></div>' +
-            ''.join(sheets) + ('<p>No findings for this date.</p>' if not rows else '') + '</body></html>')
+            '<title>Safety genba · ' + esc(day) + '</title><link rel="stylesheet" href="/redtag.css?v=20261021-print-button1"></head><body class="genba-print">'
+            '<div class="genba-print-toolbar"><div class="genba-print-toolbar-heading"><h1>Safety genba findings · ' + esc(day) + '</h1>'
+            '<button id="genbaPrintButton" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8V3h12v5M6 17H3V9h18v8h-3M6 14h12v7H6z"/><path d="M17 11h1"/></svg>Print / Save PDF</button></div><p>' + str(len(rows)) +
+            ' finding(s). Print on A4 at 100% / actual size, with browser headers and footers turned off.</p></div>' +
+            ''.join(sheets) + ('<p>No findings for this date.</p>' if not rows else '') + '<script src="/redtag-print.js?v=20261021-print1"></script></body></html>')
 
 
 def decode_photo(photo):

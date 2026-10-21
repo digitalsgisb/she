@@ -8,6 +8,7 @@ COPY air-leak-ui.js ./
 COPY she_monitoring.py monitoring-ui.js monitoring.css ./
 COPY access.py redtag.py redtag-ui.js redtag.css ./
 COPY qrcodegen.py ./
+COPY redtag-print.js ./
 COPY reporting.py report.html reporting-ui.js reporting.css ./
 RUN mkdir -p /data && addgroup -S safety && adduser -S -G safety safety && chown -R safety:safety /data /app
 

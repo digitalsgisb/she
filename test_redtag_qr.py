@@ -31,7 +31,9 @@ class PrintedQrTests(unittest.TestCase):
         with patch.dict(os.environ,{'SHE_PUBLIC_URL':'https://she.example'}):
             status,printed,_=self.request('/api/red-tags/print?date=2026-10-21',cookie=cookie)
         self.assertEqual(status,200)
-        codes=re.findall(r'<svg.*?</svg>',printed)
+        self.assertIn('id="genbaPrintButton"',printed)
+        self.assertEqual(self.request('/redtag-print.js')[0],200)
+        codes=re.findall(r'<svg[^>]*aria-label="QR code to open this red tag".*?</svg>',printed)
         self.assertEqual(len(codes),2)
         self.assertNotEqual(codes[0],codes[1])
         for finding_id in (1,2):

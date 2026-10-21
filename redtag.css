@@ -68,6 +68,9 @@
 .genba-print{font:7pt/1.12 Arial,sans-serif;color:#111;background:#ecefed;margin:0}
 .genba-print-toolbar{max-width:194mm;padding:18px;margin:0 auto;font-size:13px;line-height:1.5}
 .genba-print-toolbar h1{font-size:20px;margin:0 0 8px}
+.genba-print-toolbar-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+#genbaPrintButton{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:14px 22px;border:0;border-radius:10px;background:#b00000;color:#fff;font:bold 16px Arial,sans-serif;cursor:pointer;box-shadow:0 4px 12px #60000026}
+#genbaPrintButton:hover{background:#850000}#genbaPrintButton:focus-visible{outline:3px solid #c88b27;outline-offset:4px}
 .genba-print-sheet{width:194mm;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6mm;align-items:stretch;margin:8mm auto;break-after:page}
 .genba-print-sheet:last-child{break-after:auto}
 .genba-print .genba-card{box-sizing:border-box;min-width:0;min-height:85mm;background:#fff;border:.2mm dashed #555;padding:2mm;display:flex;flex-direction:column;margin:0;overflow-wrap:anywhere;break-after:auto;break-inside:avoid}

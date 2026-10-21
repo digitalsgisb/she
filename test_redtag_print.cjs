@@ -8,15 +8,21 @@ const fixture=fixturePath?fs.readFileSync(fixturePath):cp.execFileSync(process.e
  const browser=await chromium.launch({headless:true,executablePath:process.env.SHE_QA_BROWSER});
  try{
   const page=await browser.newPage({viewport:{width:733,height:1100}});
+  await page.addInitScript(()=>{window.printCalls=0;window.print=()=>window.printCalls++;});
   await page.route('**/*',route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html; charset=utf-8',body:fixture});
    if(path==='/redtag.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync('redtag.css')});
+   if(path==='/redtag-print.js')return route.fulfill({contentType:'application/javascript',body:fs.readFileSync('redtag-print.js')});
    const photo=path.match(/^\/api\/red-tags\/(\d+)\/photo$/);
    if(photo)return route.fulfill({contentType:'image/png',body:fixturePath?fs.readFileSync(pathTools.join(pathTools.dirname(fixturePath),photo[1]+'.png')):Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
    return route.fulfill({status:404,body:''});
   });
-  await page.goto('https://she.test/');await page.emulateMedia({media:'print'});
+  await page.goto('https://she.test/');
+  const printButton=page.getByRole('button',{name:'Print / Save PDF',exact:true});
+  assert(await printButton.isVisible());await printButton.click();assert.equal(await page.evaluate(()=>window.printCalls),1);
+  await page.emulateMedia({media:'print'});assert.equal(await printButton.isVisible(),false);
+  if(process.env.SHE_QA_PRINT_BUTTON_ONLY){console.log('Prominent print button opens print dialog and is hidden in print.');return;}
   await page.evaluate(()=>Promise.all([...document.images].map(image=>image.decode())));
   assert.equal(await page.locator('.genba-card').count(),10);
   assert.deepEqual(await page.locator('.genba-print-sheet').evaluateAll(sheets=>sheets.map(sheet=>sheet.children.length)),[6,4]);

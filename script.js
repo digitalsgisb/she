@@ -41,13 +41,13 @@ const routes = {
   'red-tag': { title: 'Red Tag', icon: 'tag' },
   'red-tag-pic': { title: 'My Red Tag Actions', icon: 'tag' },
   'hiyari-hatto': { title: 'Hiyari Hatto', icon: 'alert' },
-  waste: { title: 'Waste', icon: 'waste' },
+  co2: { title: 'CO2', icon: 'leaf' },
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
   kaizen: { title: 'Kaizen', icon: 'leaf' },
-  'reporting-forms': { title: 'Reporting Forms', icon: 'clipboard' },
-  'reporting-inbox': { title: 'SHE Reporting Inbox', icon: 'clipboard' },
+  'reporting-forms': { title: 'Reporting Form', icon: 'clipboard' },
+  'reporting-inbox': { title: 'Inbox', icon: 'clipboard' },
   safety: { title: 'Safety', icon: 'shield' },
-  'daily-safety-patrol': { title: 'Daily Safety Patrol Checklist', icon: 'clipboard' },
+  'daily-safety-patrol': { title: 'Safety Patrol', icon: 'clipboard' },
   'checklist-builder': { title: 'Checklist Builder', icon: 'clipboard' },
   'patrol-overview': { title: 'Patrol History', icon: 'grid' },
   health: { title: 'Health', icon: 'heart' },
@@ -65,18 +65,38 @@ function canAccessRoute(key) {
 }
 function filterFeatureLinks(root) {
   root.querySelectorAll('a[href^="#/"]').forEach(link => {
-    if (!canAccessRoute(link.getAttribute('href').slice(2).split('/')[0])) {
+    if (!canAccessRoute(link.getAttribute('href').slice(2).split(/[/?]/)[0])) {
       const parent=link.closest('.nav-parent');
       if(parent){ const submenu=parent.nextElementSibling;parent.remove();if(submenu?.classList.contains('subnav'))submenu.remove(); }
       else link.remove();
     }
   });
 }
-const envItems = ['findings', 'kaizen', 'waste'];
+const envItems = ['reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
+const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
+
+function safetyModule(key = currentRoute()) {
+  if (['daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return 'daily-safety-patrol';
+  return key === 'red-tag-pic' ? 'red-tag' : key;
+}
+function moduleView() {
+  const view = new URLSearchParams(location.hash.split('?')[1] || '').get('view');
+  return ['active','history'].includes(view) ? view : 'checklist';
+}
+function moduleNavigation() {
+  const key = currentRoute(), module = safetyModule(key);
+  if (!safetyItems.includes(module)) return '';
+  const patrol = module === 'daily-safety-patrol';
+  const links = patrol
+    ? [['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
+    : [[module,'Checklist'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
+  const selected = patrol || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
+  return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
+}
 const featureDescriptions = {
   'red-tag': 'A space for Red Tag records and follow-up.',
   'hiyari-hatto': 'A space to capture near misses and early warnings.',
-  waste: 'A space for waste handling and segregation.',
+  co2: 'CO2 tracking and reporting will be available here.',
   findings: 'A space for employees to report environmental concerns.',
 };
 
@@ -142,7 +162,7 @@ function addPasswordToggles(root) {
 
 function installHelpCard() {
   if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return '';
-  return `<section class="settings-card install-card"><h2>Use SHE Digital on your phone</h2><p>Install it to your Home Screen for quick access to the Daily Safety Patrol Checklist. An internet connection is needed to sign in and submit patrols; draft answers are saved on this device while you fill the form.</p><button class="primary-button" type="button" data-install-app ${installPrompt ? '' : 'hidden'}>Install app</button><div class="install-instructions"><strong>iPhone or iPad</strong><span>Open this site in Safari, tap Share, then Add to Home Screen.</span><strong>Android</strong><span>Open this site in Chrome and use Install app or Add to Home screen from the browser menu.</span></div></section>`;
+  return `<section class="settings-card install-card"><h2>Use SHE Digital on your phone</h2><p>Install it to your Home Screen for quick access to the Safety Patrol. An internet connection is needed to sign in and submit patrols; draft answers are saved on this device while you fill the form.</p><button class="primary-button" type="button" data-install-app ${installPrompt ? '' : 'hidden'}>Install app</button><div class="install-instructions"><strong>iPhone or iPad</strong><span>Open this site in Safari, tap Share, then Add to Home Screen.</span><strong>Android</strong><span>Open this site in Chrome and use Install app or Add to Home screen from the browser menu.</span></div></section>`;
 }
 
 window.addEventListener('beforeinstallprompt', event => {
@@ -180,10 +200,10 @@ function renderNav(active) {
     <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content"><a class="subnav-link ${active === 'daily-safety-patrol' ? 'active' : ''}" href="#/daily-safety-patrol"><span class="subnav-dot"></span>Daily Safety Patrol Checklist</a><a class="subnav-link ${active === 'patrol-overview' ? 'active' : ''}" href="#/patrol-overview"><span class="subnav-dot"></span>Patrol History</a><a class="subnav-link ${active === 'red-tag' ? 'active' : ''}" href="#/red-tag"><span class="subnav-dot"></span>Red Tag · Safety genba</a><a class="subnav-link ${active === 'red-tag-pic' ? 'active' : ''}" href="#/red-tag-pic"><span class="subnav-dot"></span>My Red Tag Actions</a><a class="subnav-link ${active === 'air-leak' ? 'active' : ''}" href="#/air-leak"><span class="subnav-dot"></span>Air Leak</a><a class="subnav-link ${active === 'checklist-builder' ? 'active' : ''}" href="#/checklist-builder"><span class="subnav-dot"></span>Checklist Builder</a><a class="subnav-link ${active === 'hiyari-hatto' ? 'active' : ''}" href="#/hiyari-hatto"><span class="subnav-dot"></span>Hiyari Hatto</a></div></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${[...envItems, 'reporting-inbox', ...(['admin','executive'].includes(currentUser?.role) ? ['reporting-forms'] : [])].map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">WORKSPACE</div>
     ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
     ${['admin','executive'].includes(currentUser?.role) ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
@@ -276,7 +296,13 @@ function renderDashboard() {
 }
 
 function renderSafetyHome() {
-  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Your home for safety inspections, monitoring, and the next safety features.</p></div><section class="category-banner"><div><span class="banner-kicker">SAFETY OVERVIEW</span><h2>Inspect. Review.<br />Improve.</h2><p id="safetyHomePulse">Loading this month's patrol activity…</p></div><span class="category-banner-icon" aria-hidden="true">${icon('shield', 76)}</span></section><div class="content-heading"><div><span class="eyebrow dark-eyebrow">SAFETY FEATURES</span><h2>Choose a tool</h2></div><span class="count-pill">03 spaces</span></div><div class="module-grid"><a class="module-card" href="#/daily-safety-patrol"><span class="module-icon">${icon('clipboard', 23)}</span><span class="module-copy"><small>INSPECTION</small><strong>Daily Safety Patrol Checklist</strong><span>Choose a checklist or create one with questions and photo uploads.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/patrol-overview"><span class="module-icon">${icon('grid', 23)}</span><span class="module-copy"><small>MONITORING</small><strong>Patrol History</strong><span>Review daily reports, findings photos, and saved patrols.</span></span><span class="module-arrow">${icon('arrow', 18)}</span></a><a class="module-card" href="#/red-tag"><span class="module-icon">${icon('tag',23)}</span><span class="module-copy"><small>TUESDAY GENBA</small><strong>Red Tag · Safety genba</strong><span>Record hazards, assign PICs, track actions, and print findings.</span></span><span class="module-arrow">${icon('arrow',18)}</span></a></div></div>`;
+  const descriptions = {
+    'daily-safety-patrol':'Complete a checklist, review patrol history, or build a checklist.',
+    'red-tag':'Record findings, follow current actions, and review history.',
+    'air-leak':'Report leaks, track current active reports, and review history.',
+    'hiyari-hatto':'Complete a near-miss report, follow current cases, and review history.'
+  };
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Choose a tool to report, follow up, or review past records.</p></div><div class="module-grid">${safetyItems.filter(canAccessRoute).map(key=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,23)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${descriptions[key]}</span></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div></div>`;
 }
 
 function renderHealth() {
@@ -442,7 +468,7 @@ function openUserModal(kind, user = null) {
 }
 
 function currentRoute() {
-  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || (['admin','executive'].includes(currentUser?.role)?'dashboard':'home');
+  const key = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] || (['admin','executive'].includes(currentUser?.role)?'dashboard':'home');
   return routes[key] ? key : 'home';
 }
 
@@ -508,9 +534,7 @@ function renderPage() {
   }
   else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
-  if(key==='safety' && canAccessRoute('red-tag-pic'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/red-tag-pic"><span class="module-icon">'+icon('tag',23)+'</span><span class="module-copy"><strong>My Red Tag Actions</strong><span>Receive assigned findings and upload action notes and after pictures.</span></span></a>');
   filterFeatureLinks(content);
-  if(key==='safety'&&canAccessRoute('hiyari-hatto'))content.querySelector('.module-grid')?.insertAdjacentHTML('beforeend','<a class="module-card" href="#/hiyari-hatto"><span class="module-icon">'+icon('alert',23)+'</span><span class="module-copy"><strong>Hiyari Hatto</strong><span>FR-SH-12 form, near-miss reporting and SHE review.</span></span></a>');
   filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');
   if (key === 'safety') loadSafetyPulse('safetyHomePulse');

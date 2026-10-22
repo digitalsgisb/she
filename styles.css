@@ -335,3 +335,29 @@
 .air-leak-history{margin-top:28px}.air-leak-receipt{display:grid;gap:8px;background:white;border:1px solid #d7e6da;border-radius:12px;padding:18px;margin-bottom:12px}
 .air-leak-receipt span{font-size:13px;color:#647f70}.air-leak-receipt a{color:#216b45;font-weight:700}.air-leak-confirmation{display:grid;gap:14px}.air-leak-confirmation p{margin:0;line-height:1.5}
 @media(max-width:760px){.home-actions{grid-template-columns:1fr;gap:12px}.home-page .module-card{padding:18px;min-height:96px}.home-page .page-heading{margin-bottom:22px}.air-leak-page .settings-card{padding:20px}.air-leak-page .primary-button{min-height:48px}.mobile-tabbar.committee-navigation .mobile-tab{gap:5px}}
+.module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dce5df;
+}
+.module-tabs a {
+  padding: 10px 16px;
+  border: 1px solid #dce5df;
+  border-radius: 999px;
+  background: #fff;
+  color: #365247;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.module-tabs a[aria-current="page"] {
+  color: #fff;
+  background: #245b43;
+  border-color: #245b43;
+}
+.module-tabs a:hover { border-color: #245b43; }
+.module-tabs a:focus-visible { outline: 3px solid #82b19b; outline-offset: 3px; }
+.air-leak-page [hidden] { display: none !important; }

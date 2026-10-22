@@ -179,7 +179,7 @@ def get(h, db, path):
     if path == '/api/reporting/air-leak':
         form = next((f for f in forms(db) if f['group'] == 'air-leak'), None)
         rows = db.execute("SELECT * FROM finding_reports WHERE (user_id=? OR ? IN ('admin','executive')) ORDER BY id DESC LIMIT 500", (user['id'], user['role'])).fetchall()
-        h.send_json(200, dict(form=form, token=token(), reports=[dict(**receipt(r), plant=r['plant'], location=r['location'], created_at=r['created_at']) for r in rows if json.loads(r['snapshot_json'])['group'] == 'air-leak']))
+        h.send_json(200, dict(form=form, token=token(), reports=[dict(**receipt(r), id=r['id'], status=r['status'], plant=r['plant'], location=r['location'], created_at=r['created_at']) for r in rows if json.loads(r['snapshot_json'])['group'] == 'air-leak']))
         return
     if path in ('/api/reporting/statistics','/api/reporting/statistics/records'):
         she_statistics.get(h, db, user, 'environment')

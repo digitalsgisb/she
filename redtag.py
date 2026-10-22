@@ -124,6 +124,9 @@ def get(h, db, path, user):
         day = date_key(query.get('date', [datetime.now(TZ).date().isoformat()])[0])
         if query.get('inbox') == ['1'] and path == '/api/red-tags':
             rows = db.execute("SELECT * FROM redtag_findings WHERE assigned_user_id=? ORDER BY CASE WHEN status IN ('Resolved','Closed') THEN 1 ELSE 0 END, finding_date DESC,id DESC LIMIT 500", (user['id'],)).fetchall()
+        elif path == '/api/red-tags' and query.get('view', [''])[0] in ('active', 'history'):
+            condition = "IN" if query['view'][0] == 'history' else "NOT IN"
+            rows = db.execute(f"SELECT * FROM redtag_findings WHERE status {condition} ('Resolved','Closed') ORDER BY finding_date DESC,id DESC LIMIT 500").fetchall()
         else:
             rows = db.execute('SELECT * FROM redtag_findings WHERE finding_date=? ORDER BY id', (day,)).fetchall()
         rows = [row for row in rows if can_view(row, user)]

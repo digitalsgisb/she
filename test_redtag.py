@@ -50,6 +50,20 @@ class GenbaTests(unittest.TestCase):
         self.assertEqual(status,201,result)
         return result['finding']
 
+    def test_active_and_history_span_dates(self):
+        self.setup_accounts()
+        active = self.create()
+        data = self.payload()
+        data['finding_date'] = '2026-09-01'
+        completed = self.create(data)
+        with server.database() as db:
+            db.execute("UPDATE redtag_findings SET status='Resolved' WHERE id=?", (completed['id'],))
+        for view, expected in [('active', active['id']), ('history', completed['id'])]:
+            path = '/api/red-tags?view=' + view
+            self.assertEqual([r['id'] for r in self.request(path, cookie=self.admin)[1]['findings']], [expected])
+            # Workspace records are shared with signed-in staff.
+            self.assertEqual([r['id'] for r in self.request(path, cookie=self.other)[1]['findings']], [expected])
+
     def test_assigned_pic_inbox_after_photo_and_executive_verification(self):
         self.setup_accounts()
         row=self.create()

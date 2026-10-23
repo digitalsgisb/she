@@ -178,8 +178,16 @@ python -m unittest -v test_server.py
 
 ## Air Leak reporting
 
-The dedicated signed-in Air Leak form collects plant, section/location, equipment, leak details, optional immediate action and an optional photo. Submitting saves a report and automatically creates a **maintenance** work order in the configured CMMS, with the equipment, location and report reference. Photos remain available in the SHE reporting inbox. The reporter can open the linked work order and view recent Air Leak receipts.
+The dedicated signed-in Air Leak form collects plant, section/location, equipment, leak details, optional immediate action and at least one required photo. Submitting saves a report and automatically creates a **maintenance** work order in the configured CMMS, with the equipment, location and report reference. Photos remain available in the SHE reporting inbox. The reporter can open the linked work order and view recent Air Leak receipts.
 
 The existing CMMS Requester/SHE integration must be configured for the selected plant. If CMMS is unavailable, the report stays saved and shows that work-order follow-up is required. Repeating the same submission returns its existing receipt. If a response is uncertain, SHE must verify CMMS and link the existing maintenance order before retrying; this avoids duplicate orders.
 
 Printed Red Tags include an offline-generated QR code and a clickable link to the exact finding. Set `SHE_PUBLIC_URL` in `.env` to the phone-accessible app address (default: `https://she.sugidigital.org`). The code opens `/#/red-tag/<record ID>` and preserves that destination through sign-in; existing viewing and action permissions still apply. Administrator and Executive accounts can use **Overview → Dashboards**, and the app opens dashboards by default for those roles when no page is specified.
+
+## Report to SHE QR and alerts
+
+Open **Environment → Report to SHE QR** to preview or download the public reporting QR. The same QR appears on the Environment landing page. It uses `SHE_PUBLIC_URL` and opens `/report`; all Report to SHE categories require at least one JPG, PNG or WebP picture (up to three, 2 MB each).
+
+Administrators and Executives receive website pop-ups and an unread Reports indicator while signed in, checked every 20 seconds. Unread counts persist per account until **Mark notifications as read** is used in Environment, the QR page or Inbox. Phone notifications are opt-in on each device through **Enable phone notifications**. They open the submitted report in the authenticated SHE inbox. On iPhone/iPad, install the site on the Home Screen and enable alerts from that installed app. HTTPS and browser notification permission are required.
+
+Rebuild the Docker image to install `requirements.txt` and include the alert files, or run `python -m pip install -r requirements.txt` for a local Python deployment. Web Push signing keys and device subscriptions persist in the database volume. Optionally set `SHE_PUSH_SUBJECT` to a contact such as `mailto:she@example.com`; it defaults to the public site URL. Phone deliveries are best effort; failed deliveries never prevent a report being saved, and expired subscriptions are removed. Website alerts remain available if the push dependency is missing. SHE report subscriptions use `/reporting-push/`, separately from CMMS work-order subscriptions.

@@ -135,6 +135,7 @@ def init_db() -> None:
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
         reporting.init_air_leak(db)
+        reporting.reporting_alerts.init(db)
         she_monitoring.init(db)
         redtag.init(db)
         for table, column, definition in [
@@ -412,6 +413,8 @@ class Handler(BaseHTTPRequestHandler):
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
         assets["/air-leak-ui.js"] = ROOT / "air-leak-ui.js"
+        assets['/reporting-alerts.js'] = ROOT / 'reporting-alerts.js'
+        assets['/reporting-push/sw.js'] = ROOT / 'reporting-push-sw.js'
         assets["/redtag-print.js"] = ROOT / "redtag-print.js"
         assets.update({'/monitoring-ui.js': ROOT / 'monitoring-ui.js', '/monitoring.css': ROOT / 'monitoring.css',
                        '/templates/hiyari-hatto.pdf': ROOT / 'public' / 'templates' / 'hiyari-hatto.pdf'})

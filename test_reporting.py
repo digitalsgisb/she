@@ -23,7 +23,24 @@ class ReportingTests(unittest.TestCase):
         return dict(token=public['token'], request_key=str(uuid.uuid4()), form_id=form_id,
                     revision=form['revision'], reporter='Guest Person', contact='Visitor',
                     plant='port-klang', location='Production, line 2',
-                    answers={q['id']: 'A finding that needs attention' for q in form['questions']}, photos=[])
+                    answers={q['id']: q['options'][0] if q['options'] else '2026-10-23' if q['type'] == 'date' else '1' if q['type'] == 'number' else 'A finding that needs attention' for q in form['questions']}, photos=[dict(name='Finding.png', mime='image/png', content=base64.b64encode(b'\x89PNG\r\n\x1a\n').decode())])
+
+    def test_every_public_form_requires_photo_evidence(self):
+        public = self.request('/api/reporting/public')[1]
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', return_value={'id': 'WO-photo'}):
+            for form in public['forms']:
+                with self.subTest(form=form['title']):
+                    data = self.payload(form['id'])
+                    for photos in ([], None, [data['photos'][0]] * 4):
+                        status, result, _ = self.request('/api/reporting/submit', 'POST', {**data, 'photos': photos})
+                        self.assertEqual(status, 400)
+                        self.assertIn('at least one photo', result['error'])
+                    missing = dict(data)
+                    missing.pop('photos')
+                    self.assertEqual(self.request('/api/reporting/submit', 'POST', missing)[0], 400)
+                    self.assertEqual(self.request('/api/reporting/submit', 'POST', data)[0], 201)
+        with server.database() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM finding_reports').fetchone()[0], len(public['forms']))
 
     def elevated(self, role='executive'):
         self.first_admin()
@@ -120,6 +137,7 @@ class ReportingTests(unittest.TestCase):
                     questions=[dict(id='bin', label='Bin colour', type='select', required=True, options=['Blue', 'Yellow'])])
         form_id = self.request('/api/reporting/forms', 'POST', form, cookie, csrf)[1]['id']
         data = self.payload(form_id)
+        data['answers'] = {'bin': 'Invalid choice'}
         self.assertEqual(self.request('/api/reporting/submit', 'POST', data)[0], 400)
         data['answers'] = {'bin':'Blue'}
         photo = dict(name='Finding.png', mime='image/png', content=base64.b64encode(b'\x89PNG\r\n\x1a\n').decode())

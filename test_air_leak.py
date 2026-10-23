@@ -1,4 +1,5 @@
 """Air leak persistence, maintenance work orders and role boundaries."""
+import base64
 import json
 import unittest
 from unittest.mock import patch
@@ -30,7 +31,16 @@ class AirLeakTests(unittest.TestCase):
         self.assertEqual(status, 200)
         return dict(form_id=data['form']['id'], revision=data['form']['revision'], token=data['token'],
                     request_key=key, reporter='Committee Member', contact='', plant='sendayan', location='FG Store',
-                    answers=dict(machine='Packing machine', description='Air escaping from hose fitting.', action='Isolated supply.'), photos=[])
+                    answers=dict(machine='Packing machine', description='Air escaping from hose fitting.', action='Isolated supply.'), photos=[dict(name='Finding.png', mime='image/png', content=base64.b64encode(b'\x89PNG\r\n\x1a\n').decode())])
+
+    def test_air_leak_requires_photo(self):
+        cookie, csrf = self.account()
+        data = self.payload(cookie)
+        status, result, _ = self.request('/api/reporting/submit', 'POST', {**data, 'photos': []}, cookie, csrf)
+        self.assertEqual(status, 400)
+        self.assertIn('at least one photo', result['error'])
+        with server.database() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM finding_reports').fetchone()[0], 0)
 
     def test_submit_issues_one_maintenance_order_and_retry_returns_same_receipt(self):
         cookie, csrf = self.account()

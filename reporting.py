@@ -9,6 +9,7 @@ import sqlite3
 import time
 import she_statistics
 import she_monitoring
+import reporting_alerts
 from threading import Lock
 
 from cmms_bridge import bridge, CmmsError
@@ -176,6 +177,18 @@ def get(h, db, path):
     if not session:
         return
     user = session[0]
+    if path == '/api/reporting/notifications':
+        reporting_alerts.get(h, db, user)
+        return
+    if path == '/api/reporting/qr':
+        from redtag import finding_link, qr_svg
+        try:
+            url = finding_link(1).split('/#/red-tag/')[0] + '/report'
+        except ValueError as error:
+            h.error_json(400, str(error))
+            return
+        h.send_json(200, dict(url=url, svg=qr_svg(url).replace('open this red tag', 'open Report to SHE')))
+        return
     if path == '/api/reporting/air-leak':
         form = next((f for f in forms(db) if f['group'] == 'air-leak'), None)
         rows = db.execute("SELECT * FROM finding_reports WHERE (user_id=? OR ? IN ('admin','executive')) ORDER BY id DESC LIMIT 500", (user['id'], user['role'])).fetchall()
@@ -293,8 +306,8 @@ def submit(h, db, data):
     if plant not in ('port-klang', 'sendayan'):
         raise ValueError('Choose a plant.')
     photos = data.get('photos', [])
-    if not isinstance(photos, list) or len(photos) > 3:
-        raise ValueError('Attach up to three photos.')
+    if not isinstance(photos, list) or not 1 <= len(photos) <= 3:
+        raise ValueError('Attach at least one photo (up to three photos).')
     clean_photos = []
     for photo in photos:
         if not isinstance(photo, dict) or photo.get('mime') not in ('image/jpeg', 'image/png', 'image/webp'):
@@ -321,6 +334,7 @@ def submit(h, db, data):
             h.send_json(200, receipt(previous))
         return
     saved = db.execute('SELECT * FROM finding_reports WHERE id=?', (cursor.lastrowid,)).fetchone()
+    reporting_alerts.queue_report(db, saved['id'])
     if saved['order_state'] == 'pending':
         issue_order(db, saved)
     saved = db.execute('SELECT * FROM finding_reports WHERE id=?', (saved['id'],)).fetchone()
@@ -332,6 +346,9 @@ def change(h, db, path, method, data, user):
         h.error_json(403, 'Executive access required.')
         return
     try:
+        if method == 'POST' and path in ('/api/reporting/notifications/read', '/api/reporting/notifications/subscribe', '/api/reporting/notifications/unsubscribe'):
+            reporting_alerts.change(h, db, path, data, user)
+            return
         match = re.fullmatch(r'/api/reporting/forms/(\d+)(/delete)?', path)
         if path == '/api/reporting/forms' and method == 'POST':
             new = definition(data)

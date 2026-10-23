@@ -46,6 +46,7 @@ const routes = {
   kaizen: { title: 'Kaizen', icon: 'leaf' },
   'reporting-forms': { title: 'Reporting Form', icon: 'clipboard' },
   'reporting-inbox': { title: 'Inbox', icon: 'clipboard' },
+  'reporting-qr': { title: 'Report to SHE QR', icon: 'camera' },
   safety: { title: 'Safety', icon: 'shield' },
   'daily-safety-patrol': { title: 'Safety Patrol', icon: 'clipboard' },
   'checklist-builder': { title: 'Checklist Builder', icon: 'clipboard' },
@@ -72,7 +73,7 @@ function filterFeatureLinks(root) {
     }
   });
 }
-const envItems = ['reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
+const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
 const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
 
 function safetyModule(key = currentRoute()) {
@@ -378,6 +379,7 @@ async function api(path, method = 'GET', body = null) {
 }
 
 async function showLogin(message = '') {
+  SHEReportAlerts.stop();
   cmmsStop();
   closeMenu();
   currentUser = null;
@@ -402,6 +404,11 @@ function showApp(session) {
   document.body.classList.toggle('committee-app',currentUser.role==='safety_committee');
   if (canAccessRoute('work-orders')) cmmsStart();
   csrfToken = session.csrf_token;
+  if (!document.getElementById('reportNotificationButton')) {
+    const button=document.createElement('button'); button.id='reportNotificationButton'; button.type='button'; button.className='secondary-button report-notification-button';
+    document.querySelector('.topbar-right').prepend(button);
+  }
+  SHEReportAlerts.start();
   loginScreen.hidden = true;
   appShell.classList.add('app-shell');
   appShell.hidden = false;
@@ -532,7 +539,7 @@ function renderPage() {
     if (id && /^\d+$/.test(id)) renderPatrolDetail(id);
     else renderPatrolForm();
   }
-  else if (['environmental', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
+  else if (['environmental', 'reporting-qr', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
   else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   filterFeatureLinks(content);
   filterFeatureLinks(mobileTabbar);

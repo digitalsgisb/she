@@ -1,4 +1,5 @@
 """Integration coverage for the five-dashboard addition and FR-SH-12 workflow."""
+import base64
 import json
 import unittest
 from urllib.request import urlopen
@@ -60,7 +61,7 @@ class MonitoringTests(unittest.TestCase):
         form=next(f for f in public['forms'] if f['group']=='hiyari-hatto')
         answers={q['id']:q['options'][0] if q['options'] else '2026-10-19' if q['type']=='date' else 'Example' for q in form['questions']}
         answers.update(category='Near Miss',section='Maintenance',stop='5')
-        data=dict(token=public['token'],request_key='12345678-1234-1234-1234-123456789012',form_id=form['id'],revision=form['revision'],reporter='Team member',contact='',plant='port-klang',location='Line 2',answers=answers,photos=[])
+        data=dict(token=public['token'],request_key='12345678-1234-1234-1234-123456789012',form_id=form['id'],revision=form['revision'],reporter='Team member',contact='',plant='port-klang',location='Line 2',answers=answers,photos=[dict(name='Finding.png',mime='image/png',content=base64.b64encode(b'\x89PNG\r\n\x1a\n').decode())])
         self.assertEqual(self.request('/api/reporting/submit','POST',data)[0],201)
         review={k:'Reviewed person' for k in monitoring.REVIEW_FIELDS};review.update(rank='A',stop='5',target_date='2026-10-25',manager='')
         path='/api/reporting/reports/1/hiyari-review'

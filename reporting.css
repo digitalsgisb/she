@@ -252,3 +252,28 @@
   .report-alert-popup { right: 16px; bottom: 90px; padding: 20px; }
   .report-notification-button { padding: 8px 10px; font-size: 12px; }
 }
+
+/* Keep native date controls inside the form on narrow iPhone screens. */
+.report-form, .report-form-section, .hiyari-composer { min-width: 0; }
+.report-form input, .report-form select, .report-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.report-form input[type="date"] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 48px;
+}
+.report-form input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+.hiyari-composer { max-width: 820px; margin: 0 auto; }
+.hiyari-composer > label { display: block; margin-bottom: 8px; }
+.hiyari-composer > select { width: 100%; max-width: 100%; margin-bottom: 20px; padding: 12px; }
+.hiyari-capture .report-form-section > .field-hint { margin: -8px 0 18px; line-height: 1.6; }
+.hiyari-capture .report-form-section textarea + .field-hint { margin: 6px 0 18px; }
+@media (max-width: 600px) {
+  .hiyari-capture input, .hiyari-capture select, .hiyari-capture textarea { font-size: 16px; }
+  .hiyari-staff-page .page-heading h1 { font-size: 28px; }
+}

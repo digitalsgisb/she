@@ -17,7 +17,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   if(path==='/api/reporting/reports')return json({reports});
   if(path==='/api/reporting/air-leak')return json({form:{id:1,revision:1},reports:reports.filter(r=>r.group==='air-leak'),token:'test'});
   if(path==='/api/red-tags/settings')return json({sections:[{name:'FG Store',pics:[]}],assignments:[]});
-  if(path==='/api/reporting/public')return json({forms:[],token:'test'});
+  if(path==='/api/reporting/public')return json({forms:[{id:9,revision:1,title:'Hiyari Hatto',group:'hiyari-hatto',workflow:'she',questions:[]}],token:'test'});
   if(path==='/api/patrol-templates')return json({templates:[{id:0,revision:1,is_default:true,...JSON.parse(fs.readFileSync('patrol-default.json','utf8'))}]});
   if(path.startsWith('/api/'))return json({patrols:[],findings:[],forms:[]});
   let file=path==='/'?'index.html':path.slice(1);if(/^(brand|icons)\//.test(file))file='public/'+file;
@@ -39,7 +39,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'Checklist Builder');
  for(const module of ['air-leak','hiyari-hatto','red-tag']) {
   await go(module);await page.locator('.module-tabs').waitFor();
-  assert.deepEqual((await page.locator('.module-tabs a').allTextContents()).slice(0,3),['Checklist','Current Active','History']);
+  assert.deepEqual((await page.locator('.module-tabs a').allTextContents()).slice(0,3),[module==='hiyari-hatto'?'New report':'Checklist','Current Active','History']);
   await page.locator(`.module-tabs a[href="#/${module}?view=active"]`).click();
   await page.locator('.module-tabs [aria-current]').filter({hasText:'Current Active'}).waitFor();
   if(module==='air-leak') { assert(await page.locator('#airLeakForm').isHidden());assert.equal(await page.locator('.air-leak-history article').count(),1);assert((await page.locator('.air-leak-history').textContent()).includes('SHE-3')); }

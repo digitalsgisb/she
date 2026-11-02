@@ -8,7 +8,7 @@ const SHEReporting = (() => {
     'Improper waste disposal':'Waste in wrong place', 'Waste segregation issue':'Wrong waste bin',
     'Drainage / discharge issue':'Drain problem', 'Equipment leakage':'Equipment leak',
     'Energy wastage':'Energy waste', 'Other environmental concerns':'Other',
-    'Hiyari Hatto':'Near miss', 'Kaizen idea':'Idea'
+    'Hiyari Hatto':'Hiyari Hatto', 'Kaizen idea':'Idea'
   };
   const publicTitle = form => simpleTitles[form.title] || form.title;
   const defaultDescriptions = new Set(['Kebocoran paip air', 'Tumpahan minyak / bahan kimia',
@@ -29,7 +29,7 @@ const SHEReporting = (() => {
     idea:'<path d="M8 17c0-3-4-3-4-8a8 8 0 0 1 16 0c0 5-4 5-4 8H8Zm0 3h8m-7 3h6M9 9l3 3 3-3m-3 3v5"/>'
   };
   const svg = (name, size=32) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${symbols[name] || symbols.leaf}</svg>`;
-  let publicData, requestKey, submitting=false, publicPayload=null, renderVersion=0, publicTransition;
+  let publicData, submitting=false, publicSubmission={}, staffSubmission=null, renderVersion=0, publicTransition;
   const publicRoot = document.getElementById('reportRoot');
   async function publicApi(path, method='GET', body) {
     const response = await fetch(path, {method, credentials:'same-origin', headers:body ? {'Content-Type':'application/json'} : {}, body:body ? JSON.stringify(body) : undefined});
@@ -66,9 +66,48 @@ const SHEReporting = (() => {
     else control=`<input ${attrs} type="${esc(q.type)}" ${q.type==='number'?'step="any"':'maxlength="2000"'} />`;
     const label = simple===true ? ({
       'What did you notice?':area==='kaizen'?'Your idea':area==='hiyari-hatto'?'What almost happened?':'What happened?',
-      'Any immediate action or suggestion?':area==='kaizen'?'How will it help?':'What did you do?'
+      'Any immediate action or suggestion?':area==='kaizen'?'How will it help?':'What did you do?',
+      ...(area==='hiyari-hatto'?{'Masalah / Problem':'Penemuan / Finding or near-miss description','Tarikh / Date':'Tarikh kejadian / Event date'}:{})
     }[q.label] || q.label) : q.label;
     return `<label for="${esc(id)}">${esc(label)} ${q.required?'<span class="required-mark">*</span>':'<small>Optional</small>'}</label>${control}`;
+  }
+  function captureForm(form) {
+    const hiyari=form.group==='hiyari-hatto';
+    const employeeIds=['employee_no','department','section','shift','experience'];
+    const eventIds=['event_date','category','operation','stop'];
+    const questions=ids=>form.questions.filter(q=>ids.includes(q.id)).map(q=>field(q,true,form.group)).join('');
+    const section=(step,title,body,note='')=>`<section class="report-form-section"><span class="report-step">${step}</span><h2>${title}</h2>${note?`<p class="field-hint">${note}</p>`:''}${body}</section>`;
+    const person=`<div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" autocomplete="tel" /></div></div>`;
+    const place=`<div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">${hiyari?'Event location':'Where is it?'} <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div>`;
+    const photo=`<label class="report-upload" for="photos"><b>＋ Add photos</b><span>At least 1 photo required · 3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required /><div id="photoPreview" class="report-photo-preview" aria-live="polite"></div>`;
+    const findingQuestions=form.questions.filter(q=>!employeeIds.includes(q.id)&&!eventIds.includes(q.id));
+    const hints={description:'Describe what you observed or what almost happened.',consequence:'Explain who could be hurt and what could happen.',action:'Suggest how to prevent this from happening again.'};
+    const finding=findingQuestions.map(q=>field(q,true,form.group)+(hints[q.id]?`<p class="field-hint">${hints[q.id]}</p>`:'')).join('');
+    return `<form class="stacked-form report-form ${hiyari?'hiyari-capture':''}" id="findingForm">${hiyari?
+      section('01','Employee details',person+questions(employeeIds),'Bahagian A · Team member. Enter your employee number and work details here.')+
+      section('02','Event details',place+questions(eventIds),'Tell us where and when you noticed the hazard, near miss or improvement opportunity.')+
+      section('03','Finding &amp; proposed action',finding,'Describe your finding below. SHE will complete the review and verification after submission.')+
+      section('04','Photos',photo):
+      section('01','Your details',person+place)+section('02','Finding details',form.questions.map(q=>field(q,true,form.group)).join(''))+section('03','Photos',photo)}<p class="report-privacy">Staff can see your details and photos. SHE will review your report and arrange any work order needed.</p>${errorBox()}<button type="submit" class="primary-button full-width">Send ${hiyari?'Hiyari Hatto':'report'} →</button><p class="report-urgent">Danger now? Tell your supervisor.</p></form>`;
+  }
+  function bindCapture(target,form,data,context=null) {
+    const capture=target.querySelector('#findingForm');
+    const state=context?.state || publicSubmission;
+    if(context)capture.elements.reporter.value=currentUser.display_name;
+    if(state.payload){
+      const values={...state.payload,...state.payload.answers};
+      for(const input of capture.querySelectorAll('input,select,textarea')){
+        if(input.type!=='file' && values[input.name]!==undefined)input.value=values[input.name];
+        input.disabled=true;
+      }
+      capture.querySelector('#photoPreview').textContent=state.payload.photos.map(p=>p.name).join(' · ');
+      capture.querySelector('[type=submit]').textContent=state.busy?'Sending…':'Retry same report →';
+      capture.querySelector('[type=submit]').disabled=Boolean(state.busy);
+    }
+    capture.querySelector('#photos').addEventListener('change',event=>{
+      capture.querySelector('#photoPreview').textContent=Array.from(event.target.files).map(f=>f.name).join(' · ');
+    });
+    capture.addEventListener('submit',event=>submitPublic(event,form,{...context,target,state,token:data.token,staff:Boolean(context)}));
   }
   function renderPublic() {
     if (!publicData || submitting) return;
@@ -85,13 +124,9 @@ const SHEReporting = (() => {
     publicRoot.dataset.view=selected ? 'form' : publicGroups[area] ? 'topics' : 'home';
     document.title = `${selected ? publicTitle(selected) : publicGroups[area] || 'Report to SHE'} · SHE Digital`;
     if (selected) {
-      requestKey=crypto.randomUUID(); publicPayload=null;
-      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← Back</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><h1>${esc(publicTitle(selected))}</h1>${selected.group === 'hiyari-hatto' ? '<p>Hiyari Hatto</p>' : ''}${publicDescription(selected)}</div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'SHE will arrange repairs.' : 'SHE will check your report.'}</div><form class="stacked-form report-form" id="findingForm"><div class="report-form-section"><span class="report-step">01</span><h2>Your details</h2><div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" /></div></div><div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">Where is it? <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div></div><div class="report-form-section"><span class="report-step">02</span><h2>The problem</h2>${selected.questions.map(q=>field(q,true,area)).join('')}</div><div class="report-form-section"><span class="report-step">03</span><h2>Photos <span class="required-mark">*</span></h2><label class="report-upload" for="photos"><b>＋ Add photos</b><span>At least 1 photo required · 3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required /><div id="photoPreview" class="report-photo-preview"></div></div><p class="report-privacy">Staff can see your details and photos. Repair reports also go to the maintenance system.</p>${errorBox()}<button type="submit" class="primary-button full-width">Send report <span>→</span></button><p class="report-urgent">Danger now? Tell your supervisor.</p></form></div>`;
-      publicRoot.querySelector('#photos').addEventListener('change', e=>{
-        const output=publicRoot.querySelector('#photoPreview');
-        output.textContent=Array.from(e.target.files).map(f=>f.name).join(' · ');
-      });
-      publicRoot.querySelector('#findingForm').addEventListener('submit', e=>submitPublic(e,selected));
+      publicSubmission={key:crypto.randomUUID(),payload:null};
+      publicRoot.innerHTML=`<div class="report-wrap report-form-wrap"><a class="back-link" href="#/${area}">← Back</a><div class="report-form-heading"><span class="report-symbol">${svg(selected.icon,42)}</span><h1>${esc(publicTitle(selected))}</h1>${selected.group === 'hiyari-hatto' ? '<p>Near misses, hazards and improvement opportunities</p>' : ''}${publicDescription(selected)}</div><div class="report-flow-note">${selected.workflow==='kaizen' ? 'SHE will arrange repairs.' : 'SHE will check your report.'}</div>${captureForm(selected)}</div>`;
+      bindCapture(publicRoot,selected,publicData);
     } else if (publicGroups[area]) {
       const list=publicData.forms.filter(f=>f.group===area);
       publicRoot.innerHTML=`<div class="report-wrap report-menu"><a class="back-link" href="#/">← Back</a><div class="report-menu-heading"><h1>${esc(publicGroups[area])}<span>${svg(area==='environment'?'leaf':area==='kaizen'?'idea':'alert',32)}</span></h1><p>Choose one.</p></div>${list.length ? menuTopics(list) : '<p class="report-empty">No forms yet. Ask SHE.</p>'}</div>`;
@@ -100,38 +135,51 @@ const SHEReporting = (() => {
     }
     window.scrollTo(0,0);
   }
-  async function submitPublic(event,form) {
+  async function submitPublic(event,form,context) {
     event.preventDefault();
-    if (submitting) return;
+    const {state,target,staff}=context;
+    if (state.busy) return;
     const root=event.currentTarget, button=root.querySelector('[type=submit]');
-    submitting=true; button.disabled=true; button.textContent='Sending…';
+    state.busy=true;if(!staff)submitting=true;
+    const retry=Boolean(state.payload);
+    button.disabled=true; button.textContent='Sending…';
     root.querySelector('#reportError').hidden=true;
     try {
-      if (!publicPayload) {
+      if (!state.payload) {
         const files=Array.from(root.querySelector('#photos').files);
         if (!files.length) throw new Error('Attach at least one photo before sending your report.');
         if (files.length>3 || files.some(f=>f.size>2000000 || !['image/jpeg','image/png','image/webp'].includes(f.type))) throw new Error('Use up to 3 JPG, PNG or WebP photos. Each must be under 2 MB.');
         const photos=await Promise.all(files.map(async f=>({name:f.name,mime:f.type,content:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=()=>reject(new Error('Could not read photo.'));r.readAsDataURL(f);})})));
         const values=Object.fromEntries(new FormData(root));
-        publicPayload={token:publicData.token, request_key:requestKey, form_id:form.id, revision:form.revision, reporter:values.reporter, contact:values.contact, plant:values.plant, location:values.location, answers:Object.fromEntries(form.questions.map(q=>[q.id,values[q.id] || ''])), photos};
+        state.payload={token:context.token, request_key:state.key, form_id:form.id, revision:form.revision, reporter:values.reporter, contact:values.contact, plant:values.plant, location:values.location, answers:Object.fromEntries(form.questions.map(q=>[q.id,values[q.id] || ''])), photos};
       }
       // Refresh only the public token on retry; the report body and idempotency key stay unchanged.
-      if (button.dataset.retry==='true') publicPayload.token=(await publicApi('/api/reporting/public')).token;
-      const result=await publicApi('/api/reporting/submit','POST',publicPayload);
-      publicRoot.dataset.view='success';
-      publicRoot.innerHTML=`<div class="report-wrap report-success"><span class="report-success-icon">✓</span><span class="report-kicker">THANK YOU</span><h1>Report sent.</h1><p>SHE will check it.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this report number.</p>${result.order_state==='issued' ? `<div class="report-flow-note">Work order: ${esc(result.order_id)}</div>` : result.order_state !== 'none' ? '<div class="report-flow-note">Report saved. SHE will arrange the work order.</div>' : ''}<a class="primary-button" href="/report">New report →</a></div>`;
-      publicPayload=null;
+      if (retry) state.payload.token=(await publicApi('/api/reporting/public')).token;
+      root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);
+      const result=await (staff?api:publicApi)('/api/reporting/submit','POST',state.payload);
+      state.result=result;state.payload=null;
+      if(staff && (currentRoute()!=='hiyari-hatto' || moduleView()!=='checklist' || staffSubmission!==state || state.userId!==currentUser?.id))return;
+      showReceipt(target,result,staff);
       window.scrollTo(0,0);
     } catch(error) {
       showError(root,error);
-      if (error.status && error.status<500) {publicPayload=null;root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=false);}
+      if (error.status && error.status<500) {state.payload=null;root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=false);}
       // Freeze an attempted payload until its receipt is recovered: retries must use the same key and body.
-      if (publicPayload) {
+      if (state.payload) {
         root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);
         const output=root.querySelector('#reportError');
         output.append(document.createTextNode(' Tap Retry to send the same report.'));
       }
-    } finally { submitting=false; button.disabled=false;button.dataset.retry=String(Boolean(publicPayload)); button.textContent=publicPayload ? 'Retry →' : 'Send report →'; }
+    } finally {
+      state.busy=false;if(!staff)submitting=false;
+      button.disabled=false;button.textContent=state.payload ? 'Retry same report →' : 'Send report →';
+      if(staff && context.version!==renderVersion && staffSubmission===state && state.userId===currentUser?.id && currentRoute()==='hiyari-hatto' && moduleView()==='checklist')renderStaff('hiyari-hatto');
+    }
+  }
+  function showReceipt(target,result,staff=false) {
+    target.dataset.view='success';
+    target.innerHTML=`${staff?moduleNavigation():''}<div class="report-wrap report-success" role="status"><span class="report-success-icon">✓</span><h1>Report sent.</h1><p>SHE will review your finding.</p><strong class="report-reference">${esc(result.reference)}</strong><p>Keep this report number.</p>${result.order_state==='issued'?`<div class="report-flow-note">Work order: ${esc(result.order_id)}</div>`:result.order_state!=='none'?'<div class="report-flow-note">Report saved. SHE will arrange the work order.</div>':''}${staff?`<div class="report-admin-links"><a class="primary-button" href="#/reporting-inbox/${encodeURIComponent(result.reference.replace('SHE-','').replace(/^0+/,''))}">View submitted report →</a><button class="secondary-button" id="anotherHiyari">New Hiyari Hatto report</button></div>`:'<a class="primary-button" href="/report">New report →</a>'}</div>`;
+    target.querySelector('#anotherHiyari')?.addEventListener('click',()=>{staffSubmission=null;renderStaff('hiyari-hatto');});
   }
   const date = value => new Date(value*1000).toLocaleString('en-MY');
   const stateLabel = state => ({none:'SHE review',pending:'Work order pending',sending:'Check CMMS before linking',failed:'Work order needs retry',uncertain:'Check CMMS before linking',issued:'Work order issued'}[state] || state);
@@ -178,6 +226,20 @@ const SHEReporting = (() => {
       const result=await publicApi('/api/reporting/public');
       if (version!==renderVersion || currentRoute()!==key) return;
       if (key==='reporting-forms') { formList(root,result.forms);return; }
+      if (key==='hiyari-hatto') {
+        const available=result.forms.filter(f=>f.group==='hiyari-hatto');
+        if(!available.length)throw new Error('The Hiyari Hatto form is unavailable. Contact SHE.');
+        if(staffSubmission?.userId!==currentUser.id)staffSubmission=null;
+        const selectedId=new URLSearchParams(location.hash.split('?')[1]||'').get('form');
+        const saved=staffSubmission?.payload || staffSubmission?.result;
+        const form=available.find(f=>String(f.id)===String(saved?staffSubmission.formId:selectedId)) || available[0];
+        if(!staffSubmission || staffSubmission.formId!==form.id)staffSubmission={userId:currentUser.id,formId:form.id,key:crypto.randomUUID(),payload:null};
+        if(staffSubmission.result){showReceipt(root,staffSubmission.result,true);return;}
+        root.innerHTML=`<div class="page inner-page hiyari-staff-page">${moduleNavigation()}${heading(form.title,'Report a hazard, near miss or improvement opportunity. Complete Bahagian A; SHE handles the review and verification.')}<div class="hiyari-composer">${available.length>1?`<label for="hiyariFormChoice">Reporting form</label><select id="hiyariFormChoice" ${saved?'disabled':''}>${available.map(f=>`<option value="${f.id}" ${f.id===form.id?'selected':''}>${esc(f.title)}</option>`).join('')}</select>`:''}${captureForm(form)}</div></div>`;
+        root.querySelector('#hiyariFormChoice')?.addEventListener('change',event=>{location.hash='/hiyari-hatto?form='+event.target.value;});
+        bindCapture(root,form,result,{state:staffSubmission,version});
+        return;
+      }
       const group=key==='findings'?'environment':key;
       root.innerHTML=`<div class="page inner-page report-staff-page">${key==='hiyari-hatto'?moduleNavigation():''}${heading(key==='environmental'?'Environmental':groups[group] || key, 'Every finding is a chance to improve our workplace.', `<a href="/report${groups[group] ? '?area='+group : ''}" class="primary-button">Make a report ↗</a>`)}${hero('See it. Report it.<br /><em>Improve it.</em>', 'A simple, open reporting channel for employees and guests.', 'SHE ENVIRONMENTAL PROGRAMME')}<div class="report-admin-links">${['admin','executive'].includes(currentUser.role)?'<a class="secondary-button" href="#/environment-dashboard">Open Environmental Dashboard →</a>':''}<a class="secondary-button" href="#/reporting-inbox">Open Inbox →</a>${elevated ? '<a class="secondary-button" href="#/reporting-forms">Manage reporting forms →</a>' : ''}</div>${key==='environmental' ? `<div class="report-intro"><h2>Three ways to make a difference</h2><p>Share this public link on posters: <a href="/report">${esc(location.origin)}/report</a></p></div><div class="report-staff-options">${Object.entries(groups).map(([g,label])=>`<a class="report-staff-option" href="#/${g==='environment'?'findings':g}">${svg(g==='environment'?'leaf':g==='kaizen'?'idea':'alert')}<strong>${label}</strong><span>Open reporting area →</span></a>`).join('')}</div>` : `<div class="report-intro"><h2>Available forms</h2></div>${topicCards(result.forms.filter(f=>f.group===group)).replaceAll('href="#/', 'href="/report#/')}`}</div>`;
     } catch(error) { if (version===renderVersion) root.innerHTML=`<div class="page inner-page"><p role="alert">${esc(error.message)}</p><button class="secondary-button" id="reportReload">Try again</button></div>`;root.querySelector('#reportReload')?.addEventListener('click',()=>renderStaff(key)); }

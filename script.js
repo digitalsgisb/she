@@ -90,7 +90,7 @@ function moduleNavigation() {
   const patrol = module === 'daily-safety-patrol';
   const links = patrol
     ? [['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
-    : [[module,'Checklist'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
+    : [[module,module==='hiyari-hatto'?'New report':'Checklist'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
   const selected = patrol || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
   return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
 }
@@ -373,7 +373,9 @@ async function api(path, method = 'GET', body = null) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== '/api/login' && path !== '/api/session') showLogin();
-    throw new Error(data.error || `Request failed (${response.status}).`);
+    const error = new Error(data.error || `Request failed (${response.status}).`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }

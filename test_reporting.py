@@ -81,6 +81,19 @@ class ReportingTests(unittest.TestCase):
             self.request('/api/reporting/submit', 'POST', self.payload(2))
             self.assertEqual(call.call_count, 1)
 
+    def test_signed_in_user_can_submit_hiyari_in_app(self):
+        cookie, csrf = self.elevated('user')
+        data = self.payload(9)
+        with patch.object(reporting.bridge, 'call') as call:
+            result = self.request('/api/reporting/submit', 'POST', data, cookie, csrf)
+            self.assertEqual(result[0], 201)
+            self.assertEqual(result[1]['order_state'], 'none')
+            call.assert_not_called()
+        report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
+        self.assertIsNotNone(report['user_id'])
+        self.assertEqual(report['reporter'], data['reporter'])
+        self.assertEqual(report['answers'], data['answers'])
+
     def test_hiyari_executive_receives_and_issues_order_once(self):
         cookie, csrf = self.elevated()
         data = self.payload(9)

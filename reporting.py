@@ -147,6 +147,8 @@ def issue_order(db, row):
     snapshot = json.loads(row['snapshot_json'])
     answers = json.loads(row['answers_json'])
     detail = '\n'.join(f"{q['label']}: {answers.get(q['id'], '')}" for q in snapshot['questions'])
+    if snapshot['group'] == 'hiyari-hatto':
+        detail = f"Reporter: {row['reporter']}\nContact / department: {row['contact'] or 'Not supplied'}\n{detail}"
     attempted = False
     try:
         actor = bridge.identity()
@@ -369,7 +371,7 @@ def change(h, db, path, method, data, user):
             db.commit()
             h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Form changed. Reload it.'))
         else:
-            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|retry-order|link-order|hiyari-review)', path)
+            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|issue-order|retry-order|link-order|hiyari-review)', path)
             if not match or method != 'POST':
                 h.error_json(404, 'Not found.')
                 return
@@ -380,6 +382,18 @@ def change(h, db, path, method, data, user):
             if match[2] == 'hiyari-review':
                 changed = she_monitoring.save_review(db, row, data, user)
                 h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Report changed. Reload before saving.'))
+            elif match[2] == 'issue-order':
+                if json.loads(row['snapshot_json'])['group'] != 'hiyari-hatto':
+                    raise ValueError('Manual work orders are available for Hiyari Hatto reports.')
+                claimed = db.execute("UPDATE finding_reports SET order_state='pending' WHERE id=? AND order_state='none'", (row['id'],)).rowcount
+                if not claimed:
+                    h.error_json(409, 'A work order has already been requested. Reload to view its status.')
+                    return
+                db.execute('INSERT INTO finding_updates(report_id,actor,note,status,created_at) VALUES(?,?,?,?,?)',
+                           (row['id'], user['display_name'], 'Requested a CMMS Kaizen work order from this Hiyari Hatto report.', row['status'], int(time.time())))
+                db.commit()
+                issue_order(db, row)
+                h.send_json(200, receipt(db.execute('SELECT * FROM finding_reports WHERE id=?', (row['id'],)).fetchone()))
             elif match[2] == 'retry-order':
                 if row['order_state'] not in ('failed', 'pending'):
                     h.error_json(409, 'Check CMMS and link an existing order if its creation is uncertain.')

@@ -81,6 +81,63 @@ class ReportingTests(unittest.TestCase):
             self.request('/api/reporting/submit', 'POST', self.payload(2))
             self.assertEqual(call.call_count, 1)
 
+    def test_hiyari_executive_receives_and_issues_order_once(self):
+        cookie, csrf = self.elevated()
+        data = self.payload(9)
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', return_value={'id': 'WO-HH'}) as call:
+            saved = self.request('/api/reporting/submit', 'POST', data)[1]
+            self.assertEqual(saved['order_state'], 'none')
+            call.assert_not_called()
+            notifications = self.request('/api/reporting/notifications', cookie=cookie)[1]
+            self.assertEqual(notifications['unread'], 1)
+            self.assertEqual(notifications['reports'][0]['reference'], saved['reference'])
+            path = '/api/reporting/reports/1/issue-order'
+            self.assertEqual(self.request(path, 'POST', {}, cookie)[0], 403)
+            result = self.request(path, 'POST', {}, cookie, csrf)
+            self.assertEqual(result[0], 200)
+            self.assertEqual(result[1]['order_id'], 'WO-HH')
+            payload = call.call_args.args[2]
+            self.assertEqual(payload['type'], 'kaizen')
+            self.assertEqual(payload['reportedByName'], data['reporter'])
+            self.assertEqual(payload['responsibleDepartment'], 'SHE')
+            self.assertEqual(call.call_args.args[3], data['plant'])
+            for value in (saved['reference'], data['location'], data['contact'], *data['answers'].values()):
+                self.assertIn(value, payload['issueDescription'])
+            self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 409)
+            self.assertEqual(call.call_count, 1)
+        report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
+        self.assertEqual(report['order_state'], 'issued')
+        self.assertEqual(report['updates'][0]['actor'], 'Admin User')
+
+    def test_hiyari_manual_order_permissions_and_scope(self):
+        cookie, csrf = self.elevated('user')
+        self.request('/api/reporting/submit', 'POST', self.payload(9))
+        path = '/api/reporting/reports/1/issue-order'
+        with patch.object(reporting.bridge, 'call') as call:
+            self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 403)
+            with server.database() as db:
+                db.execute("UPDATE users SET role='admin' WHERE username='admin'")
+            self.request('/api/reporting/submit', 'POST', self.payload(2))
+            self.assertEqual(self.request('/api/reporting/reports/2/issue-order', 'POST', {}, cookie, csrf)[0], 400)
+            self.assertEqual(self.request('/api/reporting/reports/999/issue-order', 'POST', {}, cookie, csrf)[0], 404)
+            call.assert_not_called()
+
+    def test_hiyari_manual_order_failure_retry_and_uncertain_link(self):
+        cookie, csrf = self.elevated()
+        self.request('/api/reporting/submit', 'POST', self.payload(9))
+        path = '/api/reporting/reports/1'
+        with patch.object(reporting.bridge, 'identity', side_effect=CmmsError(503, 'Not configured')):
+            result = self.request(path + '/issue-order', 'POST', {}, cookie, csrf)
+        self.assertEqual(result[1]['order_state'], 'failed')
+        self.assertEqual(self.request(path + '/issue-order', 'POST', {}, cookie, csrf)[0], 409)
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', side_effect=CmmsError(502, 'Timed out')) as call:
+            self.assertEqual(self.request(path + '/retry-order', 'POST', {}, cookie, csrf)[1]['order_state'], 'uncertain')
+            self.assertEqual(self.request(path + '/issue-order', 'POST', {}, cookie, csrf)[0], 409)
+            self.assertEqual(self.request(path + '/retry-order', 'POST', {}, cookie, csrf)[0], 409)
+            self.assertEqual(call.call_count, 1)
+        with patch.object(reporting.bridge, 'she_order', return_value={'id': 'WO-HH', 'type': 'kaizen', 'title': 'SHE-000001 Hiyari Hatto'}):
+            self.assertEqual(self.request(path + '/link-order', 'POST', {'order_id': 'WO-HH'}, cookie, csrf)[0], 200)
+
     def test_cmms_failure_saved_retry_and_ambiguous_order_never_retried(self):
         cookie, csrf = self.elevated()
         with patch.object(reporting.bridge, 'identity', side_effect=CmmsError(503, 'Not configured')):

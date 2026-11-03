@@ -42,6 +42,22 @@ class ReportingTests(unittest.TestCase):
         with server.database() as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM finding_reports').fetchone()[0], len(public['forms']))
 
+    def test_three_large_photos_and_size_boundary(self):
+        data = self.payload()
+        content = base64.b64encode(b'\x89PNG\r\n\x1a\n' + b'x' * (10_000_000 - 8)).decode()
+        data['photos'] = [dict(name=f'Photo-{i}.png', mime='image/png', content=content) for i in range(3)]
+        status, result, _ = self.request('/api/reporting/submit', 'POST', data)
+        self.assertEqual(status, 201, result)
+        with server.database() as db:
+            photos = json.loads(db.execute('SELECT photos_json FROM finding_reports').fetchone()[0])
+        self.assertEqual(len(photos), 3)
+        self.assertTrue(all(len(base64.b64decode(p['content'])) == 10_000_000 for p in photos))
+        data['request_key'] = str(uuid.uuid4())
+        data['photos'] = [{**data['photos'][0], 'content': base64.b64encode(b'\x89PNG\r\n\x1a\n' + b'x' * (10_000_001 - 8)).decode()}]
+        status, result, _ = self.request('/api/reporting/submit', 'POST', data)
+        self.assertEqual(status, 400)
+        self.assertIn('10 MB', result['error'])
+
     def elevated(self, role='executive'):
         self.first_admin()
         with server.database() as db:

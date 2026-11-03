@@ -1,5 +1,8 @@
 /* Shared reporting experience: public capture and authenticated SHE administration. */
 const SHEReporting = (() => {
+  const maxPhotoBytes=10_000_000, maxPhotos=3;
+  const photoError='Use up to 3 JPG, PNG or WebP photos, up to 10 MB each.';
+  const validPhotos=files=>files.length<=maxPhotos && files.every(f=>f.size>0 && f.size<=maxPhotoBytes && ['image/jpeg','image/png','image/webp'].includes(f.type));
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const groups = {environment:'Environment', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen', 'air-leak':'Air Leak'};
   const publicGroups = {environment:'Environment', 'hiyari-hatto':'Hiyari Hatto'};
@@ -79,7 +82,7 @@ const SHEReporting = (() => {
     const section=(step,title,body,note='')=>`<section class="report-form-section"><span class="report-step">${step}</span><h2>${title}</h2>${note?`<p class="field-hint">${note}</p>`:''}${body}</section>`;
     const person=`<div class="report-two-col"><div><label for="reporter">Name <span class="required-mark">*</span></label><input id="reporter" name="reporter" maxlength="80" autocomplete="name" required /></div><div><label for="contact">Contact <small>Optional</small></label><input id="contact" name="contact" maxlength="160" autocomplete="tel" /></div></div>`;
     const place=`<div class="report-two-col"><div><label for="plant">Factory <span class="required-mark">*</span></label><select id="plant" name="plant" required><option value="">Choose factory</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></div><div><label for="location">${hiyari?'Event location':'Where is it?'} <span class="required-mark">*</span></label><input id="location" name="location" maxlength="240" placeholder="Area / machine / line" required /></div></div>`;
-    const photo=`<label class="report-upload" for="photos"><b>＋ Add photos</b><span>At least 1 photo required · 3 photos max · 2 MB each</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required /><div id="photoPreview" class="report-photo-preview" aria-live="polite"></div>`;
+    const photo=`<label class="report-upload" for="photos"><b>＋ Add photos</b><span>At least 1 photo required · 3 photos max · 10 MB each</span><span>Select several photos at once, or add them one at a time.</span></label><input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required /><div id="photoPreview" class="report-photo-preview" aria-live="polite"></div>`;
     const findingQuestions=form.questions.filter(q=>!employeeIds.includes(q.id)&&!eventIds.includes(q.id));
     const hints={description:'Describe what you observed or what almost happened.',consequence:'Explain who could be hurt and what could happen.',action:'Suggest how to prevent this from happening again.'};
     const finding=findingQuestions.map(q=>field(q,true,form.group)+(hints[q.id]?`<p class="field-hint">${hints[q.id]}</p>`:'')).join('');
@@ -104,8 +107,26 @@ const SHEReporting = (() => {
       capture.querySelector('[type=submit]').textContent=state.busy?'Sending…':'Retry same report →';
       capture.querySelector('[type=submit]').disabled=Boolean(state.busy);
     }
-    capture.querySelector('#photos').addEventListener('change',event=>{
-      capture.querySelector('#photoPreview').textContent=Array.from(event.target.files).map(f=>f.name).join(' · ');
+    state.files ||= [];
+    const picker=capture.querySelector('#photos'), preview=capture.querySelector('#photoPreview');
+    const renderPhotos=()=>{
+      picker.required=!state.files.length;
+      preview.innerHTML=state.files.map((f,index)=>`<div class="report-photo-item"><span>${esc(f.name)} · ${(f.size/1_000_000).toFixed(1)} MB</span><button type="button" data-remove-photo="${index}" aria-label="Remove ${esc(f.name)}">Remove</button></div>`).join('');
+    };
+    if(!state.payload)renderPhotos();
+    picker.addEventListener('change',event=>{
+      const files=[...state.files,...Array.from(event.target.files)];
+      picker.value='';
+      if(!validPhotos(files)){showError(capture,new Error(photoError));return;}
+      state.files=files;
+      capture.querySelector('#reportError').hidden=true;
+      renderPhotos();
+    });
+    preview.addEventListener('click',event=>{
+      const button=event.target.closest('[data-remove-photo]');
+      if(!button || state.busy || state.payload)return;
+      state.files.splice(Number(button.dataset.removePhoto),1);
+      renderPhotos();
     });
     capture.addEventListener('submit',event=>submitPublic(event,form,{...context,target,state,token:data.token,staff:Boolean(context)}));
   }
@@ -146,9 +167,9 @@ const SHEReporting = (() => {
     root.querySelector('#reportError').hidden=true;
     try {
       if (!state.payload) {
-        const files=Array.from(root.querySelector('#photos').files);
+        const files=state.files;
         if (!files.length) throw new Error('Attach at least one photo before sending your report.');
-        if (files.length>3 || files.some(f=>f.size>2000000 || !['image/jpeg','image/png','image/webp'].includes(f.type))) throw new Error('Use up to 3 JPG, PNG or WebP photos. Each must be under 2 MB.');
+        if (!validPhotos(files)) throw new Error(photoError);
         const photos=await Promise.all(files.map(async f=>({name:f.name,mime:f.type,content:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=()=>reject(new Error('Could not read photo.'));r.readAsDataURL(f);})})));
         const values=Object.fromEntries(new FormData(root));
         state.payload={token:context.token, request_key:state.key, form_id:form.id, revision:form.revision, reporter:values.reporter, contact:values.contact, plant:values.plant, location:values.location, answers:Object.fromEntries(form.questions.map(q=>[q.id,values[q.id] || ''])), photos};
@@ -157,7 +178,7 @@ const SHEReporting = (() => {
       if (retry) state.payload.token=(await publicApi('/api/reporting/public')).token;
       root.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=true);
       const result=await (staff?api:publicApi)('/api/reporting/submit','POST',state.payload);
-      state.result=result;state.payload=null;
+      state.result=result;state.payload=null;state.files=[];
       if(staff && (currentRoute()!=='hiyari-hatto' || moduleView()!=='checklist' || staffSubmission!==state || state.userId!==currentUser?.id))return;
       showReceipt(target,result,staff);
       window.scrollTo(0,0);

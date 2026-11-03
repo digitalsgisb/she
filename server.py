@@ -269,6 +269,9 @@ class Handler(BaseHTTPRequestHandler):
                 limit = 3_000_000
             if urlsplit(self.path).path.startswith('/api/reporting/'):
                 limit = 9_000_000
+            if urlsplit(self.path).path == '/api/reporting/submit':
+                # Three 10 MB photos expand to 40 MB in base64; allow form metadata too.
+                limit = 41_000_000
             if length < 2 or length > limit:
                 raise ValueError
             value = json.loads(self.rfile.read(length))

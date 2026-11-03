@@ -318,8 +318,8 @@ def submit(h, db, data):
             content = base64.b64decode(photo.get('content', ''), validate=True)
         except (ValueError, TypeError):
             raise ValueError('Invalid photo.')
-        if not 1 <= len(content) <= 2_000_000:
-            raise ValueError('Each photo must be smaller than 2 MB.')
+        if not 1 <= len(content) <= 10_000_000:
+            raise ValueError('Each photo must be 10 MB or smaller.')
         if not (content.startswith(b'\xff\xd8\xff') or content.startswith(b'\x89PNG\r\n\x1a\n') or (content[:4] == b'RIFF' and content[8:12] == b'WEBP')):
             raise ValueError('Invalid image file.')
         clean_photos.append(dict(name=text(photo.get('name', 'Photo'), 120), mime=photo['mime'], content=photo['content']))

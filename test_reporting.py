@@ -11,7 +11,10 @@ from cmms_bridge import CmmsError
 
 
 class ReportingTests(unittest.TestCase):
-    setUp = AccountFlowTests.setUp
+    def setUp(self):
+        AccountFlowTests.setUp(self)
+        self.photo_upload = self.enterContext(patch.object(reporting.bridge, 'upload_photo', return_value=[]))
+        self.remote_order = self.enterContext(patch.object(reporting.bridge, 'she_order', return_value={'attachments': []}))
     tearDown = AccountFlowTests.tearDown
     request = AccountFlowTests.request
     first_admin = AccountFlowTests.first_admin
@@ -110,6 +113,78 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(report['reporter'], data['reporter'])
         self.assertEqual(report['answers'], data['answers'])
 
+    def test_order_photo_failure_retry_and_existing_order_repair(self):
+        cookie, csrf = self.elevated()
+        data = self.payload(1)
+        data['photos'] *= 3
+        self.photo_upload.side_effect = [[], CmmsError(502, 'Photo transfer timed out')]
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', return_value={'id': 'WO-photos'}) as create:
+            result = self.request('/api/reporting/submit', 'POST', data)[1]
+            self.assertEqual(result['order_state'], 'issued')
+            report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
+            self.assertEqual(report['order_photo_state'], 'failed')
+            self.assertIn('timed out', report['order_photo_error'])
+            timed_out_name = self.photo_upload.call_args.args[2]
+            self.remote_order.return_value = {'attachments': [{'originalName': timed_out_name, 'kind': 'issue'}]}
+            self.photo_upload.side_effect = None
+            path = '/api/reporting/reports/1/sync-order-photos'
+            self.assertEqual(self.request(path, 'POST', {}, cookie)[0], 403)
+            self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 200)
+            self.assertEqual(create.call_count, 1)
+            # First photo stays saved, second reconciles remotely, third alone is uploaded.
+            self.assertEqual(self.photo_upload.call_count, 3)
+            args = self.photo_upload.call_args.args
+            self.assertEqual(args[:2], ('WO-photos', 'port-klang'))
+            self.assertEqual(args[4], base64.b64decode(data['photos'][2]['content']))
+            self.assertEqual(args[-2:], ('she', 'issue'))
+            self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 200)
+            self.assertEqual(self.photo_upload.call_count, 3)
+            report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
+            self.assertEqual(report['order_photo_state'], 'synced')
+            # An older linked report has no sync row. Copy to its existing order.
+            with server.database() as db:
+                db.execute('DELETE FROM finding_order_photos WHERE report_id=1')
+            self.remote_order.return_value = {'attachments': []}
+            self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 200)
+            self.assertEqual(create.call_count, 1)
+            self.assertEqual(self.photo_upload.call_count, 6)
+        with server.database() as db:
+            db.execute("UPDATE users SET role='user' WHERE username='admin'")
+        self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 403)
+
+    def test_cmms_photo_size_conversion_preserves_small_originals(self):
+        from io import BytesIO
+        from PIL import Image
+        original = b'\x89PNG\r\n\x1a\n'
+        self.assertEqual(reporting.cmms_photo(original, 'image/png', 'small.png'), (original, 'image/png', 'small.png'))
+        output = BytesIO()
+        Image.new('RGB', (1800, 1800), '#336644').save(output, format='PNG', compress_level=0)
+        large = output.getvalue()
+        self.assertGreater(len(large), 8 * 1024 * 1024)
+        content, mime, filename = reporting.cmms_photo(large, 'image/png', 'large.png')
+        self.assertLess(len(content), 8 * 1024 * 1024)
+        self.assertEqual((mime, filename), ('image/jpeg', 'large.jpg'))
+        self.assertTrue(content.startswith(b'\xff\xd8\xff'))
+
+    def test_linked_uncertain_order_copies_photos_and_active_copy_is_not_repeated(self):
+        cookie, csrf = self.elevated()
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', side_effect=CmmsError(502, 'Timed out')) as create:
+            self.assertEqual(self.request('/api/reporting/submit', 'POST', self.payload(1))[1]['order_state'], 'uncertain')
+            self.remote_order.return_value = {'id': 'WO-found', 'type': 'kaizen', 'title': 'SHE-000001 Water leakage', 'attachments': []}
+            path = '/api/reporting/reports/1'
+            self.assertEqual(self.request(path + '/link-order', 'POST', {'order_id': 'WO-found'}, cookie, csrf)[0], 200)
+            self.photo_upload.assert_called_once()
+            self.assertEqual(self.photo_upload.call_args.args[0], 'WO-found')
+            self.assertEqual(create.call_count, 1)
+            with server.database() as db:
+                db.execute("UPDATE finding_order_photos SET state='sending',uploaded_json='[]',started_at=? WHERE report_id=1", (int(reporting.time.time()),))
+            self.assertEqual(self.request(path + '/sync-order-photos', 'POST', {}, cookie, csrf)[0], 200)
+            self.assertEqual(self.photo_upload.call_count, 1)
+            with server.database() as db:
+                db.execute("UPDATE finding_order_photos SET started_at=0 WHERE report_id=1")
+            self.assertEqual(self.request(path + '/sync-order-photos', 'POST', {}, cookie, csrf)[0], 200)
+            self.assertEqual(self.photo_upload.call_count, 2)
+
     def test_hiyari_executive_receives_and_issues_order_once(self):
         cookie, csrf = self.elevated()
         data = self.payload(9)
@@ -136,6 +211,8 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(call.call_count, 1)
         report = self.request('/api/reporting/reports/1', cookie=cookie)[1]['report']
         self.assertEqual(report['order_state'], 'issued')
+        self.assertEqual(report['order_photo_state'], 'synced')
+        self.photo_upload.assert_called_once()
         self.assertEqual(report['updates'][0]['actor'], 'Admin User')
 
     def test_hiyari_manual_order_permissions_and_scope(self):

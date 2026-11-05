@@ -11,7 +11,10 @@ from test_http_memory import urlopen
 
 
 class AirLeakTests(unittest.TestCase):
-    setUp = AccountFlowTests.setUp
+    def setUp(self):
+        AccountFlowTests.setUp(self)
+        self.photo_upload = self.enterContext(patch.object(reporting.bridge, 'upload_photo', return_value=[]))
+        self.enterContext(patch.object(reporting.bridge, 'she_order', return_value={'attachments': []}))
     tearDown = AccountFlowTests.tearDown
     first_admin = AccountFlowTests.first_admin
     login = AccountFlowTests.login
@@ -59,6 +62,9 @@ class AirLeakTests(unittest.TestCase):
             self.assertEqual(retry[0],200)
             self.assertEqual(retry[1],receipt)
             self.assertEqual(call.call_count,1)
+            self.photo_upload.assert_called_once()
+            self.assertEqual(self.photo_upload.call_args.args[:2], ('wo-123', 'sendayan'))
+            self.assertEqual(self.photo_upload.call_args.args[-1], 'issue')
             self.assertEqual(self.request('/api/reporting/submit','POST',data)[0],401)
         history=self.request('/api/reporting/air-leak',cookie=cookie)[1]['reports']
         self.assertEqual(len(history),1)

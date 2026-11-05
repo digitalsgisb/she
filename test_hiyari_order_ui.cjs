@@ -4,13 +4,13 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  const browser=await chromium.launch({headless:true,executablePath:process.env.SHE_QA_BROWSER});
  try {
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
-  let role='executive',state='none',requests=0;
+  let role='executive',state='none',requests=0,photoState='pending',photoCopies=0;
   page.on('pageerror',error=>errors.push(error.message));
   const report=()=>({id:1,reference:'SHE-000001',created_at:1793600000,revision:1,status:'open',
    reporter:'Near miss reporter',contact:'Production',plant:'port-klang',location:'Line 2',
    snapshot:{title:'Hiyari Hatto',group:'hiyari-hatto',workflow:'she',questions:[{id:'finding',label:'What almost happened?'}]},
    answers:{finding:'Almost slipped near machine'},photos:[],updates:[],hiyari_review:{},
-   order_state:state,order_id:state==='issued'?'WO-HH':null,order_error:state==='failed'?'CMMS unavailable':''});
+   order_state:state,order_id:state==='issued'?'WO-HH':null,order_error:state==='failed'?'CMMS unavailable':'',order_photo_state:photoState,order_photo_error:''});
   await page.route('**/*',async route=>{
    const path=new URL(route.request().url()).pathname;
    const json=value=>route.fulfill({contentType:'application/json',body:JSON.stringify(value)});
@@ -18,6 +18,9 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
    if(path==='/api/reporting/reports/1')return json({report:report()});
    if(path==='/api/reporting/reports/1/issue-order'){
     requests++;await new Promise(resolve=>setTimeout(resolve,250));state='issued';return json({reference:'SHE-000001',order_state:state,order_id:'WO-HH'});
+   }
+   if(path==='/api/reporting/reports/1/sync-order-photos'){
+    photoCopies++;photoState='synced';return json({ok:true});
    }
    if(path==='/api/reporting/notifications')return json({unread:0,latest_id:1,reports:[],push:{enabled:false}});
    if(path.startsWith('/api/'))return json({configured:false,forms:[],reports:[]});
@@ -33,16 +36,21 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   assert(await page.locator('#issueOrder').isDisabled());
   await page.locator('a[href="#/work-orders/WO-HH/port-klang"]').waitFor();
   assert.equal(await page.locator('#issueOrder').count(),0);assert.equal(requests,1);
+  await page.locator('#syncOrderPhotos').click();
+  await page.getByText('Report photos copied to CMMS.',{exact:true}).waitFor();
+  assert.equal(photoCopies,1);assert.equal(requests,1);
+  assert.equal(await page.locator('#syncOrderPhotos').count(),0);
   for(const next of ['failed','uncertain']){
    state=next;await page.reload();
    await page.getByText('Original report',{exact:true}).waitFor();
    assert.equal(await page.locator('#issueOrder').count(),0);
    assert.equal(await page.locator(next==='failed'?'#retryOrder':'#linkOrder').count(),1);
   }
-  state='none';role='user';await page.reload();
+  state='issued';photoState='failed';role='user';await page.reload();
   await page.getByText('Original report',{exact:true}).waitFor();
   assert.equal(await page.locator('#issueOrder').count(),0);
-  role='admin';await page.reload();await page.locator('#issueOrder').waitFor();
+  assert.equal(await page.locator('#syncOrderPhotos').count(),0);
+  state='none';role='admin';await page.reload();await page.locator('#issueOrder').waitFor();
   assert.deepEqual(errors,[]);
   console.log('Hiyari work-order UI checks passed: executive/admin issuance, pending button, linked order, recovery, read-only user.');
  }finally{await browser.close();}

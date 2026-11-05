@@ -292,7 +292,15 @@ const SHEReporting = (() => {
       root.querySelector('#printHiyari').onclick=()=>{document.body.classList.add('hiyari-print');const cleanup=()=>document.body.classList.remove('hiyari-print');window.addEventListener('afterprint',cleanup,{once:true});window.print();cleanup();};
       if(elevated)root.querySelector('#hiyariReviewForm').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;const values=Object.fromEntries(new FormData(e.target));try{await api(`/api/reporting/reports/${id}/hiyari-review`,'POST',{revision:r.revision,status:values.status,review:Object.fromEntries(Object.keys(labels).map(k=>[k,values[k]||'']))});await renderStaff('reporting-inbox');}catch(error){const box=root.querySelector('#hiyariReviewError');box.textContent=error.message;box.hidden=false;button.disabled=false;}};
     }
+    if(r.order_id){
+      const orderCard=root.querySelector('a[href^="#/work-orders/"]')?.closest('section');
+      if(orderCard){
+        const synced=r.order_photo_state==='synced';
+        orderCard.insertAdjacentHTML('beforeend',`<p role="status">${synced?'Report photos copied to CMMS.':r.order_photo_state==='sending'?'Copying report photos to CMMS.':'Report photos still need to be copied to CMMS.'}</p>${r.order_photo_error?`<p class="report-urgent">${esc(r.order_photo_error)}</p>`:''}${elevated&&!synced?'<button type="button" class="secondary-button" id="syncOrderPhotos">Copy photos to work order</button>':''}`);
+      }
+    }
     const perform=async (path,body,button)=>{button.disabled=true;try {await api(path,'POST',body);await renderStaff('reporting-inbox');}catch(error){showError(root,error);button.disabled=false;}};
+    root.querySelector('#syncOrderPhotos')?.addEventListener('click',event=>perform(`/api/reporting/reports/${id}/sync-order-photos`,{},event.target));
     root.querySelector('#reportUpdate')?.addEventListener('submit',event=>{event.preventDefault();perform(`/api/reporting/reports/${id}/updates`,{...Object.fromEntries(new FormData(event.target)),revision:r.revision},event.target.querySelector('button'));});
     root.querySelector('#issueOrder')?.addEventListener('click',event=>perform(`/api/reporting/reports/${id}/issue-order`,{},event.target));
     root.querySelector('#retryOrder')?.addEventListener('click',event=>perform(`/api/reporting/reports/${id}/retry-order`,{},event.target));

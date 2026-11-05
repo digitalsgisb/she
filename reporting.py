@@ -38,6 +38,10 @@ def init(db):
         CREATE TABLE IF NOT EXISTS finding_updates (
             id INTEGER PRIMARY KEY, report_id INTEGER NOT NULL REFERENCES finding_reports(id),
             actor TEXT NOT NULL, note TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS finding_order_photos (
+            report_id INTEGER PRIMARY KEY REFERENCES finding_reports(id),
+            state TEXT NOT NULL DEFAULT 'pending', uploaded_json TEXT NOT NULL DEFAULT '[]',
+            error TEXT NOT NULL DEFAULT '', started_at INTEGER NOT NULL DEFAULT 0);
     ''')
     # Seed once only: deleted forms must never reappear after restart.
     if db.execute('SELECT 1 FROM reporting_forms LIMIT 1').fetchone():
@@ -170,6 +174,67 @@ def issue_order(db, row):
         db.execute("UPDATE finding_reports SET order_state='uncertain',order_error='Check CMMS for this report reference before linking an order.' WHERE id=?", (row['id'],))
     db.commit()
 
+    saved = db.execute('SELECT * FROM finding_reports WHERE id=?', (row['id'],)).fetchone()
+    if saved['order_state'] == 'issued':
+        sync_order_photos(db, saved)
+
+
+def sync_order_photos(db, row):
+    """Copy evidence to the existing order; never reissue it after an upload failure."""
+    if row['order_state'] != 'issued' or not row['order_id']:
+        raise ValueError('Link an issued work order before copying photos.')
+    db.execute('INSERT OR IGNORE INTO finding_order_photos(report_id) VALUES(?)', (row['id'],))
+    now = int(time.time())
+    claimed = db.execute("UPDATE finding_order_photos SET state='sending',error='',started_at=? WHERE report_id=? AND state!='synced' AND (state!='sending' OR started_at<?)",
+                         (now, row['id'], now - 300)).rowcount
+    db.commit()
+    if not claimed:
+        return
+    progress = db.execute('SELECT uploaded_json FROM finding_order_photos WHERE report_id=?', (row['id'],)).fetchone()
+    uploaded = set(json.loads(progress['uploaded_json']))
+    try:
+        actor = bridge.identity()
+        order = bridge.she_order(row['order_id'], row['plant'])
+        attachments = order.get('attachments')
+        if not isinstance(attachments, list):
+            raise ValueError('CMMS did not return its photo list. Retry copying photos.')
+        for index, photo in enumerate(json.loads(row['photos_json'])):
+            if index in uploaded:
+                continue
+            content = base64.b64decode(photo['content'], validate=True)
+            digest = hashlib.sha256(content).hexdigest()[:16]
+            extension = {'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp'}[photo['mime']]
+            filename = f"SHE-{row['id']:06d}-photo-{index + 1}-{digest}.{extension}"
+            # A timed-out upload may have succeeded remotely. Reconcile before retrying.
+            if not any(a.get('originalName') == filename and a.get('kind') == 'issue' for a in attachments):
+                content, mime, filename = cmms_photo(content, photo['mime'], filename)
+                if not any(a.get('originalName') == filename and a.get('kind') == 'issue' for a in attachments):
+                    bridge.upload_photo(row['order_id'], row['plant'], filename, mime, content, actor['id'], 'issue')
+            uploaded.add(index)
+            db.execute('UPDATE finding_order_photos SET uploaded_json=? WHERE report_id=?', (json.dumps(sorted(uploaded)), row['id']))
+            db.commit()
+        db.execute("UPDATE finding_order_photos SET state='synced',error='' WHERE report_id=?", (row['id'],))
+    except Exception as error:
+        message = str(error) if isinstance(error, (CmmsError, ValueError)) else 'Could not copy report photos. Retry copying photos to the existing work order.'
+        db.execute("UPDATE finding_order_photos SET state='failed',error=? WHERE report_id=?", (message, row['id']))
+    db.commit()
+
+
+def cmms_photo(content, mime, filename):
+    # CMMS accepts 8 MiB; retain the full original in SHE and resize only its copy.
+    if len(content) <= 8 * 1024 * 1024:
+        return content, mime, filename
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    with Image.open(BytesIO(content)) as image:
+        image = ImageOps.exif_transpose(image).convert('RGB')
+        image.thumbnail((2560, 2560))
+        output = BytesIO()
+        image.save(output, format='JPEG', quality=85)
+    if output.tell() > 8 * 1024 * 1024:
+        raise ValueError('Photo copy exceeds the CMMS size limit.')
+    return output.getvalue(), 'image/jpeg', filename.rsplit('.', 1)[0] + '.jpg'
+
 
 def get(h, db, path):
     if path == '/api/reporting/public':
@@ -239,6 +304,9 @@ def get(h, db, path):
         review = db.execute('SELECT payload_json FROM hiyari_reviews WHERE report_id=?', (row['id'],)).fetchone()
         result['hiyari_review'] = json.loads(review['payload_json']) if review else {}
         result.update(receipt(row))
+        photo_sync = db.execute('SELECT state,error FROM finding_order_photos WHERE report_id=?', (row['id'],)).fetchone()
+        result['order_photo_state'] = photo_sync['state'] if photo_sync else 'pending'
+        result['order_photo_error'] = photo_sync['error'] if photo_sync else ''
         h.send_json(200, dict(report=result))
     else:
         h.error_json(404, 'Not found.')
@@ -371,7 +439,7 @@ def change(h, db, path, method, data, user):
             db.commit()
             h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Form changed. Reload it.'))
         else:
-            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|issue-order|retry-order|link-order|hiyari-review)', path)
+            match = re.fullmatch(r'/api/reporting/reports/(\d+)/(updates|issue-order|retry-order|link-order|sync-order-photos|hiyari-review)', path)
             if not match or method != 'POST':
                 h.error_json(404, 'Not found.')
                 return
@@ -379,7 +447,10 @@ def change(h, db, path, method, data, user):
             if not row:
                 h.error_json(404, 'Report not found.')
                 return
-            if match[2] == 'hiyari-review':
+            if match[2] == 'sync-order-photos':
+                sync_order_photos(db, row)
+                h.send_json(200, dict(ok=True))
+            elif match[2] == 'hiyari-review':
                 changed = she_monitoring.save_review(db, row, data, user)
                 h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Report changed. Reload before saving.'))
             elif match[2] == 'issue-order':
@@ -412,6 +483,7 @@ def change(h, db, path, method, data, user):
                     raise ValueError('Choose the SHE work order containing this report reference.')
                 db.execute("UPDATE finding_reports SET order_id=?,order_state='issued',order_error='' WHERE id=? AND order_state IN ('uncertain','sending')", (order_id, row['id']))
                 db.commit()
+                sync_order_photos(db, db.execute('SELECT * FROM finding_reports WHERE id=?', (row['id'],)).fetchone())
                 h.send_json(200, dict(ok=True))
             else:
                 if json.loads(row['snapshot_json']).get('group')=='hiyari-hatto' and data.get('status') in ('resolved','closed'):

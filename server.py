@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from cmms_bridge import CmmsError, bridge
 import reporting
+import finding_orders
 import access
 import she_statistics
 import she_monitoring
@@ -346,6 +347,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith('/api/finding-orders/') or path == '/api/workspace/overview':
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    if path == '/api/workspace/overview':
+                        finding_orders.overview(self, db, session[0])
+                    else:
+                        finding_orders.handle(self, db, path, 'GET', {}, session[0], patrol_files())
+            return
         if path.startswith('/api/she-monitoring/'):
             with database() as db:
                 session = self.authorize(db)
@@ -538,6 +548,9 @@ class Handler(BaseHTTPRequestHandler):
             if not session:
                 return
             user, details = session
+            if path.startswith('/api/finding-orders/'):
+                finding_orders.handle(self, db, path, method, data, user, patrol_files())
+                return
             if path.startswith('/api/she-monitoring/'):
                 she_monitoring.change(self, db, path, method, data, user)
                 return

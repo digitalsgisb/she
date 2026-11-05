@@ -40,6 +40,17 @@ def init(db):
         CREATE TABLE IF NOT EXISTS finding_updates (
             id INTEGER PRIMARY KEY, report_id INTEGER NOT NULL REFERENCES finding_reports(id),
             actor TEXT NOT NULL, note TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS source_orders (
+            id INTEGER PRIMARY KEY, source_kind TEXT NOT NULL, source_id INTEGER NOT NULL,
+            snapshot_json TEXT NOT NULL, answers_json TEXT NOT NULL, reporter TEXT NOT NULL,
+            contact TEXT NOT NULL DEFAULT '', plant TEXT NOT NULL, location TEXT NOT NULL,
+            photos_json TEXT NOT NULL, order_state TEXT NOT NULL DEFAULT 'pending',
+            order_id TEXT NOT NULL DEFAULT '', order_error TEXT NOT NULL DEFAULT '',
+            UNIQUE(source_kind,source_id));
+        CREATE TABLE IF NOT EXISTS source_order_photos (
+            report_id INTEGER PRIMARY KEY REFERENCES source_orders(id),
+            state TEXT NOT NULL DEFAULT 'pending', uploaded_json TEXT NOT NULL DEFAULT '[]',
+            error TEXT NOT NULL DEFAULT '', started_at INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS finding_order_photos (
             report_id INTEGER PRIMARY KEY REFERENCES finding_reports(id),
             state TEXT NOT NULL DEFAULT 'pending', uploaded_json TEXT NOT NULL DEFAULT '[]',
@@ -140,13 +151,25 @@ def forms(db):
     return [dict(id=r['id'], revision=r['revision'], **json.loads(r['definition_json'])) for r in db.execute('SELECT * FROM reporting_forms WHERE deleted=0 ORDER BY id')]
 
 
+def order_tables(row):
+    return ('source_orders', 'source_order_photos') if 'source_kind' in row.keys() else ('finding_reports', 'finding_order_photos')
+
+
+def order_reference(row):
+    if 'source_kind' in row.keys():
+        return f"{'GENBA' if row['source_kind']=='red-tag' else 'PATROL'}-{row['source_id']:06d}"
+    return f"SHE-{row['id']:06d}"
+
+
 def receipt(row):
-    return dict(reference=f"SHE-{row['id']:06d}", order_state=row['order_state'], order_id=row['order_id'])
+    return dict(reference=order_reference(row), order_state=row['order_state'], order_id=row['order_id'])
 
 
 def issue_order(db, row):
+    store, _ = order_tables(row)
+    reference = order_reference(row)
     # Claim and commit before the remote call. Never retry an ambiguous response automatically.
-    claimed = db.execute("UPDATE finding_reports SET order_state='sending',order_error='' WHERE id=? AND order_state IN ('pending','failed')", (row['id'],)).rowcount
+    claimed = db.execute(f"UPDATE {store} SET order_state='sending',order_error='' WHERE id=? AND order_state IN ('pending','failed')", (row['id'],)).rowcount
     db.commit()
     if not claimed:
         return
@@ -162,21 +185,21 @@ def issue_order(db, row):
         order = bridge.call('/api/work-orders', 'POST', dict(
             requesterId=actor['id'], type='maintenance' if snapshot['workflow'] == 'maintenance' else 'kaizen', priority='medium',
             responsibleDepartment='SHE', reportedByDepartment='SHE', reportedByName=row['reporter'],
-            title=f"SHE-{row['id']:06d} · {snapshot['title']}",
-            issueDescription=f"SHE-{row['id']:06d}\n{snapshot['title']}\nLocation: {row['location']}\n{detail}"[:5000],
+            title=f"{reference} · {snapshot['title']}",
+            issueDescription=f"{reference}\n{snapshot['title']}\nLocation: {row['location']}\n{detail}"[:5000],
             machineName=answers.get('machine', 'Others')[:100], area=row['location'][:100], location=row['location'][:100],
             issueCategoryName=snapshot['title'][:100]), row['plant'])
         if not isinstance(order, dict) or not order.get('id'):
             raise CmmsError(502, 'CMMS response did not include an order ID. Check CMMS before linking this report.')
-        db.execute("UPDATE finding_reports SET order_state='issued',order_id=?,order_error='' WHERE id=?", (str(order['id']), row['id']))
+        db.execute(f"UPDATE {store} SET order_state='issued',order_id=?,order_error='' WHERE id=?", (str(order['id']), row['id']))
     except CmmsError as error:
         state = 'failed' if not attempted or error.status in (400, 401, 403, 404, 409, 422, 503) else 'uncertain'
-        db.execute('UPDATE finding_reports SET order_state=?,order_error=? WHERE id=?', (state, str(error), row['id']))
+        db.execute(f'UPDATE {store} SET order_state=?,order_error=? WHERE id=?', (state, str(error), row['id']))
     except Exception:
-        db.execute("UPDATE finding_reports SET order_state='uncertain',order_error='Check CMMS for this report reference before linking an order.' WHERE id=?", (row['id'],))
+        db.execute(f"UPDATE {store} SET order_state='uncertain',order_error='Check CMMS for this report reference before linking an order.' WHERE id=?", (row['id'],))
     db.commit()
 
-    saved = db.execute('SELECT * FROM finding_reports WHERE id=?', (row['id'],)).fetchone()
+    saved = db.execute(f'SELECT * FROM {store} WHERE id=?', (row['id'],)).fetchone()
     if saved['order_state'] == 'issued':
         sync_order_photos(db, saved)
 
@@ -185,14 +208,15 @@ def sync_order_photos(db, row):
     """Copy evidence to the existing order; never reissue it after an upload failure."""
     if row['order_state'] != 'issued' or not row['order_id']:
         raise ValueError('Link an issued work order before copying photos.')
-    db.execute('INSERT OR IGNORE INTO finding_order_photos(report_id) VALUES(?)', (row['id'],))
+    _, photo_store = order_tables(row)
+    db.execute(f'INSERT OR IGNORE INTO {photo_store}(report_id) VALUES(?)', (row['id'],))
     now = int(time.time())
-    claimed = db.execute("UPDATE finding_order_photos SET state='sending',error='',started_at=? WHERE report_id=? AND state!='synced' AND (state!='sending' OR started_at<?)",
+    claimed = db.execute(f"UPDATE {photo_store} SET state='sending',error='',started_at=? WHERE report_id=? AND state!='synced' AND (state!='sending' OR started_at<?)",
                          (now, row['id'], now - 300)).rowcount
     db.commit()
     if not claimed:
         return
-    progress = db.execute('SELECT uploaded_json FROM finding_order_photos WHERE report_id=?', (row['id'],)).fetchone()
+    progress = db.execute(f'SELECT uploaded_json FROM {photo_store} WHERE report_id=?', (row['id'],)).fetchone()
     uploaded = set(json.loads(progress['uploaded_json']))
     try:
         actor = bridge.identity()
@@ -206,40 +230,39 @@ def sync_order_photos(db, row):
             content = base64.b64decode(photo['content'], validate=True)
             digest = hashlib.sha256(content).hexdigest()[:16]
             extension = {'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp'}[photo['mime']]
-            filename = f"SHE-{row['id']:06d}-photo-{index + 1}-{digest}.{extension}"
+            filename = f"{order_reference(row)}-photo-{index + 1}-{digest}.{extension}"
             # A timed-out upload may have succeeded remotely. Reconcile before retrying.
             if not any(a.get('originalName') == filename and a.get('kind') == 'issue' for a in attachments):
                 content, mime, filename = cmms_photo(content, photo['mime'], filename)
                 if not any(a.get('originalName') == filename and a.get('kind') == 'issue' for a in attachments):
                     bridge.upload_photo(row['order_id'], row['plant'], filename, mime, content, actor['id'], 'issue')
             uploaded.add(index)
-            db.execute('UPDATE finding_order_photos SET uploaded_json=? WHERE report_id=?', (json.dumps(sorted(uploaded)), row['id']))
+            db.execute(f'UPDATE {photo_store} SET uploaded_json=? WHERE report_id=?', (json.dumps(sorted(uploaded)), row['id']))
             db.commit()
-        db.execute("UPDATE finding_order_photos SET state='synced',error='' WHERE report_id=?", (row['id'],))
+        db.execute(f"UPDATE {photo_store} SET state='synced',error='' WHERE report_id=?", (row['id'],))
     except Exception as error:
         message = str(error) if isinstance(error, (CmmsError, ValueError)) else 'Could not copy report photos. Retry copying photos to the existing work order.'
-        db.execute("UPDATE finding_order_photos SET state='failed',error=? WHERE report_id=?", (message, row['id']))
+        db.execute(f"UPDATE {photo_store} SET state='failed',error=? WHERE report_id=?", (message, row['id']))
     db.commit()
 
 
 def sync_pending_order_photos(database, stop=None):
     """Catch up old linked reports and retry failed/stalled photo transfers fairly."""
-    with database() as db:
-        ids = [r['id'] for r in db.execute('''
-            SELECT r.id FROM finding_reports r
-            LEFT JOIN finding_order_photos p ON p.report_id=r.id
-            WHERE r.order_state='issued' AND r.order_id!=''
-              AND (p.report_id IS NULL OR p.state='pending'
-                   OR (p.state IN ('failed','sending') AND p.started_at<?))
-            ORDER BY COALESCE(p.started_at,0),r.id LIMIT 20
-        ''', (int(time.time()) - 300,))]
-    for report_id in ids:
-        if stop is not None and stop.is_set():
-            break
+    for store, photo_store in (('finding_reports', 'finding_order_photos'), ('source_orders', 'source_order_photos')):
         with database() as db:
-            row = db.execute('SELECT * FROM finding_reports WHERE id=?', (report_id,)).fetchone()
-            if row and row['order_state'] == 'issued' and row['order_id']:
-                sync_order_photos(db, row)
+            ids = [r['id'] for r in db.execute(f'''SELECT r.id FROM {store} r
+                LEFT JOIN {photo_store} p ON p.report_id=r.id
+                WHERE r.order_state='issued' AND r.order_id!=''
+                  AND (p.report_id IS NULL OR p.state='pending'
+                       OR (p.state IN ('failed','sending') AND p.started_at<?))
+                ORDER BY COALESCE(p.started_at,0),r.id LIMIT 20''', (int(time.time()) - 300,))]
+        for report_id in ids:
+            if stop is not None and stop.is_set():
+                return
+            with database() as db:
+                row = db.execute(f'SELECT * FROM {store} WHERE id=?', (report_id,)).fetchone()
+                if row and row['order_state'] == 'issued' and row['order_id']:
+                    sync_order_photos(db, row)
 
 
 def run_order_photo_sync(database, stop):
@@ -488,14 +511,14 @@ def change(h, db, path, method, data, user):
                 changed = she_monitoring.save_review(db, row, data, user)
                 h.send_json(200 if changed else 409, dict(ok=True) if changed else dict(error='Report changed. Reload before saving.'))
             elif match[2] == 'issue-order':
-                if json.loads(row['snapshot_json'])['group'] != 'hiyari-hatto':
-                    raise ValueError('Manual work orders are available for Hiyari Hatto reports.')
+                if json.loads(row['snapshot_json'])['group'] not in GROUPS:
+                    raise ValueError('This report does not support work orders.')
                 claimed = db.execute("UPDATE finding_reports SET order_state='pending' WHERE id=? AND order_state='none'", (row['id'],)).rowcount
                 if not claimed:
                     h.error_json(409, 'A work order has already been requested. Reload to view its status.')
                     return
                 db.execute('INSERT INTO finding_updates(report_id,actor,note,status,created_at) VALUES(?,?,?,?,?)',
-                           (row['id'], user['display_name'], 'Requested a CMMS Kaizen work order from this Hiyari Hatto report.', row['status'], int(time.time())))
+                           (row['id'], user['display_name'], 'Requested a CMMS work order from this report.', row['status'], int(time.time())))
                 db.commit()
                 issue_order(db, row)
                 h.send_json(200, receipt(db.execute('SELECT * FROM finding_reports WHERE id=?', (row['id'],)).fetchone()))

@@ -113,6 +113,23 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(report['reporter'], data['reporter'])
         self.assertEqual(report['answers'], data['answers'])
 
+    def test_manual_orders_for_every_nonautomatic_reporting_topic(self):
+        cookie, csrf = self.elevated()
+        forms = self.request('/api/reporting/public')[1]['forms']
+        manual = [form for form in forms if form['workflow'] == 'she']
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', return_value={'id': 'WO-topic'}) as create:
+            for form in manual:
+                with self.subTest(topic=form['title']):
+                    saved = self.request('/api/reporting/submit', 'POST', self.payload(form['id']))[1]
+                    report_id = int(saved['reference'].split('-')[1])
+                    path = f'/api/reporting/reports/{report_id}/issue-order'
+                    result = self.request(path, 'POST', {}, cookie, csrf)
+                    self.assertEqual(result[0], 200)
+                    self.assertEqual(result[1]['order_state'], 'issued')
+                    self.assertEqual(self.request(path, 'POST', {}, cookie, csrf)[0], 409)
+            self.assertEqual(create.call_count, len(manual))
+            self.assertEqual(self.photo_upload.call_count, len(manual))
+
     def test_order_photo_failure_retry_and_existing_order_repair(self):
         cookie, csrf = self.elevated()
         data = self.payload(1)
@@ -255,7 +272,7 @@ class ReportingTests(unittest.TestCase):
             with server.database() as db:
                 db.execute("UPDATE users SET role='admin' WHERE username='admin'")
             self.request('/api/reporting/submit', 'POST', self.payload(2))
-            self.assertEqual(self.request('/api/reporting/reports/2/issue-order', 'POST', {}, cookie, csrf)[0], 400)
+            self.assertEqual(self.request('/api/reporting/reports/2/issue-order', 'POST', {}, cookie, csrf)[0], 200)
             self.assertEqual(self.request('/api/reporting/reports/999/issue-order', 'POST', {}, cookie, csrf)[0], 404)
             call.assert_not_called()
 

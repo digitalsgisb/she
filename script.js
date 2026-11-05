@@ -244,8 +244,28 @@ function renderNav(active) {
 
 function renderHome() {
   if(currentUser.role==='safety_committee')return renderCommitteeHome();
+  if(['admin','executive'].includes(currentUser.role))return renderExecutiveHome();
   const links = [['red-tag','Record a hazard and follow up on findings.'],['air-leak','Report a leak and issue a maintenance work order.'],['red-tag-pic','View findings assigned to you.'],['daily-safety-patrol','Complete a safety inspection.'],['patrol-overview','Review your submitted patrols.'],['hiyari-hatto','Report a near miss.'],['work-orders','Follow up on SHE work orders.']];
   return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${['admin','executive'].includes(currentUser.role)?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
+}
+
+function renderExecutiveHome() {
+  const day=new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',weekday:'long',day:'numeric',month:'long'}).format(new Date());
+  const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'numeric',hourCycle:'h23'}).format(new Date()));
+  const greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  const tools=[['daily-safety-patrol','New patrol','clipboard'],['environmental','Environment','leaf'],['dashboard','Dashboards','grid'],['reporting-qr','Reporting QR','camera']];
+  return `<div class="page inner-page executive-home"><header class="exec-heading"><span class="eyebrow dark-eyebrow">YOUR SHE WORKSPACE</span><span>${escapeHtml(day)}</span></header><section class="exec-welcome"><div class="exec-welcome-copy"><span class="exec-kicker">THE NEXT ACTION STARTS HERE</span><h1>${greeting},<br>${escapeHtml(currentUser.display_name.split(' ')[0])}.</h1><p>A clearer view of your workplace.<br>Keep every finding moving towards a safer day.</p><div class="exec-hero-actions"><a href="#/reporting-inbox">Review reports ${icon('arrow',18)}</a><a href="#/work-orders">Work orders ${icon('briefcase',18)}</a></div></div><span class="exec-welcome-symbol" aria-hidden="true">${icon('shield',92)}</span><span class="exec-hero-footnote">OBSERVE · ACT · VERIFY</span></section><div class="exec-stats" aria-label="Open findings"><a href="#/reporting-inbox"><span>Reports to review</span><strong data-overview-count="reports">—</strong><small>SHE inbox ${icon('arrow',14)}</small></a><a href="#/red-tag?view=active"><span>Active Genba</span><strong data-overview-count="genba">—</strong><small>Follow up ${icon('arrow',14)}</small></a><a href="#/patrol-overview"><span>Patrol follow-ups</span><strong data-overview-count="patrols">—</strong><small>Review actions ${icon('arrow',14)}</small></a></div><section class="exec-next"><div class="exec-section-heading"><h2>Keep things moving</h2><span>YOUR DAILY TOOLS</span></div><div class="exec-action-grid"><a class="exec-action-card exec-genba" href="#/red-tag?view=active"><span class="exec-action-icon">${icon('tag',25)}</span><div><small>FROM FINDING TO FIX</small><h3>Genba &amp; Red Tag</h3><p>Review hazards, issue work orders<br>and follow up with your PICs.</p></div>${icon('arrow',22)}</a><a class="exec-action-card exec-orders" href="#/work-orders"><span class="exec-action-icon">${icon('briefcase',25)}</span><div><small>CLOSE THE LOOP</small><h3>SHE work orders</h3><p>Check maintenance progress<br>and verify completed work.</p></div>${icon('arrow',22)}</a></div></section><section class="exec-incoming"><div class="exec-section-heading"><h2>Needs your attention</h2><a href="#/reporting-inbox">View inbox →</a></div><div data-exec-recent aria-live="polite"><p class="exec-loading">Loading the latest open findings…</p></div></section><section class="exec-tools"><div class="exec-section-heading"><h2>Around the workspace</h2></div><div class="exec-tool-grid">${tools.filter(([route])=>canAccessRoute(route)).map(([route,label,symbol])=>`<a href="#/${route}">${icon(symbol,24)}<span>${label}</span></a>`).join('')}</div></section><p class="exec-home-note">Small actions. Better tomorrows.</p></div>`;
+}
+
+async function loadExecutiveOverview() {
+  const root=content.querySelector('.executive-home'),userId=currentUser?.id;
+  if(!root)return;
+  try{
+    const overview=await api('/api/workspace/overview');
+    if(!root.isConnected||currentUser?.id!==userId)return;
+    root.querySelectorAll('[data-overview-count]').forEach(el=>el.textContent=overview.counts[el.dataset.overviewCount]??'—');
+    root.querySelector('[data-exec-recent]').innerHTML=overview.recent.length?overview.recent.map(r=>`<a class="exec-recent-row" href="${escapeHtml(r.href)}"><span class="exec-recent-icon">${icon(r.kind==='Genba'?'tag':r.kind==='Patrol'?'clipboard':'leaf',21)}</span><span><small>${escapeHtml(r.kind)} · ${new Date(r.created_at*1000).toLocaleDateString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short'})}</small><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.detail)}</span></span>${icon('chevron',18)}</a>`).join(''):'<div class="exec-empty">'+icon('shield',25)+'<strong>You’re up to date.</strong><p>No open findings or patrol follow-ups to review.</p></div>';
+  }catch(error){if(root.isConnected)root.querySelector('[data-exec-recent]').innerHTML=`<p class="exec-loading">${escapeHtml(error.message)} <button type="button" class="secondary-button" data-overview-retry>Refresh</button></p>`;root.querySelector('[data-overview-retry]')?.addEventListener('click',loadExecutiveOverview);}
 }
 
 function renderCommitteeHome() {
@@ -527,7 +547,7 @@ function renderPage() {
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
-  if (key === 'home') content.innerHTML = renderHome();
+  if (key === 'home') {content.innerHTML = renderHome();loadExecutiveOverview();}
   else if (key === 'air-leak') renderAirLeak();
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();

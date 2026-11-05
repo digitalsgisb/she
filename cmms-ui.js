@@ -118,6 +118,35 @@ async function cmmsRenderCreate() {
   });
 }
 
+function mountFindingWorkOrder(parent,kind,id,before=null) {
+  if(!['admin','executive'].includes(currentUser?.role))return;
+  const card=document.createElement('section');
+  card.className='finding-order-card';
+  card.innerHTML='<h3>Work order</h3><p role="status">Checking linked work order…</p>';
+  parent.insertBefore(card,before);
+  const path=`/api/finding-orders/${kind}/${id}`,userId=currentUser.id;
+  const load=async()=>{
+    const r=await api(path);
+    if(!card.isConnected||currentUser?.id!==userId)return;
+    const pending=['pending','failed'].includes(r.order_state),uncertain=['uncertain','sending'].includes(r.order_state);
+    card.innerHTML=`<div class="finding-order-heading"><h3>Work order</h3><span>CMMS</span></div>${r.order_id?`<p>Linked to <strong>${escapeHtml(r.order_id)}</strong></p><a class="secondary-button" data-open-order href="#/work-orders/${encodeURIComponent(r.order_id)}/${r.plant}">Open work order →</a><p class="field-hint">${r.order_photo_state==='synced'?'Finding photos copied to CMMS.':'Finding photos will sync automatically.'}</p>`:r.order_state==='none'?'<p>Send this finding and its original photos to maintenance.</p><form data-order-issue><label>Plant<select name="plant" required><option value="">Choose plant</option><option value="port-klang">Port Klang</option><option value="sendayan">Sendayan</option></select></label><button type="submit" class="primary-button">Issue work order</button></form>':pending?'<p>The work order needs another attempt.</p><button type="button" class="primary-button" data-order-retry>Retry work order</button>':uncertain?`<p>Check CMMS for <strong>${escapeHtml(r.reference)}</strong> before linking the existing order.</p><form data-order-link><label>Existing CMMS order ID<input name="order_id" maxlength="100" required></label><button type="submit" class="secondary-button">Link verified order</button></form>`:''}${r.order_error?`<p class="form-error">${escapeHtml(r.order_error)}</p>`:''}${r.order_photo_error?`<p class="form-error">${escapeHtml(r.order_photo_error)}</p>`:''}<p class="form-error" data-order-error role="alert" hidden></p>`;
+    const perform=async(action,data,button)=>{
+      button.disabled=true;button.textContent='Please wait…';
+      try{await api(`${path}/${action}`,'POST',data);await load();}
+      catch(error){
+        try{await load();}catch{}
+        const box=card.querySelector('[data-order-error]');if(box){box.textContent=error.message;box.hidden=false;}
+        button.disabled=false;
+      }
+    };
+    card.querySelector('[data-order-issue]')?.addEventListener('submit',event=>{event.preventDefault();perform('issue',Object.fromEntries(new FormData(event.target)),event.target.querySelector('button'));});
+    card.querySelector('[data-order-retry]')?.addEventListener('click',event=>perform('retry',{},event.target));
+    card.querySelector('[data-order-link]')?.addEventListener('submit',event=>{event.preventDefault();perform('link',Object.fromEntries(new FormData(event.target)),event.target.querySelector('button'));});
+    card.querySelector('[data-open-order]')?.addEventListener('click',()=>closeModal());
+  };
+  load().catch(error=>{if(card.isConnected)card.innerHTML=`<h3>Work order</h3><p class="form-error">${escapeHtml(error.message)}</p><button type="button" class="secondary-button" data-check-order>Try again</button>`;card.querySelector('[data-check-order]')?.addEventListener('click',()=>{card.remove();mountFindingWorkOrder(parent,kind,id,before);});});
+}
+
 function cmmsPhotoUrl(attachment) {
   const match = String(attachment.url || '').match(/^\/uploads\/work-orders\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9._-]+)$/);
   return match ? `/api/cmms/media/${match[1]}/${match[2]}${cmmsQuery()}` : '';

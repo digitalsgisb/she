@@ -48,6 +48,7 @@ const routes = {
   'reporting-inbox': { title: 'Inbox', icon: 'clipboard' },
   'reporting-qr': { title: 'Report to SHE QR', icon: 'camera' },
   safety: { title: 'Safety', icon: 'shield' },
+  'patrol-home': { title: 'Safety Patrol', icon: 'clipboard' },
   'daily-safety-patrol': { title: 'Safety Patrol', icon: 'clipboard' },
   'checklist-builder': { title: 'Checklist Builder', icon: 'clipboard' },
   'patrol-overview': { title: 'Patrol History', icon: 'grid' },
@@ -77,7 +78,7 @@ const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting
 const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
 
 function safetyModule(key = currentRoute()) {
-  if (['daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return 'daily-safety-patrol';
+  if (['patrol-home','daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return 'daily-safety-patrol';
   return key === 'red-tag-pic' ? 'red-tag' : key;
 }
 function moduleView() {
@@ -89,7 +90,7 @@ function moduleNavigation() {
   if (!safetyItems.includes(module)) return '';
   const patrol = module === 'daily-safety-patrol';
   const links = patrol
-    ? [['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
+    ? [['patrol-home','Overview'],['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
     : [[module,module==='hiyari-hatto'?'New report':'Checklist'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
   const selected = patrol || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
   return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
@@ -190,9 +191,17 @@ function renderMobileNavigation(active) {
   mobileTabbar.classList.remove('pic-navigation');
   const committee = currentUser.role === 'safety_committee';
   mobileTabbar.classList.toggle('committee-navigation', committee);
-  const tabs = committee ? [['home','Home','grid'],['red-tag','Red Tag','tag'],['air-leak','Air Leak','droplet']] : [['home','Home','grid'],['daily-safety-patrol','Patrol','clipboard'],['patrol-overview','History','clock'],['work-orders','Orders','briefcase']];
+  const tabs = committee ? [['home','Home','grid'],['red-tag','Red Tag','tag'],['air-leak','Air Leak','droplet']] : [['home','Home','grid'],['patrol-home','Patrol','clipboard'],['patrol-overview','History','clock'],['work-orders','Orders','briefcase']];
+  if(['daily-safety-patrol','checklist-builder'].includes(active))active='patrol-home';
   const more = !tabs.some(([key])=>key===active);
-  mobileTabbar.innerHTML = tabs.map(([key,label,symbol])=>mobileTab(key,label,symbol,active===key)).join('')+`<button class="mobile-tab ${more?'active':''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu',20)}<span>More</span></button>`;
+  const markup = tabs.map(([key,label,symbol])=>mobileTab(key,label,symbol,active===key)).join('')+`<button class="mobile-tab ${more?'active':''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu',20)}<span>More</span></button>`;
+  const layout=tabs.map(([key])=>key).join(',');
+  if(mobileTabbar.dataset.layout!==layout){mobileTabbar.innerHTML=markup;mobileTabbar.dataset.layout=layout;}
+  else mobileTabbar.querySelectorAll('.mobile-tab').forEach(link=>{
+    const selected=link.id==='mobileMoreButton'?more:link.getAttribute('href')==='#/'+active;
+    link.classList.toggle('active',selected);
+    if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  });
 }
 
 function renderNav(active) {
@@ -200,8 +209,8 @@ function renderNav(active) {
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
     <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="nav-parent"><a class="nav-link ${['safety', 'patrol-home', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${key==='daily-safety-patrol'?'patrol-home':key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
@@ -323,7 +332,7 @@ function renderSafetyHome() {
     'air-leak':'Report leaks, track current active reports, and review history.',
     'hiyari-hatto':'Complete a near-miss report, follow current cases, and review history.'
   };
-  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Choose a tool to report, follow up, or review past records.</p></div><div class="module-grid">${safetyItems.filter(canAccessRoute).map(key=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,23)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${descriptions[key]}</span></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Choose a tool to report, follow up, or review past records.</p></div><div class="module-grid">${safetyItems.filter(canAccessRoute).map(key=>`<a class="module-card" href="#/${key==='daily-safety-patrol'?'patrol-home':key}"><span class="module-icon">${icon(routes[key].icon,23)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${descriptions[key]}</span></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div></div>`;
 }
 
 function renderHealth() {
@@ -540,14 +549,16 @@ function renderPage() {
   const key = currentRoute();
   SHEStats.hideTooltip();
   dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
-  safetyExpanded = ['safety', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(key);
+  safetyExpanded = ['safety', 'patrol-home', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(key);
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/home'; return; }
   renderNav(key);
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
+  if(isPatrolRoute(key))syncPatrolTabs();
   if (key === 'home') {content.innerHTML = renderHome();loadExecutiveOverview();}
+  else if (key === 'patrol-home') renderPatrolHome();
   else if (key === 'air-leak') renderAirLeak();
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();

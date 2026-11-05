@@ -32,7 +32,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  await go('safety');await page.locator('#content .module-card').first().waitFor();
  assert.deepEqual(await page.locator('#content .module-card strong').allTextContents(),['Safety Patrol','Red Tag','Air Leak','Hiyari Hatto']);
  await go('daily-safety-patrol');await page.locator('#patrolForm').waitFor();
- assert.deepEqual(await page.locator('.module-tabs a').allTextContents(),['Checklist','History','Checklist Builder']);
+  assert.deepEqual(await page.locator('.module-tabs a').allTextContents(),['Overview','Checklist','History','Checklist Builder']);
  await page.locator('.module-tabs a[href="#/patrol-overview"]').click();await page.getByRole('heading',{name:'Patrol History',exact:true}).waitFor();
  assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'History');
  await page.locator('.module-tabs a[href="#/checklist-builder"]').click();await page.locator('#checklistBuilder').waitFor();

@@ -15,6 +15,10 @@ const context = vm.createContext({content,structuredClone,console,
   api:async (path,method,payload)=>{if(!method) return {templates:[template]}; saved={path,method,payload};return {id:0};},notify:()=>{}
 });
 vm.runInContext(fs.readFileSync('patrol.js','utf8'),context);
+// Form logic uses a minimal DOM fixture; browser tests cover the persistent shell.
+vm.runInContext('renderPatrolContent = html => { content.innerHTML = html; };',context);
+context.mountFindingWorkOrder=()=>{};
+content.querySelector=()=>null;
 (async()=>{
   await vm.runInContext('renderPatrolForm()',context);
   assert(content.innerHTML.includes('href="#/checklist-builder/0"'));

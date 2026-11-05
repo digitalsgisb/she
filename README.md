@@ -204,3 +204,10 @@ Rebuild the Docker image to install `requirements.txt` and include the alert fil
 Executives and Admins have a home page with live counts for open reports, active Genba findings and patrol follow-ups, a recent-finding queue and direct links to maintenance and dashboards. Module view tabs use a horizontally scrollable underline bar.
 
 **Issue work order** is available on every SHE reporting topic, including waste and other environmental reports, and on Genba / Red Tag and completed patrol details. Existing automatic water-leak, Kaizen and Air Leak workflows remain in place. Reports with an existing order show its link instead. For Genba and patrol findings, choose Port Klang or Sendayan before issuing a maintenance order. The saved finding reference, details, requesting executive and original JPEG/PNG/WebP photos are included. Photo copies use the same automatic sync and retry flow; issuing twice cannot create another order. An uncertain CMMS response requires checking and linking the matching order first. Regular users and PICs cannot issue orders from findings.
+
+
+## Safety Patrol overview
+
+**Patrol** in the mobile bar and **Safety Patrol** in the sidebar open an Overview with completed inspections today and this month, patrols awaiting review, open follow-ups, seven-day activity and the five latest inspections. Executives/Admins see team activity; other users see their own submissions. Counts use Malaysian calendar days and exclude patrols still awaiting required uploads. Start checklist, History and Checklist Builder stay one tap away.
+
+The patrol tab bar stays mounted while views change. Only the content beneath it fades; reduced-motion settings disable that fade. Checklist drafts and history filters retain their existing behavior, and stale requests cannot overwrite another tab. The default checklist introduction is shortened to one sentence; custom checklist descriptions remain available.

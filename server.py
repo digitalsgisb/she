@@ -17,6 +17,7 @@ import sys
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -406,6 +407,12 @@ class Handler(BaseHTTPRequestHandler):
                     templates.extend(dict(id=row['id'], user_id=row['user_id'], revision=row['revision'], **json.loads(row['definition_json'])) for row in db.execute('SELECT * FROM patrol_templates ORDER BY id DESC'))
                     self.send_json(200, {'templates': templates})
             return
+        if path == '/api/patrols/summary':
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    self.patrol_summary(db, session[0])
+            return
         if path in ('/api/patrols/statistics','/api/patrols/statistics/records'):
             with database() as db:
                 session = self.authorize(db)
@@ -684,6 +691,33 @@ class Handler(BaseHTTPRequestHandler):
         db.execute('UPDATE patrols SET followup_status=? WHERE id=?', (status, patrol_id))
         db.commit()
         self.send_json(201, {'id': cursor.lastrowid})
+
+    def patrol_summary(self, db: sqlite3.Connection, user: sqlite3.Row) -> None:
+        today = datetime.now(timezone(timedelta(hours=8))).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start, day_end = int(today.timestamp()), int((today + timedelta(days=1)).timestamp())
+        month_start = int(today.replace(day=1).timestamp())
+        week_start = int((today - timedelta(days=6)).timestamp())
+        team = user['role'] in ('admin', 'executive')
+        owner, params = ('', ()) if team else (' AND user_id=?', (user['id'],))
+        counts = dict(db.execute('''SELECT
+            COALESCE(SUM(created_at>=? AND created_at<?),0) AS today,
+            COALESCE(SUM(created_at>=? AND created_at<?),0) AS month,
+            COALESCE(SUM(followup_status='open'),0) AS open,
+            COALESCE(SUM(followup_status='action_taken'),0) AS awaiting_review
+            FROM patrols WHERE completed=1''' + owner,
+            (day_start, day_end, month_start, day_end, *params)).fetchone())
+        days = {r['bucket']: r['count'] for r in db.execute('''SELECT CAST((created_at-?)/86400 AS INTEGER) AS bucket,COUNT(*) AS count
+            FROM patrols WHERE completed=1 AND created_at>=? AND created_at<?''' + owner + ' GROUP BY bucket',
+            (week_start, week_start, day_end, *params))}
+        recent = []
+        for row in db.execute('SELECT id,inspector_name,created_at,followup_status,remarks,template_json,answers_json FROM patrols WHERE completed=1' + owner + ' ORDER BY created_at DESC,id DESC LIMIT 5', params):
+            template, answers = json.loads(row['template_json']), json.loads(row['answers_json'])
+            checks = [answers.get(q['id']) for q in template['questions'] if q['type']=='status'] if template else answers.values()
+            recent.append(dict(id=row['id'], inspector=row['inspector_name'], created_at=row['created_at'],
+                               status=row['followup_status'], title=template['title'] if template else 'Daily Safety Patrol',
+                               remarks=row['remarks'], findings=sum(value=='not_ok' for value in checks)))
+        self.send_json(200, dict(scope='team' if team else 'mine', date=today.date().isoformat(), counts=counts, recent=recent,
+                                 week=[dict(date=(today-timedelta(days=6-i)).date().isoformat(), count=days.get(i,0)) for i in range(7)]))
 
     def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
         if path == "/api/patrols":

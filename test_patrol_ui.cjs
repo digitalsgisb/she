@@ -17,7 +17,7 @@ const context = vm.createContext({content,structuredClone,console,
 vm.runInContext(fs.readFileSync('patrol.js','utf8'),context);
 // Form logic uses a minimal DOM fixture; browser tests cover the persistent shell.
 vm.runInContext('renderPatrolContent = html => { content.innerHTML = html; };',context);
-context.mountFindingWorkOrder=()=>{};
+context.mountFindingWorkOrder=()=>{};context.URLSearchParams=URLSearchParams;context.requestAnimationFrame=()=>{};
 content.querySelector=()=>null;
 (async()=>{
   await vm.runInContext('renderPatrolForm()',context);
@@ -67,7 +67,7 @@ content.querySelector=()=>null;
   const patrol = {id:1,template,completed:true,inspector_name:'Sara',submitted_by:'Sara',created_at:1,rating:2,remarks:'Blocked walkway',answers:{},item_remarks:{},attachments:[],followup_status:'action_taken',updates:[{id:1,user_id:2,author:'Sara',role:'user',created_at:2,message:'Walkway cleared',status:'action_taken',attachments:[]}]};
   vm.runInContext(`renderCompletedPatrol(${JSON.stringify(patrol)})`,context);
   assert(content.innerHTML.includes('Walkway cleared'));
-  assert(content.innerHTML.includes('Follow-up &amp; action photos'));
+  assert(content.innerHTML.includes('Follow up this patrol'));
   assert(content.innerHTML.includes('Reviewed · resolve'));
   context.currentUser.role='user';
   vm.runInContext(`renderCompletedPatrol(${JSON.stringify(patrol)})`,context);

@@ -4,7 +4,7 @@ const assert = require('assert');
 const context = vm.createContext({
   console, setInterval:()=>{}, window:{addEventListener:()=>{}},
   localStorage:{getItem:()=>null}, document:{addEventListener:()=>{}},
-  content:{addEventListener:()=>{}}, escapeHtml:s=>String(s), icon:()=>''
+  content:{addEventListener:()=>{}}, escapeHtml:s=>String(s), icon:()=>'',issueThumbnail:()=>''
 });
 vm.runInContext(fs.readFileSync('patrol.js','utf8'), context);
 const rows = Array.from({length:25},(_,i)=>({id:i+1,inspector_name:i%2 ? 'Sara':'Aman',
@@ -26,5 +26,5 @@ assert(markup.includes('0 patrols'));
 markup = vm.runInContext("patrolView.search=''; patrolView.findingsOnly=true; patrolDailyReportMarkup(rows)",context);
 assert.equal((markup.match(/<article /g)||[]).length,5);
 assert(!markup.includes('All clear'));
-assert(markup.includes('Follow-up: Open'));
+assert(markup.includes('Follow up →'));
 console.log('Patrol history sorting, pagination, combined filters and empty states passed.');

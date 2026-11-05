@@ -5,6 +5,7 @@ import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 import access
+import patrol_cards
 import reporting
 from cmms_bridge import bridge, CmmsError
 
@@ -125,12 +126,12 @@ def overview(h, db, user):
                   genba=db.execute("SELECT COUNT(*) FROM redtag_findings WHERE status NOT IN ('Resolved','Closed')").fetchone()[0],
                   patrols=db.execute("SELECT COUNT(*) FROM patrols WHERE completed=1 AND followup_status!='resolved'").fetchone()[0])
     recent = []
-    for r in db.execute("SELECT id,snapshot_json,location,reporter,created_at FROM finding_reports WHERE status NOT IN ('resolved','closed') ORDER BY created_at DESC,id DESC LIMIT 5"):
-        recent.append(dict(title=json.loads(r['snapshot_json'])['title'], detail=f"{r['location']} · {r['reporter']}", kind='Report', href=f"#/reporting-inbox/{r['id']}", created_at=r['created_at']))
+    for r in db.execute("SELECT id,snapshot_json,location,reporter,created_at,json_array_length(photos_json) AS photo_count FROM finding_reports WHERE status NOT IN ('resolved','closed') ORDER BY created_at DESC,id DESC LIMIT 5"):
+        recent.append(dict(title=json.loads(r['snapshot_json'])['title'], detail=f"{r['location']} · {r['reporter']}", kind='Report', href=f"#/reporting-inbox/{r['id']}", created_at=r['created_at'],thumbnail_url=f"/api/reporting/reports/{r['id']}/photos/0" if r['photo_count'] else ''))
     for r in db.execute("SELECT id,red_tag_id,section,hazard,created_at FROM redtag_findings WHERE status NOT IN ('Resolved','Closed') ORDER BY created_at DESC,id DESC LIMIT 5"):
-        recent.append(dict(title=r['red_tag_id'], detail=f"{r['section']} · {r['hazard']}", kind='Genba', href=f"#/red-tag/{r['id']}", created_at=r['created_at']))
+        recent.append(dict(title=r['red_tag_id'], detail=f"{r['section']} · {r['hazard']}", kind='Genba', href=f"#/red-tag/{r['id']}", created_at=r['created_at'],thumbnail_url=f"/api/red-tags/{r['id']}/photo"))
     for r in db.execute("SELECT id,inspector_name,remarks,created_at FROM patrols WHERE completed=1 AND followup_status!='resolved' ORDER BY created_at DESC,id DESC LIMIT 5"):
-        recent.append(dict(title=f"Patrol #{r['id']}", detail=f"{r['inspector_name']} · {r['remarks'] or 'Follow up on this inspection'}", kind='Patrol', href=f"#/daily-safety-patrol/{r['id']}", created_at=r['created_at']))
+        recent.append(dict(title=f"Patrol #{r['id']}", detail=f"{r['inspector_name']} · {r['remarks'] or 'Follow up on this inspection'}", kind='Patrol', href=f"#/daily-safety-patrol/{r['id']}", created_at=r['created_at'],thumbnail_url=patrol_cards.first_photo(db,r['id'])))
     h.send_json(200, dict(counts=counts, recent=sorted(recent, key=lambda r: r['created_at'], reverse=True)[:5]))
 
 
@@ -149,7 +150,7 @@ def module_summary(h, db, kind, user):
         table = 'finding_reports'
         owner, owner_args = ('', ()) if kind!='air-leak' or user['role'] in ('admin','executive') else (' AND user_id=?', (user['id'],))
         where, args = "json_extract(snapshot_json,'$.group')=?" + owner, (group, *owner_args)
-        fields = "id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at"
+        fields = "id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at,json_array_length(photos_json) AS photo_count"
     counts = dict(db.execute(f'''SELECT
         COALESCE(SUM(LOWER(status) NOT IN ('resolved','closed')),0) AS active,
         COALESCE(SUM(created_at>=? AND created_at<?),0) AS today,
@@ -164,7 +165,7 @@ def module_summary(h, db, kind, user):
             status='action_taken'
         recent.append(dict(id=r['id'], title=r['title'], detail=r['detail'], reporter=r['reporter'], status=status,
                            status_label=r['status'].replace('_',' '), created_at=r['created_at'],
-                           href=f"#/red-tag/{r['id']}" if kind=='red-tag' else f"#/reporting-inbox/{r['id']}"))
+                           href=f"#/red-tag/{r['id']}" if kind=='red-tag' else f"#/reporting-inbox/{r['id']}",thumbnail_url=f"/api/red-tags/{r['id']}/photo" if kind=='red-tag' else f"/api/reporting/reports/{r['id']}/photos/0" if r['photo_count'] else ''))
     result=dict(counts=counts,recent=recent)
     if kind=='red-tag':
         active = db.execute(f"SELECT {fields} FROM {table} WHERE {where} AND LOWER(status) NOT IN ('resolved','closed') ORDER BY created_at DESC,id DESC LIMIT 500",args).fetchall()

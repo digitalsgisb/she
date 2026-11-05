@@ -14,6 +14,7 @@ COPY qrcodegen.py ./
 COPY redtag-print.js ./
 COPY reporting.py report.html reporting-ui.js reporting.css ./
 COPY finding_orders.py ./
+COPY patrol_cards.py ./
 COPY reporting_alerts.py reporting-alerts.js reporting-push-sw.js ./
 RUN mkdir -p /data && addgroup -S safety && adduser -S -G safety safety && chown -R safety:safety /data /app
 

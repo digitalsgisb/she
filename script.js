@@ -23,6 +23,17 @@ const icon = (name, size = 20) => {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 };
 
+function issueThumbnail(url,label='Issue photo'){
+  return `<span class="issue-thumbnail">${url?`<img data-issue-thumbnail src="${escapeHtml(url)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async">`:icon('camera',24)}</span>`;
+}
+function bindIssueThumbnails(root){
+  root.querySelectorAll('img[data-issue-thumbnail]').forEach(img=>{
+    const fallback=()=>{const box=img.parentElement;if(box){box.innerHTML=icon('camera',24);box.classList.add('issue-thumbnail-empty');}};
+    img.addEventListener('error',fallback,{once:true});
+    if(img.complete&&!img.naturalWidth)fallback();
+  });
+}
+
 const routes = {
   home: { title: 'Home', icon: 'grid' },
   'air-leak': { title: 'Air Leak', icon: 'droplet' },
@@ -107,7 +118,7 @@ function moduleNavigation() {
       : [[moduleEntryRoute(module),'Overview'],[module,'New report'],[module+'?view=active','Current Active'],[module+'?view=history','History']];
   const selected = module==='red-tag'
     ? key==='red-tag-pic'?key:key==='red-tag-home'?'red-tag-home':moduleView()==='history'?'red-tag?view=history':new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1'?'red-tag?new=1':'red-tag-home'
-    : patrol || findingModuleHomes[key] ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
+    : patrol&&key==='daily-safety-patrol'&&/^\d+$/.test(location.hash.split('?')[0].split('/')[2]||'') ? (new URLSearchParams(location.hash.split('?')[1]||'').get('followup')==='1'?'patrol-home':'patrol-overview') : patrol || findingModuleHomes[key] ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
   return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
 }
 const featureDescriptions = {
@@ -290,7 +301,8 @@ async function loadExecutiveOverview() {
     const overview=await api('/api/workspace/overview');
     if(!root.isConnected||currentUser?.id!==userId)return;
     root.querySelectorAll('[data-overview-count]').forEach(el=>el.textContent=overview.counts[el.dataset.overviewCount]??'—');
-    root.querySelector('[data-exec-recent]').innerHTML=overview.recent.length?overview.recent.map(r=>`<a class="exec-recent-row" href="${escapeHtml(r.href)}"><span class="exec-recent-icon">${icon(r.kind==='Genba'?'tag':r.kind==='Patrol'?'clipboard':'leaf',21)}</span><span><small>${escapeHtml(r.kind)} · ${new Date(r.created_at*1000).toLocaleDateString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short'})}</small><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.detail)}</span></span>${icon('chevron',18)}</a>`).join(''):'<div class="exec-empty">'+icon('shield',25)+'<strong>You’re up to date.</strong><p>No open findings or patrol follow-ups to review.</p></div>';
+    root.querySelector('[data-exec-recent]').innerHTML=overview.recent.length?overview.recent.map(r=>`<a class="exec-recent-row" href="${escapeHtml(r.href)}"><span class="exec-recent-icon">${icon(r.kind==='Genba'?'tag':r.kind==='Patrol'?'clipboard':'leaf',21)}</span><span><small>${escapeHtml(r.kind)} · ${new Date(r.created_at*1000).toLocaleDateString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short'})}</small><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.detail)}</span></span>${issueThumbnail(r.thumbnail_url)}${icon('chevron',18)}</a>`).join(''):'<div class="exec-empty">'+icon('shield',25)+'<strong>You’re up to date.</strong><p>No open findings or patrol follow-ups to review.</p></div>';
+    bindIssueThumbnails(root);
   }catch(error){if(root.isConnected)root.querySelector('[data-exec-recent]').innerHTML=`<p class="exec-loading">${escapeHtml(error.message)} <button type="button" class="secondary-button" data-overview-retry>Refresh</button></p>`;root.querySelector('[data-overview-retry]')?.addEventListener('click',loadExecutiveOverview);}
 }
 
@@ -591,7 +603,7 @@ function renderPage() {
   else if (key === 'checklist-builder') renderChecklistBuilder();
   else if (key === 'patrol-overview') renderPatrolOverview();
   else if (key === 'daily-safety-patrol') {
-    const id = location.hash.split('/')[2];
+    const id = location.hash.split('?')[0].split('/')[2];
     if (id && /^\d+$/.test(id)) renderPatrolDetail(id);
     else renderPatrolForm();
   }

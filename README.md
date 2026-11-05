@@ -230,3 +230,7 @@ Print/PDF, date-based CSV export, the Red Tag dashboard and section/PIC manageme
 ## Header profile menu
 
 The header shows the installed-app icon and a profile menu with the signed-in name, role, **My profile** and **Sign out**. My profile opens the existing account page. The menu closes after navigation, outside clicks or Escape, and keeps the header compact on phones.
+
+## Patrol follow-up and photo cards
+
+Report, recent activity and patrol cards show a side photo when available. Missing images use a camera placeholder. Patrol History defaults to all completed patrols, newest first, with compact Week/Month filters and Load older patrols. Needs attention on Patrol Overview includes unresolved findings from any date. Follow up opens that original patrol and its action form; updates and photos stay attached to it. Action taken waits for SHE review, and resolving removes it from Needs attention. Existing account visibility rules apply.

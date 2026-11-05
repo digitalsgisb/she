@@ -28,8 +28,9 @@ async function loadFindingModuleHome(key,quiet=false){
         const active=data.active||[];
         root.querySelector('[data-redtag-active]').innerHTML=active.length?genbaCards(active):'<p class="patrol-empty">No active findings.</p>';
         root.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
-      }else root.querySelector('[data-module-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong></div>`;
+      }else root.querySelector('[data-module-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${issueThumbnail(row.thumbnail_url)}${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong></div>`;
     }
+    bindIssueThumbnails(root);
     root.querySelector('[data-module-home-error]').hidden=true;
     button.hidden=true;
   }catch(error){if(root.isConnected&&currentRoute()===key){const box=root.querySelector('[data-module-home-error]');if(box){box.textContent=error.message;box.hidden=false;button.hidden=false;}}}

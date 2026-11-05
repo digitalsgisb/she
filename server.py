@@ -28,6 +28,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 from cmms_bridge import CmmsError, bridge
 import reporting
 import finding_orders
+import patrol_cards
 import access
 import she_statistics
 import she_monitoring
@@ -717,14 +718,23 @@ class Handler(BaseHTTPRequestHandler):
         days = {r['bucket']: r['count'] for r in db.execute('''SELECT CAST((created_at-?)/86400 AS INTEGER) AS bucket,COUNT(*) AS count
             FROM patrols WHERE completed=1 AND created_at>=? AND created_at<?''' + owner + ' GROUP BY bucket',
             (week_start, week_start, day_end, *params))}
-        recent = []
-        for row in db.execute('SELECT id,inspector_name,created_at,followup_status,remarks,template_json,answers_json FROM patrols WHERE completed=1' + owner + ' ORDER BY created_at DESC,id DESC LIMIT 5', params):
-            template, answers = json.loads(row['template_json']), json.loads(row['answers_json'])
-            checks = [answers.get(q['id']) for q in template['questions'] if q['type']=='status'] if template else answers.values()
-            recent.append(dict(id=row['id'], inspector=row['inspector_name'], created_at=row['created_at'],
-                               status=row['followup_status'], title=template['title'] if template else 'Daily Safety Patrol',
-                               remarks=row['remarks'], findings=sum(value=='not_ok' for value in checks)))
+        default = db.execute('SELECT definition_json FROM patrol_default_template WHERE id=0').fetchone()
+        default_template = json.loads(default['definition_json']) if default else {'questions':[]}
+        recent = [patrol_cards.card(db,row,default_template) for row in db.execute('SELECT * FROM patrols WHERE completed=1' + owner + ' ORDER BY created_at DESC,id DESC LIMIT 5',params)]
+        attention=[]
+        attention_total=0
+        counts['open']=0
+        for row in db.execute("SELECT * FROM patrols WHERE completed=1 AND followup_status!='resolved'" + owner + ' ORDER BY created_at,id',params):
+            item=patrol_cards.card(db,row,default_template,photo=False)
+            if not item['needs_attention']:
+                continue
+            attention_total+=1
+            if item['status']=='open':counts['open']+=1
+            if len(attention)<50:
+                item['thumbnail_url']=patrol_cards.first_photo(db,row['id'])
+                attention.append(item)
         self.send_json(200, dict(scope='team' if team else 'mine', date=today.date().isoformat(), counts=counts, recent=recent,
+                                 attention=attention,attention_total=attention_total,
                                  week=[dict(date=(today-timedelta(days=6-i)).date().isoformat(), count=days.get(i,0)) for i in range(7)]))
 
     def patrol_get(self, db: sqlite3.Connection, path: str, user: sqlite3.Row) -> None:
@@ -732,25 +742,40 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(urlsplit(self.path).query)
             owner_clause = " AND p.user_id=?" if user["role"] not in ("admin", "executive") else ""
             owner_params = (user["id"],) if owner_clause else ()
+            paged=query.get('history')==['1']
+            next_cursor=None
+            conditions=['p.completed=1']
+            args=[]
+            if owner_clause:
+                conditions.append('p.user_id=?');args.extend(owner_params)
             if "start" in query or "end" in query:
                 try:
-                    start = int(query["start"][0])
-                    end = int(query["end"][0])
-                    if not 0 <= start < end <= 4_102_444_800 or end - start > 32 * 86_400:
-                        raise ValueError
-                except (KeyError, ValueError, IndexError):
-                    self.error_json(400, "Choose a valid week or month.")
-                    return
-                rows = db.execute("SELECT p.*,u.display_name AS submitted_by "
-                                  "FROM patrols p JOIN users u ON u.id=p.user_id "
-                                  f"WHERE p.completed=1 AND p.created_at>=? AND p.created_at<?{owner_clause} ORDER BY p.created_at DESC,p.id DESC",
-                                  (start, end, *owner_params)).fetchall()
-            else:
-                rows = db.execute("SELECT p.*,u.display_name AS submitted_by "
-                                  f"FROM patrols p JOIN users u ON u.id=p.user_id WHERE p.completed=1{owner_clause} "
-                                  "ORDER BY p.created_at DESC,p.id DESC LIMIT 100", owner_params).fetchall()
+                    start,end=int(query['start'][0]),int(query['end'][0])
+                    if not 0<=start<end<=4_102_444_800 or end-start>32*86_400:raise ValueError
+                except (KeyError,ValueError,IndexError):
+                    self.error_json(400,'Choose a valid week or month.');return
+                conditions.append('p.created_at>=? AND p.created_at<?');args.extend((start,end))
+            if paged:
+                try:
+                    size=int(query.get('limit',['50'])[0])
+                    if not 1<=size<=100:raise ValueError
+                    if query.get('cursor'):
+                        stamp,identifier=map(int,query['cursor'][0].split(':'))
+                        if not 0<=stamp<=4_102_444_800 or identifier<1:raise ValueError
+                        conditions.append('(p.created_at<? OR (p.created_at=? AND p.id<?))');args.extend((stamp,stamp,identifier))
+                except (ValueError,IndexError):
+                    self.error_json(400,'Invalid patrol history page.');return
+            limit=' LIMIT ?' if paged else (' LIMIT 100' if 'start' not in query else '')
+            rows=db.execute('SELECT p.*,u.display_name AS submitted_by FROM patrols p JOIN users u ON u.id=p.user_id WHERE '+
+                            ' AND '.join(conditions)+' ORDER BY p.created_at DESC,p.id DESC'+limit,(*args,size+1) if paged else args).fetchall()
+            if paged and len(rows)>size:
+                rows=rows[:size]
+                next_cursor=f"{rows[-1]['created_at']}:{rows[-1]['id']}"
+            default=db.execute('SELECT definition_json FROM patrol_default_template WHERE id=0').fetchone()
+            default_template=json.loads(default['definition_json']) if default else {'questions':[]}
             patrols = []
             for row in rows:
+                card=patrol_cards.card(db,row,default_template)
                 answers = json.loads(row["answers_json"])
                 template = json.loads(row['template_json'])
                 status_answers = [answers.get(q['id']) for q in template['questions'] if q['type'] == 'status'] if template else list(answers.values())
@@ -763,9 +788,9 @@ class Handler(BaseHTTPRequestHandler):
                                 'title': template['title'] if template else 'Daily Safety Patrol Checklist',
                                 'remarks': row['remarks'],
                                 'followup_status': row['followup_status'],
-                                'update_count': db.execute('SELECT COUNT(*) FROM patrol_updates WHERE patrol_id=?', (row['id'],)).fetchone()[0],
+                                'update_count':card['update_count'],'thumbnail_url':card['thumbnail_url'],'issues':card['issues'],'needs_attention':card['needs_attention'],
                                 'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL ORDER BY created_at,id', (row['id'],))]})
-            self.send_json(200, {"patrols": patrols})
+            self.send_json(200, {"patrols": patrols,"next_cursor":next_cursor})
             return
         match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)
         patrol_id, attachment_id = int(match.group(1)), match.group(2)
@@ -797,13 +822,15 @@ class Handler(BaseHTTPRequestHandler):
         updates = []
         for update in db.execute('SELECT p.*,u.display_name AS author,u.role AS role FROM patrol_updates p JOIN users u ON u.id=p.user_id WHERE patrol_id=? ORDER BY created_at,id', (patrol_id,)):
             updates.append({**dict(update), 'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size FROM patrol_attachments WHERE patrol_id=? AND update_id=? ORDER BY created_at,id', (patrol_id, update['id']))]})
+        default=db.execute('SELECT definition_json FROM patrol_default_template WHERE id=0').fetchone()
+        issues=patrol_cards.finding_items(row,json.loads(default['definition_json']) if default else {'questions':[]})
         self.send_json(200, {"patrol": {"id": row["id"], "inspector_name": row["inspector_name"],
                                       "answers": json.loads(row["answers_json"]), "rating": row["rating"],
                                       'item_remarks': json.loads(row['item_remarks_json']),
                                       "remarks": row["remarks"], "created_at": row["created_at"],
                                       "submitted_by": row["submitted_by"],
                                       'template': json.loads(row['template_json']), 'completed': bool(row['completed']),
-                                      'followup_status': row['followup_status'], 'updates': updates,
+                                      'followup_status': row['followup_status'], 'updates': updates,'issues':issues,
                                       "attachments": [dict(item) for item in attachments]}})
 
     def create_patrol(self, db: sqlite3.Connection, data: dict, user: sqlite3.Row) -> None:

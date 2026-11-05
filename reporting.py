@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import re
 import secrets
 import sqlite3
@@ -19,6 +20,7 @@ RATE_LOCK = Lock()
 ATTEMPTS = {}
 GROUPS = ('environment', 'hiyari-hatto', 'kaizen', 'air-leak')
 STATUSES = ('open', 'in_progress', 'resolved', 'closed')
+LOG = logging.getLogger(__name__)
 
 
 def init(db):
@@ -218,6 +220,38 @@ def sync_order_photos(db, row):
         message = str(error) if isinstance(error, (CmmsError, ValueError)) else 'Could not copy report photos. Retry copying photos to the existing work order.'
         db.execute("UPDATE finding_order_photos SET state='failed',error=? WHERE report_id=?", (message, row['id']))
     db.commit()
+
+
+def sync_pending_order_photos(database, stop=None):
+    """Catch up old linked reports and retry failed/stalled photo transfers fairly."""
+    with database() as db:
+        ids = [r['id'] for r in db.execute('''
+            SELECT r.id FROM finding_reports r
+            LEFT JOIN finding_order_photos p ON p.report_id=r.id
+            WHERE r.order_state='issued' AND r.order_id!=''
+              AND (p.report_id IS NULL OR p.state='pending'
+                   OR (p.state IN ('failed','sending') AND p.started_at<?))
+            ORDER BY COALESCE(p.started_at,0),r.id LIMIT 20
+        ''', (int(time.time()) - 300,))]
+    for report_id in ids:
+        if stop is not None and stop.is_set():
+            break
+        with database() as db:
+            row = db.execute('SELECT * FROM finding_reports WHERE id=?', (report_id,)).fetchone()
+            if row and row['order_state'] == 'issued' and row['order_id']:
+                sync_order_photos(db, row)
+
+
+def run_order_photo_sync(database, stop):
+    """Run immediately at startup, then poll without delaying HTTP requests."""
+    while not stop.is_set():
+        try:
+            if bridge.configured:
+                sync_pending_order_photos(database, stop)
+        except Exception:
+            LOG.exception('Automatic CMMS report photo sync failed; it will retry.')
+        if stop.wait(60):
+            break
 
 
 def cmms_photo(content, mime, filename):

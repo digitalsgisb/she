@@ -3,7 +3,7 @@ import json
 import base64
 import uuid
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, PropertyMock, patch
 import reporting
 import server
 from test_server import AccountFlowTests
@@ -166,6 +166,37 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual((mime, filename), ('image/jpeg', 'large.jpg'))
         self.assertTrue(content.startswith(b'\xff\xd8\xff'))
 
+    def test_automatic_photo_catch_up_and_retry_cooldown(self):
+        with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', return_value={'id': 'WO-old'}) as create:
+            self.request('/api/reporting/submit', 'POST', self.payload(1))
+            self.request('/api/reporting/submit', 'POST', self.payload(2))
+            with server.database() as db:
+                db.execute('DELETE FROM finding_order_photos')
+            self.photo_upload.reset_mock()
+            self.photo_upload.side_effect = CmmsError(502, 'CMMS offline')
+            reporting.sync_pending_order_photos(server.database)
+            self.assertEqual(self.photo_upload.call_count, 1)
+            with server.database() as db:
+                sync = db.execute('SELECT * FROM finding_order_photos').fetchone()
+                self.assertEqual(sync['state'], 'failed')
+                started = sync['started_at']
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM finding_order_photos').fetchone()[0], 1)
+            reporting.sync_pending_order_photos(server.database)
+            self.assertEqual(self.photo_upload.call_count, 1)
+            self.photo_upload.side_effect = None
+            with patch.object(reporting.time, 'time', return_value=started + 301):
+                reporting.sync_pending_order_photos(server.database)
+            self.assertEqual(self.photo_upload.call_count, 2)
+            reporting.sync_pending_order_photos(server.database)
+            self.assertEqual(self.photo_upload.call_count, 2)
+            # Recover a transfer interrupted by a restart after its lease expires.
+            with server.database() as db:
+                db.execute("UPDATE finding_order_photos SET state='sending',started_at=0,uploaded_json='[]'")
+            reporting.sync_pending_order_photos(server.database)
+            self.assertEqual(self.photo_upload.call_count, 3)
+            self.assertEqual(create.call_count, 1)
+            self.assertEqual(self.photo_upload.call_args.args[0], 'WO-old')
+
     def test_linked_uncertain_order_copies_photos_and_active_copy_is_not_repeated(self):
         cookie, csrf = self.elevated()
         with patch.object(reporting.bridge, 'identity', return_value={'id': 'she'}), patch.object(reporting.bridge, 'call', side_effect=CmmsError(502, 'Timed out')) as create:
@@ -313,6 +344,42 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(self.request('/api/reporting/reports/1')[0], 401)
         listed = self.request('/api/reporting/reports', cookie=cookie)[1]['reports'][0]
         self.assertNotIn('photos', listed)
+
+
+class OrderPhotoWorkerTests(unittest.TestCase):
+    def test_worker_runs_immediately_and_recovers_after_an_error(self):
+        stop = Mock()
+        stop.is_set.return_value = False
+        stop.wait.side_effect = [False, True]
+        database = Mock()
+        with patch.object(type(reporting.bridge), 'configured', new_callable=PropertyMock, return_value=True), patch.object(reporting, 'sync_pending_order_photos', side_effect=[RuntimeError('temporary'), None]) as sync, self.assertLogs(reporting.LOG, level='ERROR'):
+            reporting.run_order_photo_sync(database, stop)
+        self.assertEqual(sync.call_count, 2)
+        sync.assert_called_with(database, stop)
+        self.assertEqual(stop.wait.call_args_list[0].args, (60,))
+
+    def test_worker_waits_when_cmms_is_not_configured(self):
+        stop = Mock()
+        stop.is_set.return_value = False
+        stop.wait.return_value = True
+        with patch.object(type(reporting.bridge), 'configured', new_callable=PropertyMock, return_value=False), patch.object(reporting, 'sync_pending_order_photos') as sync:
+            reporting.run_order_photo_sync(Mock(), stop)
+        sync.assert_not_called()
+        stop.wait.assert_called_once_with(60)
+
+    def test_server_starts_and_stops_automatic_photo_worker(self):
+        with patch.object(server.sys, 'argv', ['server.py']), patch.object(server, 'init_db') as init, patch.object(server, 'ThreadingHTTPServer') as http, patch.object(server, 'Thread') as thread:
+            server.main()
+        init.assert_called_once()
+        self.assertEqual(thread.call_args.kwargs['target'], reporting.run_order_photo_sync)
+        database, stop = thread.call_args.kwargs['args']
+        self.assertIs(database, server.database)
+        self.assertTrue(stop.is_set())
+        self.assertTrue(thread.call_args.kwargs['daemon'])
+        thread.return_value.start.assert_called_once()
+        http.return_value.serve_forever.assert_called_once()
+        http.return_value.server_close.assert_called_once()
+        thread.return_value.join.assert_called_once_with(timeout=1)
 
 
 if __name__ == '__main__':

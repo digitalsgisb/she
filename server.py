@@ -21,7 +21,7 @@ from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread
 from urllib.parse import parse_qs, quote, urlsplit
 
 from cmms_bridge import CmmsError, bridge
@@ -1085,8 +1085,17 @@ def main() -> None:
         return
     init_db()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    photo_sync_stop = Event()
+    photo_sync_worker = Thread(target=reporting.run_order_photo_sync, args=(database, photo_sync_stop),
+                               name='she-order-photos', daemon=True)
+    photo_sync_worker.start()
     print(f"SHE Digital listening on port {PORT}", flush=True)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        photo_sync_stop.set()
+        server.server_close()
+        photo_sync_worker.join(timeout=1)
 
 
 if __name__ == "__main__":

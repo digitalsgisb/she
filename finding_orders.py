@@ -135,30 +135,38 @@ def overview(h, db, user):
 
 
 def module_summary(h, db, kind, user):
-    """Use the same record visibility as each source module; omit photo payloads."""
+    """Use source visibility, aggregate counts, and never load photo payloads."""
     today = int(datetime.now(timezone(timedelta(hours=8))).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
     if kind == 'red-tag':
+        table = 'redtag_findings'
         where, args = ('1=1', ()) if 'red-tag' in access.features(user) else ('assigned_user_id=?', (user['id'],))
-        rows = db.execute('SELECT id,red_tag_id AS title,section AS detail,issued_by AS reporter,status,created_at FROM redtag_findings WHERE ' + where + ' ORDER BY created_at DESC,id DESC', args).fetchall()
+        fields = 'id,red_tag_id AS title,section AS detail,issued_by AS reporter,status,created_at,pic,machine,hazard,rank'
     else:
         group = {'hiyari-hatto':'hiyari-hatto', 'air-leak':'air-leak'}.get(kind)
         if not group:
             h.error_json(404, 'Module not found.')
             return
-        owner, args = ('', ()) if kind!='air-leak' or user['role'] in ('admin','executive') else (' AND user_id=?', (user['id'],))
-        rows = db.execute('''SELECT id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at
-            FROM finding_reports WHERE json_extract(snapshot_json,'$.group')=?''' + owner + ' ORDER BY created_at DESC,id DESC', (group, *args)).fetchall()
-    closed = {'resolved','closed'}
-    counts = dict(active=sum(r['status'].lower() not in closed for r in rows),
-                  today=sum(today<=r['created_at']<today+86400 for r in rows),
-                  history=sum(r['status'].lower() in closed for r in rows),
-                  review=sum(r['status'].lower()=='action taken · awaiting review' for r in rows))
+        table = 'finding_reports'
+        owner, owner_args = ('', ()) if kind!='air-leak' or user['role'] in ('admin','executive') else (' AND user_id=?', (user['id'],))
+        where, args = "json_extract(snapshot_json,'$.group')=?" + owner, (group, *owner_args)
+        fields = "id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at"
+    counts = dict(db.execute(f'''SELECT
+        COALESCE(SUM(LOWER(status) NOT IN ('resolved','closed')),0) AS active,
+        COALESCE(SUM(created_at>=? AND created_at<?),0) AS today,
+        COALESCE(SUM(LOWER(status) IN ('resolved','closed')),0) AS history,
+        COALESCE(SUM(LOWER(status)='action taken · awaiting review'),0) AS review
+        FROM {table} WHERE {where}''', (today,today+86400,*args)).fetchone())
+    rows = db.execute(f'SELECT {fields} FROM {table} WHERE {where} ORDER BY created_at DESC,id DESC LIMIT 5',args).fetchall()
     recent=[]
-    for r in rows[:5]:
+    for r in rows:
         status=r['status'].lower().replace(' ', '_')
         if status not in ('open','in_progress','resolved','closed'):
             status='action_taken'
         recent.append(dict(id=r['id'], title=r['title'], detail=r['detail'], reporter=r['reporter'], status=status,
                            status_label=r['status'].replace('_',' '), created_at=r['created_at'],
                            href=f"#/red-tag/{r['id']}" if kind=='red-tag' else f"#/reporting-inbox/{r['id']}"))
-    h.send_json(200, dict(counts=counts,recent=recent))
+    result=dict(counts=counts,recent=recent)
+    if kind=='red-tag':
+        active = db.execute(f"SELECT {fields} FROM {table} WHERE {where} AND LOWER(status) NOT IN ('resolved','closed') ORDER BY created_at DESC,id DESC LIMIT 500",args).fetchall()
+        result['active']=[dict(id=r['id'],red_tag_id=r['title'],section=r['detail'],issued_by=r['reporter'],status=r['status'],pic=r['pic'],machine=r['machine'],hazard=r['hazard'],rank=r['rank']) for r in active]
+    h.send_json(200,result)

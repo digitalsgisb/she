@@ -14,7 +14,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
    if(path==='/api/session')return json({user:{id:1,role:'executive',display_name:'SHE Executive'},csrf_token:'test'});
    if(path.startsWith('/api/workspace/modules/')){
     const kind=path.split('/').pop(),title=kind==='red-tag'?'RT-202611-006':kind==='air-leak'?'Air Leak':'Hiyari Hatto';
-    return json({counts:{active:3,today:1,history:8,review:1},recent:[{id:6,title,detail:'Production · Packing line',reporter:'Sara',status:'open',status_label:'Open',created_at:1793850000,href:kind==='red-tag'?'#/red-tag/6':'#/reporting-inbox/6'}]});
+    return json({counts:{active:3,today:1,history:8,review:1},active:[{id:6,red_tag_id:title,section:'Production',machine:'Packing line',pic:'Sara',status:'Open',hazard:'Guard needs action'}],recent:[{id:6,title,detail:'Production · Packing line',reporter:'Sara',status:'open',status_label:'Open',created_at:1793850000,href:kind==='red-tag'?'#/red-tag/6':'#/reporting-inbox/6'}]});
    }
    if(path==='/api/patrols/summary')return json({scope:'team',date:'2026-11-05',counts:{today:0,month:0,open:0,awaiting_review:0},week:[],recent:[]});
    if(path==='/api/patrol-templates'){if(delay)await new Promise(r=>setTimeout(r,250));return json({templates:[template]});}
@@ -56,7 +56,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   await page.waitForTimeout(350);await checkIndicator();
   for(const [home,module] of [['red-tag-home','red-tag'],['hiyari-home','hiyari-hatto'],['air-leak-home','air-leak']]){
    await page.goto('https://she.test/#/'+home);await page.locator('[data-module-count=active]').filter({hasText:'3'}).waitFor();
-   assert.equal(await page.locator('.module-home-record').count(),1);
+   assert.equal(await page.locator(module==='red-tag'?'[data-genba-id]':'.module-home-record').count(),1);
    await page.evaluate(()=>window.moduleTabs=document.querySelector('.module-tabs'));
    for(const width of [320,390,1280]){
     await page.setViewportSize({width,height:844});await page.waitForTimeout(350);await checkIndicator();
@@ -64,10 +64,12 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
     if(width===390)await page.screenshot({path:`.qa-temp/${home}-mobile.png`,fullPage:true});
    }
    await page.setViewportSize({width:390,height:844});
+   if(module!=='red-tag'){
    await page.locator(`.module-tabs a[href="#/${module}?view=active"]`).click();
    await page.waitForTimeout(400);
    assert(await page.evaluate(()=>window.moduleTabs===document.querySelector('.module-tabs')));
    assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'Current Active');await checkIndicator();
+   }
    await page.locator(`.module-tabs a[href="#/${module}?view=history"]`).click();await page.waitForTimeout(400);
    assert(await page.evaluate(()=>window.moduleTabs===document.querySelector('.module-tabs')));
    assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'History');await checkIndicator();

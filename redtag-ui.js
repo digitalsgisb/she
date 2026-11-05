@@ -3,7 +3,6 @@ let genbaDate = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Kuala_Lumpur', 
 let genbaSettings = null;
 let genbaRows = [];
 let genbaShowCompleted=false;
-let genbaCommitteeFilter='all';
 const genbaCommittee = () => currentUser?.role==='safety_committee';
 const genbaInbox = () => currentRoute()==='red-tag-pic';
 const genbaRouteActive = () => ['red-tag','red-tag-pic'].includes(currentRoute());
@@ -27,53 +26,29 @@ function genbaError(error, target=content) {
   if(!box){box=document.createElement('p');box.className='form-error';box.dataset.genbaError='';target.prepend(box);}
   box.textContent=error.message;box.hidden=false;
 }
+function genbaCards(rows,assigned=false){
+  return rows.map(r=>`<button class="genba-record" data-genba-id="${r.id}"><img src="/api/red-tags/${r.id}/photo" alt="Finding at ${escapeHtml(r.section)}" loading="lazy"><span class="genba-record-body"><strong>${escapeHtml(r.red_tag_id)}</strong><span class="state-badge">${escapeHtml(r.status==='Action taken · awaiting review'?'For review':r.status)}</span><h2>${escapeHtml(r.section)}</h2><span>${escapeHtml(r.machine)} · PIC ${escapeHtml(r.pic)}</span><p>${escapeHtml(r.hazard)}</p><span class="genba-card-action">${assigned?'Update action':'View finding'} →</span></span></button>`).join('');
+}
+async function refreshGenbaSource(){
+  if(currentRoute()==='red-tag-home')await loadFindingModuleHome('red-tag-home');
+  else if(genbaRouteActive())await renderGenba();
+}
 let genbaRenderSequence=0;
-async function renderGenba(quiet=false) {
-  const sequence=++genbaRenderSequence, route=currentRoute(), hash=location.hash, day=genbaDate;
-  if(!quiet)renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">Loading safety genba…</div></div>');
-  try {
-    const [config, result]=await Promise.all([api('/api/red-tags/settings'),api(genbaInbox()?'/api/red-tags?inbox=1':moduleView()==='checklist'?'/api/red-tags?date='+genbaDate:'/api/red-tags?view='+moduleView())]);
-    if(!genbaRouteActive()||currentRoute()!==route||location.hash!==hash||genbaDate!==day||sequence!==genbaRenderSequence)return;
+async function renderGenba(quiet=false){
+  const sequence=++genbaRenderSequence,route=currentRoute(),hash=location.hash;
+  if(!quiet)renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">Loading findings…</div></div>');
+  try{
+    const [config,result]=await Promise.all([api('/api/red-tags/settings'),api(genbaInbox()?'/api/red-tags?inbox=1':'/api/red-tags?view='+(moduleView()==='history'?'history':'active'))]);
+    if(!genbaRouteActive()||currentRoute()!==route||location.hash!==hash||sequence!==genbaRenderSequence)return;
+    content.querySelector('[data-genba-error]')?.remove();
     if(quiet&&JSON.stringify(result.findings)===JSON.stringify(genbaRows))return;
     genbaSettings=config;genbaRows=result.findings;
-    const visibleRows=genbaInbox()&&!genbaShowCompleted?genbaRows.filter(r=>!['Resolved','Closed'].includes(r.status)):genbaRows;
-    renderSafetyModuleContent('<div class="page inner-page">'+moduleNavigation()+'<div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SAFETY / TUESDAY GENBA</span><h1>'+ (genbaInbox()?'My Red Tag Actions':'Red Tag · Safety genba') +'</h1><p>'+(genbaInbox()?'Open a finding, take action, and send an after photo to SHE.':'Record hazards during the committee genba, assign a PIC, and follow actions through to verification.')+'</p></div>'+(!genbaInbox()?'<button class="primary-button" id="genbaNew">+ New finding</button>':'')+'</div>'+'<div class="genba-toolbar">'+(!genbaInbox()?'<label>Genba date<input id="genbaDate" type="date" value="'+genbaDate+'"></label><a class="secondary-button" target="_blank" rel="noopener" href="/api/red-tags/print?date='+genbaDate+'">Print findings / Save PDF</a><a class="secondary-button" href="/api/red-tags/export?date='+genbaDate+'">Export for Google Sheets</a>':'')+'<button class="secondary-button" id="genbaRefresh">Refresh</button>'+(genbaInbox()?'<label class="genba-completed-toggle"><input id="genbaCompleted" type="checkbox" '+(genbaShowCompleted?'checked':'')+'> Show completed</label>':'')+(genbaManager()?''+(['admin','executive'].includes(currentUser.role)?'<a class="secondary-button" href="#/red-tag-dashboard">Open dashboard</a>':'')+'<button class="secondary-button" id="genbaMaster">Manage sections &amp; PICs</button>':'')+'</div>'+(!genbaInbox()?'<p class="field-hint">Tuesday is the regular safety genba day. You can record and print findings for any date. Before pictures stay in SHE Digital; CSV exports contain the finding details.</p>':'')+'<div class="genba-summary"><strong>'+genbaRows.length+' '+(genbaInbox()?'assigned findings':'findings')+'</strong><span>'+genbaRows.filter(r=>['Open','In progress'].includes(r.status)).length+' to do</span><span>'+genbaRows.filter(r=>r.status==='Action taken · awaiting review').length+' awaiting SHE verification</span></div><div class="genba-grid">'+visibleRows.map(r=>'<button class="genba-record" data-genba-id="'+r.id+'"><img src="/api/red-tags/'+r.id+'/photo" alt="Before picture" loading="lazy"><span class="genba-record-body"><strong>'+escapeHtml(r.red_tag_id)+'</strong><span class="state-badge">'+escapeHtml(r.status)+'</span><h2>'+escapeHtml(r.section)+'</h2><span>'+escapeHtml(r.machine)+' · PIC '+escapeHtml(r.pic)+'</span><p>'+escapeHtml(r.hazard)+'</p><small>Rank '+escapeHtml(r.rank)+' · '+escapeHtml(r.issued_by)+(r.printed_at?' · Printed':'')+'</small><span class="genba-card-action">'+(genbaInbox()?'Open &amp; take action':'View finding')+' →</span></span></button>').join('')+'</div>'+(!visibleRows.length?'<div class="category-empty">'+(genbaInbox()?"You're up to date. New findings assigned to you will appear here.":'No findings for this date. Add the first genba finding.')+'</div>':'')+'</div>');
-    if(genbaCommittee()&&!genbaInbox()&&moduleView()==='checklist'){genbaShowCommittee();return;}
-    if(!genbaInbox()&&moduleView()!=='checklist'){
-      content.querySelector('h1').textContent='Red Tag · '+(moduleView()==='active'?'Current Active':'History');
-      content.querySelector('#genbaDate')?.closest('label').remove();
-      content.querySelectorAll('a[href^="/api/red-tags/"]').forEach(link=>link.remove());
-      const empty=content.querySelector('.category-empty');if(empty)empty.textContent=moduleView()==='active'?'No active findings.':'No completed findings yet.';
-    }
-    if(document.getElementById('genbaDate'))document.getElementById('genbaDate').onchange=e=>{if(e.target.value){genbaDate=e.target.value;renderGenba();}};
-    document.getElementById('genbaRefresh').onclick=()=>renderGenba();
-    document.getElementById('genbaCompleted')?.addEventListener('change',e=>{genbaShowCompleted=e.target.checked;renderGenba();});
-    document.getElementById('genbaNew')?.addEventListener('click',genbaNew);
-    document.getElementById('genbaMaster')?.addEventListener('click',genbaMaster);
-    content.querySelectorAll('[data-genba-id]').forEach(b=>b.onclick=()=>genbaDetail(b.dataset.genbaId));
+    const rows=genbaInbox()&&!genbaShowCompleted?genbaRows.filter(r=>!['Resolved','Closed'].includes(r.status)):genbaRows;
+    const title=genbaInbox()?'Assigned to me':moduleView()==='history'?'Red Tag history':'Red Tag';
+    renderSafetyModuleContent(`<div class="page inner-page"><div class="page-heading genba-compact-heading"><div><h1>${title}</h1>${genbaInbox()?'<p>Cases assigned to you as PIC.</p>':''}</div><small class="genba-live-status" role="status">Live</small></div>${genbaInbox()?`<label class="genba-completed-toggle"><input id="genbaCompleted" type="checkbox" ${genbaShowCompleted?'checked':''}> Show completed</label>`:''}<div class="genba-grid">${genbaCards(rows,genbaInbox())}</div>${!rows.length?`<p class="category-empty">${genbaInbox()?'No cases assigned to you.':moduleView()==='history'?'No completed findings.':'No active findings.'}</p>`:''}</div>`);
+    document.getElementById('genbaCompleted')?.addEventListener('change',event=>{genbaShowCompleted=event.target.checked;renderGenba();});
+    content.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
   }catch(error){if(genbaRouteActive()&&location.hash===hash&&sequence===genbaRenderSequence)genbaError(error);}
-}
-function genbaShowCommittee() {
-  renderSafetyModuleContent(genbaCommitteePage());
-  content.querySelector('.page').insertAdjacentHTML('afterbegin',moduleNavigation());
-  content.querySelectorAll('[data-genba-filter]').forEach(button=>button.onclick=()=>{
-    genbaCommitteeFilter=button.dataset.genbaFilter;
-    genbaShowCommittee();
-    content.querySelector(`[data-genba-filter="${genbaCommitteeFilter}"]`).focus({preventScroll:true});
-  });
-  document.getElementById('genbaDate').onchange=e=>{if(e.target.value){genbaDate=e.target.value;renderGenba();}};
-  document.getElementById('genbaRefresh').onclick=()=>renderGenba();
-  document.getElementById('genbaNew').onclick=genbaNew;
-  content.querySelector('[data-start-finding]')?.addEventListener('click',genbaNew);
-  content.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
-}
-
-function genbaCommitteePage() {
-  const groups=[['all','All findings'],['todo','To do'],['review','For review'],['done','Completed']];
-  const matches=r=>genbaCommitteeFilter==='all'||(genbaCommitteeFilter==='todo'&&['Open','In progress'].includes(r.status))||(genbaCommitteeFilter==='review'&&r.status==='Action taken · awaiting review')||(genbaCommitteeFilter==='done'&&['Resolved','Closed'].includes(r.status));
-  const rows=genbaRows.filter(matches);
-  const status=r=>r.status==='Action taken · awaiting review'?'SHE review':r.status;
-  return `<div class="page inner-page committee-page"><section class="committee-hero"><div class="committee-hero-copy"><span class="committee-kicker">YOUR SAFETY WALK</span><h1>Spot it.<br>Make it safer.</h1><p>See a hazard? Capture it now.<br>We’ll follow the action together.</p><button class="committee-primary" id="genbaNew">${icon('tag',20)}<span>Add a finding</span>${icon('arrow',18)}</button></div><span class="committee-hero-art" aria-hidden="true">${icon('shield',62)}<i>+</i></span></section><div class="committee-datebar"><label for="genbaDate"><span>Walk date</span><input id="genbaDate" type="date" value="${genbaDate}" aria-label="Walk date"></label><button id="genbaRefresh" class="committee-icon-button" aria-label="Refresh findings" title="Refresh findings">${icon('refresh',21)}</button></div><div class="committee-list-heading"><div><span class="committee-kicker">SPOT · SHARE · FOLLOW UP</span><h2>Your walk, at a glance</h2></div><span class="committee-count">${genbaRows.length}</span></div><div class="committee-filters" aria-label="Filter findings">${groups.map(([key,label])=>`<button type="button" data-genba-filter="${key}" aria-pressed="${genbaCommitteeFilter===key}" class="${genbaCommitteeFilter===key?'selected':''}">${label}</button>`).join('')}</div><div class="committee-findings">${rows.map(r=>`<button class="committee-finding" data-genba-id="${r.id}"><img src="/api/red-tags/${r.id}/photo" alt="Hazard at ${escapeHtml(r.section)}" loading="lazy"><span class="committee-finding-body"><span class="committee-finding-meta"><small>${escapeHtml(r.red_tag_id)}</small><span class="committee-status ${['Resolved','Closed'].includes(r.status)?'done':r.status==='Action taken · awaiting review'?'review':'todo'}">${escapeHtml(status(r))}</span></span><strong>${escapeHtml(r.section)}</strong><span>${escapeHtml(r.machine)}</span><p>${escapeHtml(r.hazard)}</p><span class="committee-finding-footer">PIC · ${escapeHtml(r.pic)} <b>View finding ${icon('arrow',15)}</b></span></span></button>`).join('')}</div>${!rows.length?`<section class="committee-empty"><span class="committee-empty-symbol">${icon(genbaCommitteeFilter==='all'?'tag':'shield',34)}</span><h3>${genbaCommitteeFilter==='all'?'A safer walk starts here':'Nothing in this view yet'}</h3><p>${genbaCommitteeFilter==='all'?'Look around, spot a hazard, and turn it into an action. Your findings for this date will appear here.':'Try another filter or walk date to find what you’re looking for.'}</p>${genbaCommitteeFilter==='all'?'<button class="committee-text-button" data-start-finding>Add your first finding →</button>':''}</section>`:''}<p class="committee-footnote">${icon('shield',14)} Every finding helps someone get home safely.</p></div>`;
 }
 
 function genbaFindingGuide(form) {
@@ -146,18 +121,18 @@ function genbaNew() {
       const fingerprint=JSON.stringify(draft);
       if(!pending||pending.fingerprint!==fingerprint)pending={fingerprint,body:{...draft,request_key:crypto.randomUUID()}};
       const result=await api('/api/red-tags','POST',pending.body);
-      genbaDate=result.finding.finding_date;if(guide)genbaCommitteeFilter='all';closeModal();notify('Finding saved: '+result.finding.red_tag_id);await renderGenba();
+      genbaDate=result.finding.finding_date;closeModal();notify('Finding saved: '+result.finding.red_tag_id);if(genbaRouteActive())await renderGenba();
     }catch(error){genbaError(error,form);}finally{button.disabled=false;}
   };
 }
 async function genbaDetail(id) {
   try {
-    const route=currentRoute();const result=await api('/api/red-tags/'+id);if(!genbaRouteActive()||currentRoute()!==route)return;const r=result.finding;
+    const route=currentRoute();const result=await api('/api/red-tags/'+id);if((!genbaRouteActive()&&currentRoute()!=='red-tag-home')||currentRoute()!==route)return;const r=result.finding;
     const simplePIC=genbaInbox()&&!genbaManager();
     const canUpdate=(genbaManager()||r.user_id===currentUser.id||r.assigned_user_id===currentUser.id)&&(!simplePIC||!['Resolved','Closed'].includes(r.status));
     modalBody.innerHTML='<h2 id="modalTitle">'+escapeHtml(r.red_tag_id)+'</h2><img class="genba-detail-photo" src="/api/red-tags/'+r.id+'/photo" alt="Before picture"><dl class="genba-details">'+[['Date',r.finding_date],['Section',r.section],['Machine / Equipment',r.machine],['PIC',r.pic],['Type of stop',r.type_of_stop],['Rank',r.rank],['Status',r.status],['Issue by',r.issued_by]].map(([k,v])=>'<dt>'+k+'</dt><dd>'+escapeHtml(v)+'</dd>').join('')+'</dl><h3>Hazard identified</h3><p class="genba-text">'+escapeHtml(r.hazard)+'</p><h3>Recommendation</h3><p class="genba-text">'+escapeHtml(r.recommendation)+'</p><h3>Action history</h3>'+result.updates.map(u=>'<div class="genba-update"><strong>'+escapeHtml(u.actor)+' · '+escapeHtml(u.status)+'</strong><small>'+escapeHtml(new Date(u.created_at*1000).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur'}))+'</small><p class="genba-text">'+escapeHtml(u.note)+'</p>'+(u.has_after_photo?'<a href="/api/red-tags/'+r.id+'/updates/'+u.id+'/photo" target="_blank" rel="noopener"><img class="genba-detail-photo" src="/api/red-tags/'+r.id+'/updates/'+u.id+'/photo" alt="After picture"></a>':'')+'</div>').join('')+(!result.updates.length?'<p>No action updates yet.</p>':'')+(canUpdate?'<form id="genbaUpdate" class="stacked-form"><label>Status<select name="status">'+(genbaManager()?['Open','In progress','Action taken · awaiting review','Resolved','Closed']:['Open','In progress','Action taken · awaiting review']).map(s=>'<option '+(s===r.status?'selected':'')+'>'+s+'</option>').join('')+'</select></label><label>Action note<textarea name="note" maxlength="2000" rows="3" required></textarea></label><label>After picture<input name="after_photo" type="file" accept="image/jpeg,image/png,image/webp"><small>JPEG, PNG or WebP · up to 2 MB. Required when submitting an action for review.</small></label><p class="form-error" data-genba-error hidden></p><button type="submit" class="primary-button">Save action</button></form>':'')+'<div class="modal-actions"><button id="genbaPrinted" class="secondary-button">Confirm this finding printed</button><button id="genbaDetailClose" class="secondary-button">Close</button></div>';
     mountFindingWorkOrder(modalBody,'red-tag',r.id,modalBody.querySelector('.genba-details'));
-    if(genbaCommittee())modalBody.querySelector('#genbaPrinted')?.remove();
+    if(genbaCommittee()||!isRedTagDesktop())modalBody.querySelector('#genbaPrinted')?.remove();
     if(simplePIC){
       const details=modalBody.querySelector('.genba-details');const disclosure=document.createElement('details');disclosure.className='genba-more-details';disclosure.innerHTML='<summary>Finding details</summary>';details.replaceWith(disclosure);disclosure.append(details);
       const actionForm=modalBody.querySelector('#genbaUpdate');
@@ -191,16 +166,16 @@ async function genbaDetail(id) {
           closeModal();notify('Red tag deleted: '+r.red_tag_id);
           if(currentRoute()===route){
             if(location.hash.split('/')[2])location.hash='#/'+route;
-            else await renderGenba();
+            else await refreshGenbaSource();
           }
         }catch(error){genbaError(error,modalBody);}
         finally{buttons.forEach(([node,disabled])=>node.disabled=disabled);button.textContent='Delete red tag';}
       };
     }
-    if(document.getElementById('genbaPrinted'))document.getElementById('genbaPrinted').onclick=async e=>{e.target.disabled=true;try{await api('/api/red-tags/printed','POST',{ids:[r.id]});notify('Printing confirmed.');await renderGenba();}catch(error){genbaError(error,modalBody);}finally{e.target.disabled=false;}};
+    if(document.getElementById('genbaPrinted'))document.getElementById('genbaPrinted').onclick=async e=>{e.target.disabled=true;try{await api('/api/red-tags/printed','POST',{ids:[r.id]});notify('Printing confirmed.');await refreshGenbaSource();}catch(error){genbaError(error,modalBody);}finally{e.target.disabled=false;}};
     document.getElementById('genbaUpdate')?.addEventListener('submit',async e=>{
       e.preventDefault();const form=e.target,button=e.submitter||form.querySelector('[type=submit]');if(form.dataset.sending)return;form.dataset.sending='1';const originalLabel=button.textContent;form.querySelectorAll('[type=submit]').forEach(b=>b.disabled=true);button.textContent='Sending…';
-      try{const data=Object.fromEntries(new FormData(form));if(e.submitter?.hasAttribute('data-save-progress'))data.status='In progress';const file=form.elements.after_photo.files[0];delete data.after_photo;delete data.after_gallery;if(simplePIC){await form.photoReady;if(form.afterPhotoData)data.after_photo=form.afterPhotoData;}else if(file)data.after_photo=await genbaReadPhoto(file);if(data.status==='Action taken · awaiting review'&&!data.after_photo)throw new Error('Add an after photo to send your completed action to SHE.');await api('/api/red-tags/'+r.id,'PATCH',{...data,revision:r.revision});if(simplePIC){try{localStorage.removeItem(form.draftKey);}catch{}}notify(simplePIC?'Your action was saved.':'Action saved.');await genbaDetail(r.id);await renderGenba();}catch(error){genbaError(error,form);}finally{delete form.dataset.sending;form.querySelectorAll('[type=submit]').forEach(b=>b.disabled=false);button.textContent=originalLabel;}
+      try{const data=Object.fromEntries(new FormData(form));if(e.submitter?.hasAttribute('data-save-progress'))data.status='In progress';const file=form.elements.after_photo.files[0];delete data.after_photo;delete data.after_gallery;if(simplePIC){await form.photoReady;if(form.afterPhotoData)data.after_photo=form.afterPhotoData;}else if(file)data.after_photo=await genbaReadPhoto(file);if(data.status==='Action taken · awaiting review'&&!data.after_photo)throw new Error('Add an after photo to send your completed action to SHE.');await api('/api/red-tags/'+r.id,'PATCH',{...data,revision:r.revision});if(simplePIC){try{localStorage.removeItem(form.draftKey);}catch{}}notify(simplePIC?'Your action was saved.':'Action saved.');await genbaDetail(r.id);await refreshGenbaSource();}catch(error){genbaError(error,form);}finally{delete form.dataset.sending;form.querySelectorAll('[type=submit]').forEach(b=>b.disabled=false);button.textContent=originalLabel;}
     });
   }catch(error){genbaError(error);}
 }
@@ -218,7 +193,7 @@ function genbaMaster() {
   genbaSettings.sections.forEach(add);rebuild();
   document.getElementById('genbaAddSection').onclick=()=>{add();rebuild();};document.getElementById('genbaMasterCancel').onclick=closeModal;
   document.getElementById('genbaMasterForm').onsubmit=async e=>{e.preventDefault();const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;
-    try{await api('/api/red-tags/settings','PATCH',{revision:genbaSettings.revision,assignments:[...assigned.querySelectorAll('select')].filter(s=>s.value).map(s=>({section:JSON.parse(s.dataset.pair)[0],pic:JSON.parse(s.dataset.pair)[1],user_id:Number(s.value)})),sections:[...rows.children].map(r=>({name:r.querySelector('[data-section]').value,pics:r.querySelector('[data-pics]').value.split(',').map(x=>x.trim()).filter(Boolean)}))});closeModal();notify('Section/PIC list saved.');await renderGenba();}catch(error){genbaError(error,form);}finally{button.disabled=false;}
+    try{await api('/api/red-tags/settings','PATCH',{revision:genbaSettings.revision,assignments:[...assigned.querySelectorAll('select')].filter(s=>s.value).map(s=>({section:JSON.parse(s.dataset.pair)[0],pic:JSON.parse(s.dataset.pair)[1],user_id:Number(s.value)})),sections:[...rows.children].map(r=>({name:r.querySelector('[data-section]').value,pics:r.querySelector('[data-pics]').value.split(',').map(x=>x.trim()).filter(Boolean)}))});closeModal();notify('Section/PIC list saved.');if(currentRoute()==='red-tag-home')await loadFindingModuleHome('red-tag-home');else await refreshGenbaSource();}catch(error){genbaError(error,form);}finally{button.disabled=false;}
   };
 }
 
@@ -234,4 +209,4 @@ async function genbaReadPhoto(file) {
   throw new Error('This photo is still too large. Try taking a closer photo.');
 }
 
-setInterval(()=>{if(genbaInbox()&&currentUser&&!document.hidden&&modalBackdrop.hidden)renderGenba(true);},15000);
+setInterval(()=>{if(genbaRouteActive()&&currentUser&&!document.hidden&&modalBackdrop.hidden)renderGenba(true);},15000);

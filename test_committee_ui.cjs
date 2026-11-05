@@ -9,6 +9,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  await page.route('**/*',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname;
   const json=data=>route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+  if(path==='/api/workspace/modules/red-tag')return json({counts:{active:findings.filter(r=>!['Resolved','Closed'].includes(r.status)).length,today:findings.length,history:findings.filter(r=>['Resolved','Closed'].includes(r.status)).length},recent:[],active:findings.filter(r=>!['Resolved','Closed'].includes(r.status))});
   if(path==='/api/session')return signedIn?json({user:user(),csrf_token:'csrf'}):route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:'Please sign in.'})});
   if(path==='/api/login'){signedIn=true;return json({user:user(),csrf_token:'csrf'});}
   if(path==='/api/users')return json({users:[user()]});
@@ -16,7 +17,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   if(path==='/api/red-tags/settings')return json({revision:1,sections:[{name:'FG Store',pics:['Fareez','Shahrul','Chandran']},{name:'Macro',pics:['Aman']}],assignments:[]});
   if(path==='/api/red-tags'){
    if(req.method()==='POST'){const finding={...req.postDataJSON(),id:1,user_id:2,red_tag_id:'RT2610-001',issued_by:'Committee Member',revision:1};findings.push(finding);return json({finding});}
-   return json({findings});
+   const view=new URL(req.url()).searchParams.get('view');return json({findings:view==='history'?findings.filter(r=>['Closed','Resolved'].includes(r.status)):findings});
   }
   if(path==='/api/red-tags/1'){
    if(req.method()==='DELETE'){deleteRequests.push(req.postDataJSON());if(failDelete){failDelete=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Please try deletion again.'})});}findings=[];return json({ok:true});}
@@ -38,10 +39,10 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  assert.equal(await page.locator('#environmentSubnav').count(),1);
  assert.equal(await page.locator('#nav a[href="#/patrol-overview"]').count(),0);
  assert.deepEqual(await page.locator('#safetySubnav a').allTextContents(),['Safety Patrol','Red Tag','Air Leak','Hiyari Hatto']);
- await page.locator('#safetyToggle').click();await page.locator('#nav a[href="#/red-tag-home"]').click();await page.locator('.module-tabs a[href="#/red-tag"]').click();await page.locator('#genbaNew').waitFor();
+ await page.locator('#safetyToggle').click();await page.locator('#nav a[href="#/red-tag-home"]').click();await page.locator('.module-tabs a[href="#/red-tag?new=1"]').click();await page.locator('#genbaForm').waitFor();
  assert.equal(await page.locator('a[href*="/api/red-tags/print"],a[href*="/api/red-tags/export"]').count(),0);
  await page.screenshot({path:'.qa-temp/committee-redtag-refined.png',fullPage:true,animations:'disabled'});
- await page.locator('#genbaNew').click();
+
  await page.locator('#genbaSection').selectOption('Macro');assert.deepEqual(await page.locator('#genbaPic option').allTextContents(),['Aman']);
  await page.locator('#genbaSection').selectOption('FG Store');assert.deepEqual(await page.locator('#genbaPic option').allTextContents(),['Fareez','Shahrul','Chandran']);
  assert.equal(await page.locator('[name=type_of_stop] option').count(),7);assert.equal(await page.locator('[name=rank] option').count(),4);
@@ -69,8 +70,8 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  for(const width of [320,390,600]){await page.setViewportSize({width,height:844});assert(await page.locator('[data-step="2"] select,[data-step="2"] textarea').evaluateAll(nodes=>nodes.every(n=>{const r=n.getBoundingClientRect();return r.left>=19&&r.right<=innerWidth-19;})));}
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.qa-temp/finding-classification-dropdowns.png',animations:'disabled'});
  await page.locator('#genbaForm [type=submit]').click();await page.locator('[data-genba-id="1"]').waitFor();assert.equal(findings.length,1);assert.equal(findings[0].machine,'Packing line');assert.equal(findings[0].pic,'Fareez');assert(findings[0].photo.startsWith('data:image/'));
- await page.locator('[data-genba-filter="done"]').click();await page.getByRole('heading',{name:'Nothing in this view yet'}).waitFor();
- await page.locator('[data-genba-filter="todo"]').click();await page.locator('[data-genba-id="1"]').click();await page.locator('#genbaDetailClose').waitFor();assert.equal(await page.locator('#genbaPrinted').count(),0);
+ await page.locator('.module-tabs a[href="#/red-tag?view=history"]').click();await page.getByText('No completed findings.',{exact:true}).waitFor();
+ await page.locator('.module-tabs a[href="#/red-tag-home"]').click();await page.locator('[data-genba-id="1"]').click();await page.locator('#genbaDetailClose').waitFor();assert.equal(await page.locator('#genbaPrinted').count(),0);
  for(const width of [320,390,600]){
   await page.setViewportSize({width,height:844});
   const inside=await page.locator('#genbaUpdate input,#genbaUpdate select,#genbaUpdate textarea,#genbaUpdate button,#genbaDetailClose').evaluateAll(nodes=>nodes.every(node=>{const r=node.getBoundingClientRect();return r.left>=19&&r.right<=innerWidth-19;}));assert(inside,`Detail form is misaligned at ${width}px`);
@@ -99,7 +100,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  role='executive';await page.reload();await page.locator('#genbaDelete').waitFor();
  page.once('dialog',dialog=>dialog.dismiss());await page.locator('#genbaDelete').click();assert.equal(deleteRequests.length,0);
  page.once('dialog',dialog=>{assert(dialog.message().includes('RT2610-001'));dialog.accept();});await page.locator('#genbaDelete').click();await page.getByText('Please try deletion again.',{exact:true}).waitFor();assert(await page.locator('#genbaDelete').isEnabled());
- page.once('dialog',dialog=>dialog.accept());await page.locator('#genbaDelete').click();await page.waitForURL('**/#/red-tag');await page.locator('#genbaNew').waitFor();
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#genbaDelete').click();await page.waitForURL('**/#/red-tag');await page.locator('.module-tabs').waitFor();
   await page.locator('[data-genba-id="1"]').waitFor({state:'detached'});
   assert.equal(deleteRequests.length,2);assert.equal(deleteRequests[1].revision,1);assert.equal(await page.locator('[data-genba-id="1"]').count(),0);assert(await page.locator('#modalBackdrop').isHidden());
  assert.deepEqual(errors,[]);await browser.close();console.log('Committee mobile navigation, More, dashboard restriction, finding layout, feature removal and Air Leak submission passed.');

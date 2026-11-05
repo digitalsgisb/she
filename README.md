@@ -218,3 +218,15 @@ The patrol tab bar stays mounted while views change. Only the content beneath it
 Red Tag, Hiyari Hatto and Air Leak now open on their own Overview pages, with live active/today/history counts, recent activity and clear choices for starting a report, following current work or reviewing history. Red Tag also links to My Actions; New finding opens the entry form directly. Source visibility rules still apply, including own-report access for Air Leak and assigned Genba visibility. The mobile bar now offers Home, Patrol, Red Tag, Orders and More; patrol history stays in the Patrol overview and top tabs.
 
 Safety module tabs share a persistent page shell and one underline indicator that slides between selected tabs. The indicator repositions after resizing and font loading, and reduced-motion settings disable its movement. Counts refresh quietly while a module home is open.
+
+
+## Red Tag workflow
+
+Red Tag navigation is **Overview**, **Findings**, **History** and **Assigned to me**. Overview contains active findings; Findings opens the entry form. Assigned to me means cases linked to the signed-in PIC account. Red Tag lists and home activity update automatically every 15 seconds while visible; routine Refresh buttons are removed. Forms and action editors keep their existing retry and photo behavior.
+
+Print/PDF, date-based CSV export, the Red Tag dashboard and section/PIC management are grouped under **Tools** at the bottom of Red Tag Overview on PC-sized screens with a mouse/fine pointer. Dashboard and section/PIC management retain their executive/admin restrictions. The Red Tag dashboard is omitted from mobile navigation, and an open section/PIC editor closes when switching to a narrow screen. This layout restriction supplements existing account permissions.
+
+
+## Header profile menu
+
+The header shows the installed-app icon and a profile menu with the signed-in name, role, **My profile** and **Sign out**. My profile opens the existing account page. The menu closes after navigation, outside clicks or Escape, and keeps the header compact on phones.

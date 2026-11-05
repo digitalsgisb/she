@@ -39,7 +39,7 @@ const routes = {
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
-  'red-tag-pic': { title: 'My Red Tag Actions', icon: 'tag' },
+  'red-tag-pic': { title: 'Assigned to me', icon: 'tag' },
   'hiyari-hatto': { title: 'Hiyari Hatto', icon: 'alert' },
   co2: { title: 'CO2', icon: 'leaf' },
   findings: { title: 'Environmental Findings', icon: 'clipboard' },
@@ -64,6 +64,7 @@ const routes = {
 
 function canAccessRoute(key) {
   if (!currentUser) return false;
+  if(key==='red-tag-dashboard'&&!isRedTagDesktop())return false;
   if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records') return ['admin','executive'].includes(currentUser.role);
   if (['users','reporting-forms'].includes(key)) return ['admin','executive'].includes(currentUser.role);
   return Boolean(routes[key]);
@@ -81,7 +82,7 @@ const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting
 const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
 
 const findingModuleHomes={
-  'red-tag-home':{module:'red-tag',title:'Red Tag',icon:'tag',description:'Record hazards, follow actions and review completed findings.',start:'New finding',startHref:'#/red-tag?new=1'},
+  'red-tag-home':{module:'red-tag',title:'Red Tag',icon:'tag',description:'Report hazards. Track action.',start:'Findings',startHref:'#/red-tag?new=1'},
   'hiyari-home':{module:'hiyari-hatto',title:'Hiyari Hatto',icon:'alert',description:'Report a near miss and follow it through to verification.',start:'New report',startHref:'#/hiyari-hatto'},
   'air-leak-home':{module:'air-leak',title:'Air Leak',icon:'droplet',description:'Report leaks and track maintenance work from one place.',start:'Report a leak',startHref:'#/air-leak'}
 };
@@ -101,8 +102,12 @@ function moduleNavigation() {
   const patrol = module === 'daily-safety-patrol';
   const links = patrol
     ? [['patrol-home','Overview'],['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
-    : [[moduleEntryRoute(module),'Overview'],[module,module==='red-tag'?'Findings':'New report'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
-  const selected = patrol || findingModuleHomes[key] || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
+    : module==='red-tag'
+      ? [['red-tag-home','Overview'],['red-tag?new=1','Findings'],['red-tag?view=history','History'],['red-tag-pic','Assigned to me']]
+      : [[moduleEntryRoute(module),'Overview'],[module,'New report'],[module+'?view=active','Current Active'],[module+'?view=history','History']];
+  const selected = module==='red-tag'
+    ? key==='red-tag-pic'?key:key==='red-tag-home'?'red-tag-home':moduleView()==='history'?'red-tag?view=history':new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1'?'red-tag?new=1':'red-tag-home'
+    : patrol || findingModuleHomes[key] ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
   return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
 }
 const featureDescriptions = {
@@ -457,6 +462,8 @@ function showApp(session) {
   appShell.hidden = false;
   loginForm.reset();
   headerUser.textContent = currentUser.display_name;
+  document.getElementById('headerAvatar').textContent=currentUser.display_name.trim().charAt(0).toUpperCase();
+  document.getElementById('headerProfileRole').textContent=roleLabel(currentUser.role);
   if (!canAccessRoute(currentRoute())) location.hash='#/home';
   render();
 }
@@ -469,8 +476,10 @@ function notify(message) {
 }
 
 function closeModal() {
+  const findingForm=Boolean(modalBody.querySelector('#genbaForm'));
   modalBackdrop.hidden = true;
   modalBody.innerHTML = '';
+  if(findingForm&&currentRoute()==='red-tag'&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')location.hash='#/red-tag-home';
 }
 
 function openUserModal(kind, user = null) {
@@ -559,6 +568,7 @@ function render() {
 function renderPage() {
   if (!currentUser) return;
   const key = currentRoute();
+  document.getElementById('headerProfile').open=false;
   SHEStats.hideTooltip();
   dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
   safetyExpanded = (key==='safety'||safetyItems.includes(safetyModule(key)));
@@ -676,6 +686,12 @@ content.addEventListener('submit', async event => {
     output.hidden = false;
   } finally { button.disabled = false; }
 });
+
+const headerProfile=document.getElementById('headerProfile');
+document.addEventListener('click',event=>{if(!headerProfile.contains(event.target))headerProfile.open=false;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&headerProfile.open){headerProfile.open=false;headerProfile.querySelector('summary').focus();}});
+document.getElementById('headerMyProfile').addEventListener('click',()=>{headerProfile.open=false;});
+document.getElementById('signOutButton').addEventListener('click',()=>{headerProfile.open=false;});
 
 async function bootstrap() {
   try { showApp(await api('/api/session')); }

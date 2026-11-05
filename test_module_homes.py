@@ -38,6 +38,9 @@ class ModuleHomeTests(unittest.TestCase):
                 self.assertEqual(data['counts']['active'],1)
                 self.assertEqual(data['counts']['history'],0 if kind=='red-tag' else 1)
                 self.assertEqual(len(data['recent']),1 if kind=='red-tag' else 2)
+                if kind=='red-tag':
+                    self.assertEqual(len(data['active']),1)
+                    self.assertEqual(data['active'][0]['pic'],'Fareez')
                 self.assertNotIn('photos',data['recent'][0])
                 self.assertNotIn('content',json.dumps(data))
 

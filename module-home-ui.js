@@ -1,17 +1,21 @@
 /* Shared entry points for finding-based Safety modules. */
 function renderFindingModuleHome(key){
   const config=findingModuleHomes[key],module=config.module;
-  renderSafetyModuleContent(`<div class="page inner-page finding-module-home"><section class="patrol-home-hero"><div><span class="eyebrow">CHOOSE YOUR NEXT ACTION</span><h1>${escapeHtml(config.title)}</h1><p>${escapeHtml(config.description)}</p><a class="primary-button" href="${config.startHref}">${icon(config.icon,19)} ${escapeHtml(config.start)} ${icon('arrow',18)}</a></div><span class="patrol-home-emblem" aria-hidden="true">${icon(config.icon,78)}</span></section><div class="patrol-home-stats"><div><span>Current active</span><strong data-module-count="active">—</strong></div><div><span>New today</span><strong data-module-count="today">—</strong></div><div><span>History</span><strong data-module-count="history">—</strong></div></div><div class="module-home-choices"><a href="#/${module}?view=active"><span class="module-home-choice-icon">${icon('alert',25)}</span><span><strong>Current active</strong><small>Follow findings and outstanding actions</small></span>${icon('chevron',20)}</a><a href="#/${module}?view=history"><span class="module-home-choice-icon">${icon('clock',25)}</span><span><strong>History</strong><small>Review completed reports and actions</small></span>${icon('chevron',20)}</a>${module==='red-tag'?`<a href="#/red-tag-pic"><span class="module-home-choice-icon">${icon('person',25)}</span><span><strong>My actions</strong><small>Findings assigned to your account</small></span>${icon('chevron',20)}</a>`:''}</div><section class="module-home-recent"><div class="exec-section-heading"><h2>Recent activity</h2><a href="#/${module}?view=active">View active →</a></div><div data-module-recent aria-live="polite"><p class="patrol-empty">Loading activity…</p></div></section><p class="form-error" data-module-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-module-home-refresh>Refresh activity</button></div>`);
+  const activity=module==='red-tag'
+    ? '<section class="module-home-recent red-tag-active"><div class="exec-section-heading"><h2>Active findings</h2><a href="#/red-tag-pic">Assigned to me →</a></div><div data-redtag-active class="genba-grid" aria-live="polite"><p class="patrol-empty">Loading findings…</p></div></section><section data-redtag-desktop class="red-tag-desktop-tools" hidden></section>'
+    : `<div class="module-home-choices"><a href="#/${module}?view=active"><span class="module-home-choice-icon">${icon('alert',25)}</span><span><strong>Active</strong><small>Follow open cases</small></span>${icon('chevron',20)}</a><a href="#/${module}?view=history"><span class="module-home-choice-icon">${icon('clock',25)}</span><span><strong>History</strong><small>Completed cases</small></span>${icon('chevron',20)}</a></div><section class="module-home-recent"><div class="exec-section-heading"><h2>Recent activity</h2><a href="#/${module}?view=active">View active →</a></div><div data-module-recent aria-live="polite"><p class="patrol-empty">Loading activity…</p></div></section>`;
+  renderSafetyModuleContent(`<div class="page inner-page finding-module-home"><section class="patrol-home-hero"><div><h1>${escapeHtml(config.title)}</h1><p>${escapeHtml(config.description)}</p><a class="primary-button" href="${config.startHref}">${icon(config.icon,19)} ${escapeHtml(config.start)} ${icon('arrow',18)}</a></div><span class="patrol-home-emblem" aria-hidden="true">${icon(config.icon,78)}</span></section><div class="patrol-home-stats"><div><span>Active</span><strong data-module-count="active">—</strong></div><div><span>Today</span><strong data-module-count="today">—</strong></div><div><span>Completed</span><strong data-module-count="history">—</strong></div></div>${activity}<p class="form-error" data-module-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-module-home-retry hidden>Try again</button></div>`);
   const root=content.querySelector('.finding-module-home');
   root.dataset.homeKey=key;delete root.dataset.homeSnapshot;
-  root.querySelector('[data-module-home-refresh]').onclick=()=>loadFindingModuleHome(key);
+  root.querySelector('[data-module-home-retry]').onclick=()=>loadFindingModuleHome(key);
+  if(module==='red-tag')mountRedTagDesktopTools(root);
   loadFindingModuleHome(key);
 }
 
 async function loadFindingModuleHome(key,quiet=false){
   const root=content.querySelector('.finding-module-home'),config=findingModuleHomes[key];
-  if(!root||!config||currentRoute()!==key||root.dataset.homeLoading)return;
-  const userId=currentUser.id,button=root.querySelector('[data-module-home-refresh]');
+  if(!root||!config||currentRoute()!==key||root.dataset.homeLoading||(quiet&&key==='red-tag-home'&&!modalBackdrop.hidden))return;
+  const userId=currentUser.id,button=root.querySelector('[data-module-home-retry]');
   root.dataset.homeLoading='true';if(!quiet)button.disabled=true;
   try{
     const data=await api(`/api/workspace/modules/${config.module}`);
@@ -20,12 +24,35 @@ async function loadFindingModuleHome(key,quiet=false){
     if(root.dataset.homeSnapshot!==snapshot){
       root.dataset.homeSnapshot=snapshot;
       root.querySelectorAll('[data-module-count]').forEach(el=>el.textContent=data.counts[el.dataset.moduleCount]);
-      root.querySelector('[data-module-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong><p>Start with ${config.module==='red-tag'?'a new finding':'a new report'}.</p></div>`;
+      if(config.module==='red-tag'){
+        const active=data.active||[];
+        root.querySelector('[data-redtag-active]').innerHTML=active.length?genbaCards(active):'<p class="patrol-empty">No active findings.</p>';
+        root.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
+      }else root.querySelector('[data-module-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong></div>`;
     }
     root.querySelector('[data-module-home-error]').hidden=true;
-  }catch(error){if(root.isConnected&&currentRoute()===key){const box=root.querySelector('[data-module-home-error]');if(box){box.textContent=error.message;box.hidden=false;}}}
+    button.hidden=true;
+  }catch(error){if(root.isConnected&&currentRoute()===key){const box=root.querySelector('[data-module-home-error]');if(box){box.textContent=error.message;box.hidden=false;button.hidden=false;}}}
   finally{delete root.dataset.homeLoading;if(!quiet)button.disabled=false;}
 }
+
+const redTagDesktop=matchMedia('(min-width:1024px) and (any-pointer:fine)');
+function isRedTagDesktop(){return redTagDesktop.matches;}
+function mountRedTagDesktopTools(root){
+  const target=root.querySelector('[data-redtag-desktop]');if(!target)return;
+  target.hidden=!isRedTagDesktop();
+  if(target.hidden){target.replaceChildren();return;}
+  target.innerHTML=`<div class="exec-section-heading"><h2>Tools</h2><label>Date <input type="date" data-redtag-tool-date value="${genbaDate}"></label></div><div class="red-tag-tool-links"><a class="secondary-button" data-redtag-print target="_blank" rel="noopener">Print / PDF</a><a class="secondary-button" data-redtag-export>Export CSV</a>${genbaManager()?'<a class="secondary-button" href="#/red-tag-dashboard">Dashboard</a><button type="button" class="secondary-button" data-redtag-manage>Sections &amp; PICs</button>':''}</div><p class="form-error" data-redtag-tool-error hidden></p>`;
+  const updateLinks=()=>{target.querySelector('[data-redtag-print]').href='/api/red-tags/print?date='+encodeURIComponent(genbaDate);target.querySelector('[data-redtag-export]').href='/api/red-tags/export?date='+encodeURIComponent(genbaDate);};
+  updateLinks();target.querySelector('[data-redtag-tool-date]').onchange=event=>{if(event.target.value)genbaDate=event.target.value;else event.target.value=genbaDate;updateLinks();};
+  target.querySelector('[data-redtag-manage]')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;button.disabled=true;
+    try{genbaSettings=await api('/api/red-tags/settings');if(currentRoute()==='red-tag-home'&&root.isConnected&&isRedTagDesktop())genbaMaster();}
+    catch(error){const box=target.querySelector('[data-redtag-tool-error]');if(box){box.textContent=error.message;box.hidden=false;}}
+    finally{button.disabled=false;}
+  });
+}
+redTagDesktop.addEventListener('change',()=>{if(typeof currentRoute!=='function')return;if(!isRedTagDesktop()){if(modalBody.querySelector('#genbaMasterForm'))closeModal();if(currentRoute()==='red-tag-dashboard')location.hash='#/red-tag-home';}const root=content.querySelector('.finding-module-home');if(root&&currentRoute()==='red-tag-home')mountRedTagDesktopTools(root);});
 
 setInterval(()=>{
   if(typeof currentRoute!=='function'||!currentUser||document.hidden||!navigator.onLine)return;

@@ -48,6 +48,9 @@ const routes = {
   'reporting-inbox': { title: 'Inbox', icon: 'clipboard' },
   'reporting-qr': { title: 'Report to SHE QR', icon: 'camera' },
   safety: { title: 'Safety', icon: 'shield' },
+  'red-tag-home': {title:'Red Tag',icon:'tag'},
+  'hiyari-home': {title:'Hiyari Hatto',icon:'alert'},
+  'air-leak-home': {title:'Air Leak',icon:'droplet'},
   'patrol-home': { title: 'Safety Patrol', icon: 'clipboard' },
   'daily-safety-patrol': { title: 'Safety Patrol', icon: 'clipboard' },
   'checklist-builder': { title: 'Checklist Builder', icon: 'clipboard' },
@@ -77,9 +80,16 @@ function filterFeatureLinks(root) {
 const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
 const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
 
+const findingModuleHomes={
+  'red-tag-home':{module:'red-tag',title:'Red Tag',icon:'tag',description:'Record hazards, follow actions and review completed findings.',start:'New finding',startHref:'#/red-tag?new=1'},
+  'hiyari-home':{module:'hiyari-hatto',title:'Hiyari Hatto',icon:'alert',description:'Report a near miss and follow it through to verification.',start:'New report',startHref:'#/hiyari-hatto'},
+  'air-leak-home':{module:'air-leak',title:'Air Leak',icon:'droplet',description:'Report leaks and track maintenance work from one place.',start:'Report a leak',startHref:'#/air-leak'}
+};
+function moduleEntryRoute(key){return key==='daily-safety-patrol'?'patrol-home':Object.keys(findingModuleHomes).find(home=>findingModuleHomes[home].module===key)||key;}
+
 function safetyModule(key = currentRoute()) {
   if (['patrol-home','daily-safety-patrol','patrol-overview','checklist-builder'].includes(key)) return 'daily-safety-patrol';
-  return key === 'red-tag-pic' ? 'red-tag' : key;
+  return findingModuleHomes[key]?.module || (key === 'red-tag-pic' ? 'red-tag' : key);
 }
 function moduleView() {
   const view = new URLSearchParams(location.hash.split('?')[1] || '').get('view');
@@ -91,8 +101,8 @@ function moduleNavigation() {
   const patrol = module === 'daily-safety-patrol';
   const links = patrol
     ? [['patrol-home','Overview'],['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
-    : [[module,module==='hiyari-hatto'?'New report':'Checklist'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
-  const selected = patrol || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
+    : [[moduleEntryRoute(module),'Overview'],[module,module==='red-tag'?'Findings':'New report'],[module+'?view=active','Current Active'],[module+'?view=history','History'],...(module==='red-tag' ? [['red-tag-pic','My Actions']] : [])];
+  const selected = patrol || findingModuleHomes[key] || key === 'red-tag-pic' ? key : module + (moduleView()==='checklist' ? '' : '?view='+moduleView());
   return `<nav class="module-tabs" aria-label="${routes[module].title} sections">${links.filter(([target])=>canAccessRoute(target.split('?')[0])).map(([target,label])=>`<a href="#/${target}" ${selected===target?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`;
 }
 const featureDescriptions = {
@@ -191,8 +201,10 @@ function renderMobileNavigation(active) {
   mobileTabbar.classList.remove('pic-navigation');
   const committee = currentUser.role === 'safety_committee';
   mobileTabbar.classList.toggle('committee-navigation', committee);
-  const tabs = committee ? [['home','Home','grid'],['red-tag','Red Tag','tag'],['air-leak','Air Leak','droplet']] : [['home','Home','grid'],['patrol-home','Patrol','clipboard'],['patrol-overview','History','clock'],['work-orders','Orders','briefcase']];
-  if(['daily-safety-patrol','checklist-builder'].includes(active))active='patrol-home';
+  const tabs = committee ? [['home','Home','grid'],['red-tag-home','Red Tag','tag'],['air-leak-home','Air Leak','droplet']] : [['home','Home','grid'],['patrol-home','Patrol','clipboard'],['red-tag-home','Red Tag','tag'],['work-orders','Orders','briefcase']];
+  if(isPatrolRoute(active))active='patrol-home';
+  else if(safetyModule(active)==='red-tag')active='red-tag-home';
+  else if(committee&&safetyModule(active)==='air-leak')active='air-leak-home';
   const more = !tabs.some(([key])=>key===active);
   const markup = tabs.map(([key,label,symbol])=>mobileTab(key,label,symbol,active===key)).join('')+`<button class="mobile-tab ${more?'active':''}" id="mobileMoreButton" type="button" data-mobile-more aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu',20)}<span>More</span></button>`;
   const layout=tabs.map(([key])=>key).join(',');
@@ -209,8 +221,8 @@ function renderNav(active) {
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
     <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
-    <div class="nav-parent"><a class="nav-link ${['safety', 'patrol-home', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(active) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${key==='daily-safety-patrol'?'patrol-home':key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="nav-parent"><a class="nav-link ${(active==='safety'||safetyItems.includes(safetyModule(active))) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
@@ -255,7 +267,7 @@ function renderHome() {
   if(currentUser.role==='safety_committee')return renderCommitteeHome();
   if(['admin','executive'].includes(currentUser.role))return renderExecutiveHome();
   const links = [['red-tag','Record a hazard and follow up on findings.'],['air-leak','Report a leak and issue a maintenance work order.'],['red-tag-pic','View findings assigned to you.'],['daily-safety-patrol','Complete a safety inspection.'],['patrol-overview','Review your submitted patrols.'],['hiyari-hatto','Report a near miss.'],['work-orders','Follow up on SHE work orders.']];
-  return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${key}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${['admin','executive'].includes(currentUser.role)?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
+  return `<div class="page inner-page home-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE WORKSPACE</span><h1>Home</h1><p>Welcome, ${escapeHtml(currentUser.display_name)}. What would you like to do?</p></div><div class="home-actions">${links.map(([key,detail])=>`<a class="module-card" href="#/${moduleEntryRoute(key)}"><span class="module-icon">${icon(routes[key].icon,24)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${detail}</span></span><span class="module-arrow">${icon('chevron',20)}</span></a>`).join('')}</div>${['admin','executive'].includes(currentUser.role)?'<a class="secondary-button home-dashboard-link" href="#/dashboard">Open dashboards →</a>':''}</div>`;
 }
 
 function renderExecutiveHome() {
@@ -263,7 +275,7 @@ function renderExecutiveHome() {
   const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'numeric',hourCycle:'h23'}).format(new Date()));
   const greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const tools=[['daily-safety-patrol','New patrol','clipboard'],['environmental','Environment','leaf'],['dashboard','Dashboards','grid'],['reporting-qr','Reporting QR','camera']];
-  return `<div class="page inner-page executive-home"><header class="exec-heading"><span class="eyebrow dark-eyebrow">YOUR SHE WORKSPACE</span><span>${escapeHtml(day)}</span></header><section class="exec-welcome"><div class="exec-welcome-copy"><span class="exec-kicker">THE NEXT ACTION STARTS HERE</span><h1>${greeting},<br>${escapeHtml(currentUser.display_name.split(' ')[0])}.</h1><p>A clearer view of your workplace.<br>Keep every finding moving towards a safer day.</p><div class="exec-hero-actions"><a href="#/reporting-inbox">Review reports ${icon('arrow',18)}</a><a href="#/work-orders">Work orders ${icon('briefcase',18)}</a></div></div><span class="exec-welcome-symbol" aria-hidden="true">${icon('shield',92)}</span><span class="exec-hero-footnote">OBSERVE · ACT · VERIFY</span></section><div class="exec-stats" aria-label="Open findings"><a href="#/reporting-inbox"><span>Reports to review</span><strong data-overview-count="reports">—</strong><small>SHE inbox ${icon('arrow',14)}</small></a><a href="#/red-tag?view=active"><span>Active Genba</span><strong data-overview-count="genba">—</strong><small>Follow up ${icon('arrow',14)}</small></a><a href="#/patrol-overview"><span>Patrol follow-ups</span><strong data-overview-count="patrols">—</strong><small>Review actions ${icon('arrow',14)}</small></a></div><section class="exec-next"><div class="exec-section-heading"><h2>Keep things moving</h2><span>YOUR DAILY TOOLS</span></div><div class="exec-action-grid"><a class="exec-action-card exec-genba" href="#/red-tag?view=active"><span class="exec-action-icon">${icon('tag',25)}</span><div><small>FROM FINDING TO FIX</small><h3>Genba &amp; Red Tag</h3><p>Review hazards, issue work orders<br>and follow up with your PICs.</p></div>${icon('arrow',22)}</a><a class="exec-action-card exec-orders" href="#/work-orders"><span class="exec-action-icon">${icon('briefcase',25)}</span><div><small>CLOSE THE LOOP</small><h3>SHE work orders</h3><p>Check maintenance progress<br>and verify completed work.</p></div>${icon('arrow',22)}</a></div></section><section class="exec-incoming"><div class="exec-section-heading"><h2>Needs your attention</h2><a href="#/reporting-inbox">View inbox →</a></div><div data-exec-recent aria-live="polite"><p class="exec-loading">Loading the latest open findings…</p></div></section><section class="exec-tools"><div class="exec-section-heading"><h2>Around the workspace</h2></div><div class="exec-tool-grid">${tools.filter(([route])=>canAccessRoute(route)).map(([route,label,symbol])=>`<a href="#/${route}">${icon(symbol,24)}<span>${label}</span></a>`).join('')}</div></section><p class="exec-home-note">Small actions. Better tomorrows.</p></div>`;
+  return `<div class="page inner-page executive-home"><header class="exec-heading"><span class="eyebrow dark-eyebrow">YOUR SHE WORKSPACE</span><span>${escapeHtml(day)}</span></header><section class="exec-welcome"><div class="exec-welcome-copy"><span class="exec-kicker">THE NEXT ACTION STARTS HERE</span><h1>${greeting},<br>${escapeHtml(currentUser.display_name.split(' ')[0])}.</h1><p>A clearer view of your workplace.<br>Keep every finding moving towards a safer day.</p><div class="exec-hero-actions"><a href="#/reporting-inbox">Review reports ${icon('arrow',18)}</a><a href="#/work-orders">Work orders ${icon('briefcase',18)}</a></div></div><span class="exec-welcome-symbol" aria-hidden="true">${icon('shield',92)}</span><span class="exec-hero-footnote">OBSERVE · ACT · VERIFY</span></section><div class="exec-stats" aria-label="Open findings"><a href="#/reporting-inbox"><span>Reports to review</span><strong data-overview-count="reports">—</strong><small>SHE inbox ${icon('arrow',14)}</small></a><a href="#/red-tag?view=active"><span>Active Genba</span><strong data-overview-count="genba">—</strong><small>Follow up ${icon('arrow',14)}</small></a><a href="#/patrol-overview"><span>Patrol follow-ups</span><strong data-overview-count="patrols">—</strong><small>Review actions ${icon('arrow',14)}</small></a></div><section class="exec-next"><div class="exec-section-heading"><h2>Keep things moving</h2><span>YOUR DAILY TOOLS</span></div><div class="exec-action-grid"><a class="exec-action-card exec-genba" href="#/red-tag-home"><span class="exec-action-icon">${icon('tag',25)}</span><div><small>FROM FINDING TO FIX</small><h3>Genba &amp; Red Tag</h3><p>Review hazards, issue work orders<br>and follow up with your PICs.</p></div>${icon('arrow',22)}</a><a class="exec-action-card exec-orders" href="#/work-orders"><span class="exec-action-icon">${icon('briefcase',25)}</span><div><small>CLOSE THE LOOP</small><h3>SHE work orders</h3><p>Check maintenance progress<br>and verify completed work.</p></div>${icon('arrow',22)}</a></div></section><section class="exec-incoming"><div class="exec-section-heading"><h2>Needs your attention</h2><a href="#/reporting-inbox">View inbox →</a></div><div data-exec-recent aria-live="polite"><p class="exec-loading">Loading the latest open findings…</p></div></section><section class="exec-tools"><div class="exec-section-heading"><h2>Around the workspace</h2></div><div class="exec-tool-grid">${tools.filter(([route])=>canAccessRoute(route)).map(([route,label,symbol])=>`<a href="#/${route}">${icon(symbol,24)}<span>${label}</span></a>`).join('')}</div></section><p class="exec-home-note">Small actions. Better tomorrows.</p></div>`;
 }
 
 async function loadExecutiveOverview() {
@@ -279,7 +291,7 @@ async function loadExecutiveOverview() {
 
 function renderCommitteeHome() {
   const day=new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',weekday:'long',day:'numeric',month:'short'}).format(new Date());
-  return `<div class="page inner-page home-page committee-page committee-home"><header class="committee-home-heading"><span class="committee-kicker">SAFETY STARTS WITH US</span><h1>Hello, ${escapeHtml(currentUser.display_name.split(' ')[0])}<span class="committee-wave" aria-hidden="true">✦</span></h1><p>${escapeHtml(day)} <span>·</span> Let’s look out for each other.</p></header><div class="home-actions committee-home-actions"><a class="committee-home-feature" href="#/red-tag"><span class="committee-feature-top"><span class="committee-kicker">SEE SOMETHING? SAY SOMETHING.</span>${icon('shield',32)}</span><h2>A small finding.<br>A safer tomorrow.</h2><p>Spot a hazard, add a photo,<br>and get the right person involved.</p><span class="committee-feature-cta">${icon('tag',19)} Open Red Tag ${icon('arrow',19)}</span></a><a class="committee-air-card" href="#/air-leak"><span class="committee-air-symbol">${icon('droplet',28)}</span><span><small>KEEP THE ENERGY IN</small><strong>Hear an air leak?</strong><span>Report it. We’ll issue the work order.</span></span>${icon('arrow',21)}</a></div><section class="committee-quick-section"><div class="committee-list-heading"><h2>Keep things moving</h2><span class="committee-kicker">YOUR TOOLS</span></div><div class="committee-quick-grid"><a href="#/red-tag-pic">${icon('tag',23)}<strong>My actions</strong><span>Follow up on assigned findings</span>${icon('arrow',16)}</a><a href="#/daily-safety-patrol">${icon('clipboard',23)}<strong>Safety patrol</strong><span>Take a closer look around</span>${icon('arrow',16)}</a></div></section><section class="committee-how"><span>${icon('shield',21)}</span><div><strong>Good observations make a difference.</strong><p>Notice it. Share it. Follow it through.<br>Everything else is a tap away in More.</p></div></section></div>`;
+  return `<div class="page inner-page home-page committee-page committee-home"><header class="committee-home-heading"><span class="committee-kicker">SAFETY STARTS WITH US</span><h1>Hello, ${escapeHtml(currentUser.display_name.split(' ')[0])}<span class="committee-wave" aria-hidden="true">✦</span></h1><p>${escapeHtml(day)} <span>·</span> Let’s look out for each other.</p></header><div class="home-actions committee-home-actions"><a class="committee-home-feature" href="#/red-tag-home"><span class="committee-feature-top"><span class="committee-kicker">SEE SOMETHING? SAY SOMETHING.</span>${icon('shield',32)}</span><h2>A small finding.<br>A safer tomorrow.</h2><p>Spot a hazard, add a photo,<br>and get the right person involved.</p><span class="committee-feature-cta">${icon('tag',19)} Open Red Tag ${icon('arrow',19)}</span></a><a class="committee-air-card" href="#/air-leak-home"><span class="committee-air-symbol">${icon('droplet',28)}</span><span><small>KEEP THE ENERGY IN</small><strong>Hear an air leak?</strong><span>Report it. We’ll issue the work order.</span></span>${icon('arrow',21)}</a></div><section class="committee-quick-section"><div class="committee-list-heading"><h2>Keep things moving</h2><span class="committee-kicker">YOUR TOOLS</span></div><div class="committee-quick-grid"><a href="#/red-tag-pic">${icon('tag',23)}<strong>My actions</strong><span>Follow up on assigned findings</span>${icon('arrow',16)}</a><a href="#/daily-safety-patrol">${icon('clipboard',23)}<strong>Safety patrol</strong><span>Take a closer look around</span>${icon('arrow',16)}</a></div></section><section class="committee-how"><span>${icon('shield',21)}</span><div><strong>Good observations make a difference.</strong><p>Notice it. Share it. Follow it through.<br>Everything else is a tap away in More.</p></div></section></div>`;
 }
 
 function sectionCard(key, number, description) {
@@ -332,7 +344,7 @@ function renderSafetyHome() {
     'air-leak':'Report leaks, track current active reports, and review history.',
     'hiyari-hatto':'Complete a near-miss report, follow current cases, and review history.'
   };
-  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Choose a tool to report, follow up, or review past records.</p></div><div class="module-grid">${safetyItems.filter(canAccessRoute).map(key=>`<a class="module-card" href="#/${key==='daily-safety-patrol'?'patrol-home':key}"><span class="module-icon">${icon(routes[key].icon,23)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${descriptions[key]}</span></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / SAFETY</span><h1>Safety</h1><p>Choose a tool to report, follow up, or review past records.</p></div><div class="module-grid">${safetyItems.filter(canAccessRoute).map(key=>`<a class="module-card" href="#/${moduleEntryRoute(key)}"><span class="module-icon">${icon(routes[key].icon,23)}</span><span class="module-copy"><strong>${routes[key].title}</strong><span>${descriptions[key]}</span></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div></div>`;
 }
 
 function renderHealth() {
@@ -549,21 +561,22 @@ function renderPage() {
   const key = currentRoute();
   SHEStats.hideTooltip();
   dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
-  safetyExpanded = ['safety', 'patrol-home', 'daily-safety-patrol', 'patrol-overview', 'checklist-builder', 'red-tag', 'red-tag-pic', 'air-leak', 'hiyari-hatto'].includes(key);
+  safetyExpanded = (key==='safety'||safetyItems.includes(safetyModule(key)));
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/home'; return; }
   renderNav(key);
   renderMobileNavigation(key);
   breadcrumb.textContent = routes[key].title;
   document.title = `${routes[key].title} · SHE Digital`;
-  if(isPatrolRoute(key))syncPatrolTabs();
+  if(isSafetyModuleRoute(key))syncModuleTabs();
   if (key === 'home') {content.innerHTML = renderHome();loadExecutiveOverview();}
   else if (key === 'patrol-home') renderPatrolHome();
+  else if(findingModuleHomes[key])renderFindingModuleHome(key);
   else if (key === 'air-leak') renderAirLeak();
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key.endsWith('-dashboard'))renderStatsDashboard(key);
-  else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);});
+  else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);else if(currentRoute()===key&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')genbaNew();});
   else if (key === 'work-orders') renderWorkOrders();
   else if (key === 'checklist-builder') renderChecklistBuilder();
   else if (key === 'patrol-overview') renderPatrolOverview();
@@ -593,7 +606,7 @@ mobileTabbar.addEventListener('click', event => {
   if (event.target.closest('[data-mobile-more]')) toggleMenu();
 });
 nav.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
-window.addEventListener('resize', () => { if (window.innerWidth > 760) closeMenu(); });
+window.addEventListener('resize', () => { if (window.innerWidth > 760) closeMenu();syncModuleTabs(); });
 document.addEventListener('keydown', event => {
   if (!sidebar.classList.contains('mobile-open')) return;
   if (event.key === 'Escape') { event.preventDefault(); closeMenu(); document.getElementById('mobileMoreButton')?.focus(); }

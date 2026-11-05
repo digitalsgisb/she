@@ -39,7 +39,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'Checklist Builder');
  for(const module of ['air-leak','hiyari-hatto','red-tag']) {
   await go(module);await page.locator('.module-tabs').waitFor();
-  assert.deepEqual((await page.locator('.module-tabs a').allTextContents()).slice(0,3),[module==='hiyari-hatto'?'New report':'Checklist','Current Active','History']);
+  assert.deepEqual((await page.locator('.module-tabs a').allTextContents()).slice(0,4),['Overview',module==='red-tag'?'Findings':'New report','Current Active','History']);
   await page.locator(`.module-tabs a[href="#/${module}?view=active"]`).click();
   await page.locator('.module-tabs [aria-current]').filter({hasText:'Current Active'}).waitFor();
   if(module==='air-leak') { assert(await page.locator('#airLeakForm').isHidden());assert.equal(await page.locator('.air-leak-history article').count(),1);assert((await page.locator('.air-leak-history').textContent()).includes('SHE-3')); }

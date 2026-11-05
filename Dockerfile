@@ -7,6 +7,7 @@ COPY server.py cmms_bridge.py index.html styles.css script.js patrol.js patrol-d
 COPY public ./public
 COPY she_statistics.py statistics-ui.js statistics.css ./
 COPY air-leak-ui.js ./
+COPY module-home-ui.js ./
 COPY she_monitoring.py monitoring-ui.js monitoring.css ./
 COPY access.py redtag.py redtag-ui.js redtag.css ./
 COPY qrcodegen.py ./

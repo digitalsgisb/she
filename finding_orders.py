@@ -3,6 +3,8 @@ import base64
 import json
 import re
 import sqlite3
+from datetime import datetime, timedelta, timezone
+import access
 import reporting
 from cmms_bridge import bridge, CmmsError
 
@@ -130,3 +132,33 @@ def overview(h, db, user):
     for r in db.execute("SELECT id,inspector_name,remarks,created_at FROM patrols WHERE completed=1 AND followup_status!='resolved' ORDER BY created_at DESC,id DESC LIMIT 5"):
         recent.append(dict(title=f"Patrol #{r['id']}", detail=f"{r['inspector_name']} · {r['remarks'] or 'Follow up on this inspection'}", kind='Patrol', href=f"#/daily-safety-patrol/{r['id']}", created_at=r['created_at']))
     h.send_json(200, dict(counts=counts, recent=sorted(recent, key=lambda r: r['created_at'], reverse=True)[:5]))
+
+
+def module_summary(h, db, kind, user):
+    """Use the same record visibility as each source module; omit photo payloads."""
+    today = int(datetime.now(timezone(timedelta(hours=8))).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    if kind == 'red-tag':
+        where, args = ('1=1', ()) if 'red-tag' in access.features(user) else ('assigned_user_id=?', (user['id'],))
+        rows = db.execute('SELECT id,red_tag_id AS title,section AS detail,issued_by AS reporter,status,created_at FROM redtag_findings WHERE ' + where + ' ORDER BY created_at DESC,id DESC', args).fetchall()
+    else:
+        group = {'hiyari-hatto':'hiyari-hatto', 'air-leak':'air-leak'}.get(kind)
+        if not group:
+            h.error_json(404, 'Module not found.')
+            return
+        owner, args = ('', ()) if kind!='air-leak' or user['role'] in ('admin','executive') else (' AND user_id=?', (user['id'],))
+        rows = db.execute('''SELECT id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at
+            FROM finding_reports WHERE json_extract(snapshot_json,'$.group')=?''' + owner + ' ORDER BY created_at DESC,id DESC', (group, *args)).fetchall()
+    closed = {'resolved','closed'}
+    counts = dict(active=sum(r['status'].lower() not in closed for r in rows),
+                  today=sum(today<=r['created_at']<today+86400 for r in rows),
+                  history=sum(r['status'].lower() in closed for r in rows),
+                  review=sum(r['status'].lower()=='action taken · awaiting review' for r in rows))
+    recent=[]
+    for r in rows[:5]:
+        status=r['status'].lower().replace(' ', '_')
+        if status not in ('open','in_progress','resolved','closed'):
+            status='action_taken'
+        recent.append(dict(id=r['id'], title=r['title'], detail=r['detail'], reporter=r['reporter'], status=status,
+                           status_label=r['status'].replace('_',' '), created_at=r['created_at'],
+                           href=f"#/red-tag/{r['id']}" if kind=='red-tag' else f"#/reporting-inbox/{r['id']}"))
+    h.send_json(200, dict(counts=counts,recent=recent))

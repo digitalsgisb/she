@@ -348,6 +348,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        module_match = re.fullmatch(r'/api/workspace/modules/(red-tag|hiyari-hatto|air-leak)', path)
+        if module_match:
+            with database() as db:
+                session = self.authorize(db)
+                if session:
+                    finding_orders.module_summary(self, db, module_match[1], session[0])
+            return
         if path.startswith('/api/finding-orders/') or path == '/api/workspace/overview':
             with database() as db:
                 session = self.authorize(db)
@@ -433,6 +440,7 @@ class Handler(BaseHTTPRequestHandler):
         assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
         assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
         assets["/air-leak-ui.js"] = ROOT / "air-leak-ui.js"
+        assets['/module-home-ui.js'] = ROOT / 'module-home-ui.js'
         assets['/reporting-alerts.js'] = ROOT / 'reporting-alerts.js'
         assets['/reporting-push/sw.js'] = ROOT / 'reporting-push-sw.js'
         assets["/redtag-print.js"] = ROOT / "redtag-print.js"

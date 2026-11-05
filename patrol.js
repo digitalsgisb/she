@@ -65,40 +65,55 @@ async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
   finally{delete root.dataset.loading;button.disabled=false;}
 }
 
-function syncPatrolTabs() {
-  const nav=content.querySelector('.patrol-module-shell>.module-tabs');
-  if(!nav||!isPatrolRoute(currentRoute()))return;
+const isSafetyModuleRoute=key=>safetyItems.includes(safetyModule(key));
+function moveModuleTabIndicator(nav){
+  const selected=nav.querySelector('a[aria-current="page"]');
+  if(!selected)return;
+  let indicator=nav.querySelector('.module-tab-indicator');
+  const fresh=!indicator;
+  if(fresh){indicator=document.createElement('span');indicator.className='module-tab-indicator';indicator.setAttribute('aria-hidden','true');indicator.style.transition='none';nav.append(indicator);}
+  indicator.style.width=`${selected.offsetWidth}px`;
+  indicator.style.transform=`translateX(${selected.offsetLeft}px)`;
+  if(fresh){indicator.getBoundingClientRect();indicator.style.transition='';}
+}
+function syncModuleTabs() {
+  const nav=content.querySelector('.safety-module-shell>.module-tabs');
+  if(!nav||!isSafetyModuleRoute(currentRoute()))return;
   const template=document.createElement('template');template.innerHTML=moduleNavigation();
   const selected=template.content.querySelector('[aria-current]')?.getAttribute('href');
   nav.querySelectorAll('a').forEach(link=>{if(link.getAttribute('href')===selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
+  moveModuleTabIndicator(nav);
 }
-function renderPatrolContent(html) {
-  if(!isPatrolRoute(currentRoute()))return;
+function syncPatrolTabs(){syncModuleTabs();}
+function renderPatrolContent(html){renderSafetyModuleContent(html);}
+function renderSafetyModuleContent(html) {
+  const module=safetyModule(currentRoute());
+  if(!isSafetyModuleRoute(currentRoute())){content.innerHTML=html;return;}
   const template=document.createElement('template');template.innerHTML=html;
   const incoming=template.content.querySelector('.page');
   const incomingNav=template.content.querySelector('.module-tabs');incomingNav?.remove();
-  let shell=content.querySelector('.patrol-module-shell');
+  let shell=content.querySelector('.safety-module-shell');
+  if(shell?.dataset.module!==module)shell=null;
   const loading=Boolean(template.content.querySelector('.loading-panel'));
   if(shell){
-    syncPatrolTabs();
-    if(loading){shell.querySelector('.patrol-module-content').setAttribute('aria-busy','true');return;}
+    syncModuleTabs();
+    if(loading){shell.querySelector('.safety-module-content').setAttribute('aria-busy','true');return;}
   }else{
-    shell=document.createElement('div');
+    shell=document.createElement('div');shell.dataset.module=module;
     const navTemplate=document.createElement('template');navTemplate.innerHTML=moduleNavigation();
     shell.append(incomingNav||navTemplate.content.firstElementChild);
     content.replaceChildren(shell);
   }
   const entering=shell.dataset.view!==location.hash;
-  shell.className=(incoming?.className||'page inner-page patrol-page')+' patrol-module-shell';
+  shell.className=(incoming?.className||'page inner-page')+' safety-module-shell'+(module==='daily-safety-patrol'?' patrol-module-shell':'');
   shell.dataset.view=location.hash;
   const body=document.createElement('div');
-  body.className='patrol-module-content'+(entering?' patrol-content-enter':'');
+  body.className='safety-module-content'+(module==='daily-safety-patrol'?' patrol-module-content':'')+(entering?' patrol-content-enter':'');
   body.append(...(incoming?incoming.childNodes:template.content.childNodes));
-  const previous=shell.querySelector('.patrol-module-content');
+  const previous=shell.querySelector('.safety-module-content');
   if(previous)previous.replaceWith(body);else shell.append(body);
-  syncPatrolTabs();
+  syncModuleTabs();
 }
-
 const patrolIntro = 'Check conditions, record findings and submit your patrol.';
 const patrolView = {mode: 'day', anchor: new Date(), rows: [], search: '', findingsOnly: false, status: 'all', page: 0};
 let patrolTemplates = [];

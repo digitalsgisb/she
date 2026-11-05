@@ -211,3 +211,10 @@ Executives and Admins have a home page with live counts for open reports, active
 **Patrol** in the mobile bar and **Safety Patrol** in the sidebar open an Overview with completed inspections today and this month, patrols awaiting review, open follow-ups, seven-day activity and the five latest inspections. Executives/Admins see team activity; other users see their own submissions. Counts use Malaysian calendar days and exclude patrols still awaiting required uploads. Start checklist, History and Checklist Builder stay one tap away.
 
 The patrol tab bar stays mounted while views change. Only the content beneath it fades; reduced-motion settings disable that fade. Checklist drafts and history filters retain their existing behavior, and stale requests cannot overwrite another tab. The default checklist introduction is shortened to one sentence; custom checklist descriptions remain available.
+
+
+## Finding module home pages
+
+Red Tag, Hiyari Hatto and Air Leak now open on their own Overview pages, with live active/today/history counts, recent activity and clear choices for starting a report, following current work or reviewing history. Red Tag also links to My Actions; New finding opens the entry form directly. Source visibility rules still apply, including own-report access for Air Leak and assigned Genba visibility. The mobile bar now offers Home, Patrol, Red Tag, Orders and More; patrol history stays in the Patrol overview and top tabs.
+
+Safety module tabs share a persistent page shell and one underline indicator that slides between selected tabs. The indicator repositions after resizing and font loading, and reduced-motion settings disable its movement. Counts refresh quietly while a module home is open.

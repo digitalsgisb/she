@@ -123,6 +123,48 @@ function cmmsPhotoUrl(attachment) {
   return match ? `/api/cmms/media/${match[1]}/${match[2]}${cmmsQuery()}` : '';
 }
 
+function cmmsOpenPhoto(url, label, trigger) {
+  document.querySelector('.cmms-photo-viewer')?.close();
+  const viewer=document.createElement('dialog');
+  viewer.className='cmms-photo-viewer';
+  viewer.setAttribute('aria-label','Work order photo');
+  viewer.innerHTML='<div class="cmms-viewer-toolbar"><strong>Photo</strong><button type="button" data-zoom="out" aria-label="Zoom out" disabled>−</button><output aria-live="polite">100%</output><button type="button" data-zoom="in" aria-label="Zoom in" disabled>+</button><button type="button" data-zoom="fit" disabled>Fit</button><button type="button" data-close autofocus aria-label="Close photo">× Close</button></div><div class="cmms-viewer-stage" tabindex="0" aria-label="Photo; scroll to move around when zoomed"><div class="cmms-viewer-canvas"><img alt=""><p role="status">Loading photo…</p></div></div>';
+  const image=viewer.querySelector('img'), stage=viewer.querySelector('.cmms-viewer-stage');
+  const status=viewer.querySelector('[role=status]'), output=viewer.querySelector('output');
+  const controls=[...viewer.querySelectorAll('[data-zoom]')];
+  let scale=1,fitWidth=0;
+  const resize=()=>{
+    if(!image.naturalWidth)return;
+    fitWidth=Math.min(image.naturalWidth,stage.clientWidth-32,(stage.clientHeight-32)*image.naturalWidth/image.naturalHeight);
+    image.style.width=`${Math.max(1,fitWidth)*scale}px`;
+    image.style.height=`${Math.max(1,fitWidth)*scale*image.naturalHeight/image.naturalWidth}px`;
+    output.value=`${Math.round(scale*100)}%`;
+    viewer.querySelector('[data-zoom=out]').disabled=scale<=1;
+    viewer.querySelector('[data-zoom=in]').disabled=scale>=4;
+  };
+  const close=()=>viewer.close();
+  viewer.querySelector('[data-close]').onclick=close;
+  controls.forEach(button=>button.onclick=()=>{
+    scale=button.dataset.zoom==='fit'?1:Math.max(1,Math.min(4,scale+(button.dataset.zoom==='in' ? 0.5 : -0.5)));
+    resize();
+    if(scale===1){stage.scrollLeft=0;stage.scrollTop=0;}
+  });
+  viewer.addEventListener('close',()=>{
+    window.removeEventListener('resize',resize);
+    window.removeEventListener('hashchange',close);
+    viewer.remove();
+    if(trigger?.isConnected)trigger.focus({preventScroll:true});
+  },{once:true});
+  image.onload=()=>{status.hidden=true;controls.forEach(button=>button.disabled=false);resize();};
+  image.onerror=()=>{status.textContent='Could not load this photo. Close and try again.';};
+  image.alt=label;
+  document.body.append(viewer);
+  viewer.showModal();
+  window.addEventListener('resize',resize);
+  window.addEventListener('hashchange',close);
+  image.src=url;
+}
+
 async function cmmsRenderDetail(id) {
   const detail = await api(`/api/cmms/work-orders/${encodeURIComponent(id)}${cmmsQuery()}`);
   const body = document.getElementById('cmmsBody');
@@ -130,6 +172,11 @@ async function cmmsRenderDetail(id) {
   body.className = 'cmms-detail';
   const photos = (detail.attachments || []).filter(a => cmmsPhotoUrl(a));
   body.innerHTML = `<a href="#/work-orders" class="cmms-back">← All SHE work orders</a><div class="cmms-detail-card"><div class="cmms-order-top"><strong>${escapeHtml(detail.number)}</strong><span class="cmms-status cmms-status-${escapeHtml(detail.status)}">${escapeHtml(cmmsStatus[detail.status] || detail.status)}</span></div><h2>${escapeHtml(detail.title)}</h2><p>${escapeHtml(detail.issueDescription || detail.description)}</p><div class="cmms-facts"><span><b>Plant</b>${detail.plantId === 'sendayan' ? 'Sendayan' : 'Port Klang'}</span><span><b>Priority</b>${escapeHtml(detail.priority)}</span><span><b>Equipment</b>${escapeHtml(detail.machineName)}</span><span><b>Area</b>${escapeHtml(detail.area)}</span><span><b>Issued by</b>${escapeHtml(detail.reportedByName)}</span><span><b>Assigned to</b>${escapeHtml(detail.assignedTo?.name || 'Not assigned')}</span><span><b>Created</b>${escapeHtml(cmmsDate(detail.createdAt))}</span><span><b>Updated</b>${escapeHtml(cmmsDate(detail.updatedAt))}</span></div></div><div class="cmms-detail-grid"><section class="cmms-detail-card"><h3>Work and evidence</h3><p><b>Maintenance summary:</b> ${escapeHtml(detail.completionNote || 'Awaiting completion')}</p><div class="cmms-photos">${photos.map(a => `<a href="${cmmsPhotoUrl(a)}" target="_blank" rel="noopener"><img src="${cmmsPhotoUrl(a)}" alt="${escapeHtml(a.kind)} photo"><span>${escapeHtml(a.kind.replace('_',' '))}</span></a>`).join('') || '<p>No photos attached yet.</p>'}</div><form id="cmmsPhotoForm" class="cmms-inline-form"><label>Add an issue or return photo<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></label><button class="secondary-button" type="submit">Upload photo</button></form></section><section class="cmms-detail-card"><h3>Activity</h3><div class="cmms-activity">${(detail.activities || []).map(a => `<div><strong>${escapeHtml(a.action.replace('_',' '))}</strong><small>${escapeHtml(cmmsDate(a.createdAt))}</small><p>${escapeHtml(a.message)}</p></div>`).join('') || '<p>No updates yet.</p>'}</div><form id="cmmsCommentForm" class="cmms-inline-form"><label>Add a follow-up note<textarea name="message" rows="3" maxlength="2000" required></textarea></label><button class="secondary-button" type="submit">Add note</button></form></section></div>${detail.status === 'resolved' ? `<section class="cmms-detail-card cmms-verify"><h3>Verify completed work</h3><p>Review the maintenance summary and photos. Close the job if complete, or return it with a reason.</p><textarea id="cmmsVerifyNote" rows="3" placeholder="Verification note or reason for return"></textarea><div class="cmms-actions"><button class="primary-button" data-verify="closed">Verify and close</button><button class="secondary-button" data-verify="returned">Return for more work</button></div></section>` : ''}<p id="cmmsDetailError" class="form-error" role="alert" hidden></p>`;
+  body.querySelectorAll('.cmms-photos a').forEach(link=>{
+    link.removeAttribute('target');
+    link.setAttribute('aria-label',`View ${link.querySelector('img').alt}`);
+    link.addEventListener('click',event=>{event.preventDefault();cmmsOpenPhoto(link.href,link.querySelector('img').alt,link);});
+  });
   body.querySelector('.cmms-back').insertAdjacentHTML('afterend', '<button class="secondary-button cmms-refresh" type="button">Refresh</button>');
   body.querySelector('.cmms-refresh').addEventListener('click', () => cmmsRenderDetail(id).catch(cmmsError));
   document.getElementById('cmmsCommentForm').addEventListener('submit', async event => {

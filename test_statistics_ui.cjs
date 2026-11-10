@@ -14,10 +14,12 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
    if(p.endsWith('/statistics/records')){
      requests.push(url.href);const kind=p.startsWith('/api/patrols')?'patrol':p.startsWith('/api/red-tags')?'red-tag':'environment',values=JSON.parse(url.searchParams.get('values')||'[]');
      const r={id:1,reference:kind==='red-tag'?'RT2610-001':'Test record #1',title:'Packing line',date:'2026-10-13',status:values[0]||'Open',section:'FG Store',pic:'Fareez',inspector:'Sara',plant:'Port Klang',location:'Production',description:'Damaged guard',photo_url:kind==='red-tag'?'/api/red-tags/1/photo':null,matched_count:1,detail_url:kind==='red-tag'?'/#/red-tag/1':kind==='patrol'?'/#/daily-safety-patrol/1':'/#/reporting-inbox/1'};
+     if(kind==='environment')Object.assign(r,{order_id:'WO-1',order_plant:'port-klang'});
      return json({kind,selection:{label:'October 2026'},field:url.searchParams.get('field')||'',values,exclude:url.searchParams.has('exclude'),total:1,page:1,pages:1,page_size:25,matched_items:1,records:[r]});
    }
    if(p==='/api/red-tags/1')return json({finding:{id:1,red_tag_id:'RT2610-001',finding_date:'2026-10-13',section:'FG Store',pic:'Fareez',machine:'Packing line',hazard:'Damaged guard',rank:'A',type_of_stop:'Immediate stop',recommendation:'Repair guard',issued_by:'SHE',user_id:1,assigned_user_id:3,status:'Open',revision:1},updates:[]});
-   if(p.endsWith('/photo'))return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
+   if(p==='/api/cmms/work-orders/WO-1')return json({attachments:[{kind:'completion',url:'/uploads/work-orders/WO-1/after.png'}]});
+   if(p.endsWith('/photo')||p==='/api/cmms/media/WO-1/after.png')return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
    if(p.endsWith('/statistics')){requests.push(url.href);const d=structuredClone(fixture[p.startsWith('/api/patrols')?'patrol':p.startsWith('/api/red-tags')?'red':'environment']);if(dense){const entries=Array.from({length:12},(_,i)=>({label:'Production area with a long section or topic name '+(i+1),count:12-i}));for(const key of ['sections','categories'])if(d[key])d[key]=entries;}d.selection.label=url.searchParams.get('period')==='year'?'2026':'October 2026';d.selection.mode=url.searchParams.get('period')||'month';if(empty){d.summary={total:0,to_do:0,awaiting_review:0,completed:0,outstanding:0,completion_rate:null};d.backlog={...d.summary};for(const key of ['statuses','sections','ranks','stops','categories','plants','locations','work_orders'])if(d[key])d[key]=[];d.pic_workload=[];d.unassigned=0;d.trend.points.forEach(x=>x.count=0);}return json(d);}
    if(p==='/api/patrols')return json({patrols:[]});
    if(p==='/api/red-tags/settings')return json({revision:1,sections:[{name:'FG Store',pics:['Fareez']}],assignments:[],accounts:[]});
@@ -57,6 +59,11 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.getByRole('heading',{name:'Overview table',exact:true}).waitFor();
  assert.equal(await page.locator('[data-stat-group] option[value="environment"]').textContent(),'Green Eyes');
  assert.equal(await page.locator('.she-chart-tabs').count(),0);
+ const heights=await page.locator('[data-stat-panel=overview] > .she-chart-card').evaluateAll(cards=>cards.map(card=>card.getBoundingClientRect().height));
+ assert.equal(heights.length,3);assert.equal(new Set(heights).size,1);
+ const afterPhoto=page.locator('[data-stat-panel=records] img[alt="Work order follow-up photo"]');
+ await afterPhoto.scrollIntoViewIfNeeded();
+ await page.waitForFunction(()=>document.querySelector('[data-stat-panel=records] img[alt="Work order follow-up photo"]')?.naturalWidth>0);
  await page.locator('[data-stat-group]').selectOption('kaizen');await page.waitForTimeout(100);assert(requests.some(x=>x.includes('group=kaizen')));
  await page.locator('.she-chart-legend li.she-chart-hit').first().click();await page.locator('.dashboard-records-page .she-record-table tbody tr').waitFor();
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.waitForTimeout(350);await page.screenshot({path:'.qa-temp/area-record-cards-mobile.png',fullPage:true});

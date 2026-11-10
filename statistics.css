@@ -77,4 +77,5 @@
 .she-stacked-sections{display:grid;gap:22px}
 .she-stacked-sections>section{min-width:0}
 .she-stacked-sections h2{margin:0 0 10px;color:#214b38;font-size:18px}
+.focused-dashboard-page [aria-labelledby="environment-heading-overview"]>.she-charts-grid{align-items:stretch}
 @media(min-width:761px){.focused-dashboard-page .she-patrol-sections [data-stat-panel=overview]{grid-template-columns:repeat(2,minmax(0,1fr))}}

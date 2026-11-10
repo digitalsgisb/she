@@ -256,6 +256,7 @@ const SHEStats = (() => {
 
   function mountRecordResults(target,kind,query,onLoad) {
     let page=Number(query.get('page')||1),version=0,showCards=false;
+    const autoEvidence=kind==='environment'&&(query.get('group')||'environment')==='environment';
     bindEvidence(target);
     const load=async()=>{
       const current=++version;target.innerHTML='<p role="status" class="she-chart-empty">Loading matching records…</p>';
@@ -268,6 +269,7 @@ const SHEStats = (() => {
         const answerCount=kind==='patrol'&&['answer','section'].includes(data.field);
         const countNote=number(data.total)+' matching '+(kind==='patrol'?'patrols':kind==='red-tag'?'findings':'reports')+(answerCount?' · '+number(data.matched_items)+' matching checklist answers':'');
         const draw=()=>{target.innerHTML='<div class="she-record-heading"><strong>'+countNote+'</strong>'+(data.records.length?'<button class="secondary-button" type="button" data-record-layout>'+(showCards?'Overview table':'Cards')+'</button>':'')+'</div>'+(data.records.length?(showCards?'<div class="she-record-list">'+data.records.map(r=>recordCard(r,kind,answerCount)).join('')+'</div>':recordsTable(statRecordRows(data.records,kind,answerCount),(data.page-1)*data.page_size))+'<div class="she-record-paging"><button class="secondary-button" data-record-prev '+(data.page===1?'disabled':'')+'>Previous</button><span>'+number((data.page-1)*data.page_size+1)+'–'+number(Math.min(data.page*data.page_size,data.total))+' of '+number(data.total)+'</span><button class="secondary-button" data-record-next '+(data.page===data.pages?'disabled':'')+'>Next</button></div>':'<div class="she-chart-empty">No records match this chart selection.</div>');
+        if(autoEvidence&&!showCards)bindEvidence(target,true);
         target.querySelector('[data-record-layout]')?.addEventListener('click',()=>{showCards=!showCards;draw();target.querySelector('[data-record-layout]')?.focus();});
         target.querySelector('[data-record-prev]')?.addEventListener('click',()=>{page--;load();});
         target.querySelector('[data-record-next]')?.addEventListener('click',()=>{page++;load();});};draw();

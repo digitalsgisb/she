@@ -74,6 +74,7 @@
 .she-summary-page .she-overview-figures span{color:#485950}
 .she-summary-page .she-overview-card:focus-visible{outline:2px solid var(--summary-accent);outline-offset:3px}
 
-.she-patrol-sections{display:grid;gap:22px}
-.she-patrol-sections>section{min-width:0}
-.she-patrol-sections h2{margin:0 0 10px;color:#214b38;font-size:18px}
+.she-stacked-sections{display:grid;gap:22px}
+.she-stacked-sections>section{min-width:0}
+.she-stacked-sections h2{margin:0 0 10px;color:#214b38;font-size:18px}
+@media(min-width:761px){.focused-dashboard-page .she-patrol-sections [data-stat-panel=overview]{grid-template-columns:repeat(2,minmax(0,1fr))}}

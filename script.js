@@ -356,7 +356,7 @@ async function renderSheSummary() {
     {title:'Red Tag / Genba',icon:'tag',link:canAccessRoute('red-tag-dashboard')?'red-tag-dashboard':'red-tag-home',url:'/api/red-tags/statistics?period=all'},
     {title:'Hiyari Hatto',icon:'alert',link:'hiyari-dashboard',url:'/api/reporting/statistics?period=all&group=hiyari-hatto'},
     {title:'Air Leak',icon:'droplet',link:'air-leak-home',url:'/api/reporting/statistics?period=all&group=air-leak'},
-    {title:'Green Eyes Event',icon:'leaf',link:'environment-dashboard',url:'/api/reporting/statistics?period=all&group=environment'},
+    {title:'Green Eyes',icon:'leaf',link:'environment-dashboard',url:'/api/reporting/statistics?period=all&group=environment'},
     {title:'Kaizen',icon:'leaf',link:'reporting-inbox?area=kaizen',url:'/api/reporting/statistics?period=all&group=kaizen'}
   ];
   const results=await Promise.allSettled(sources.map(s=>api(s.url)));
@@ -393,7 +393,7 @@ async function renderSheSummary() {
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
   const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','compound-dashboard','environmental-findings-dashboard','co2-dashboard']:[];
-  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'Environmental Enforcement Register','environmental-findings-dashboard':'Environmental Inspection Register','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes Event'};
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'Environmental Enforcement Register','environmental-findings-dashboard':'Environmental Inspection Register','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes'};
   return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><h1>'+title+'</h1>'+(detail?'<p>'+detail+'</p>':'')+'<div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}

@@ -4,8 +4,8 @@ const SHEReporting = (() => {
   const photoError='Use up to 3 JPG, PNG or WebP photos, up to 10 MB each.';
   const validPhotos=files=>files.length<=maxPhotos && files.every(f=>f.size>0 && f.size<=maxPhotoBytes && ['image/jpeg','image/png','image/webp'].includes(f.type));
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const groups = {environment:'Green Eyes Event', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen', 'air-leak':'Air Leak'};
-  const publicGroups = {environment:'Green Eyes Event', 'hiyari-hatto':'Hiyari Hatto'};
+  const groups = {environment:'Green Eyes', 'hiyari-hatto':'Hiyari Hatto', kaizen:'Kaizen', 'air-leak':'Air Leak'};
+  const publicGroups = {environment:'Green Eyes', 'hiyari-hatto':'Hiyari Hatto'};
   const simpleTitles = {
     'Water leakage':'Water leak', 'Oil / chemical spillage':'Oil / chemical spill',
     'Improper waste disposal':'Waste in wrong place', 'Waste segregation issue':'Wrong waste bin',

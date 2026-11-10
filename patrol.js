@@ -37,15 +37,15 @@ const patrolSections = [
 
 const isPatrolRoute=key=>['patrol-home','daily-safety-patrol','patrol-overview','checklist-builder'].includes(key);
 function renderPatrolHome() {
-  renderPatrolContent(`<div class="page inner-page patrol-page patrol-home-page">${patrolNavigation()}<section class="patrol-home-hero"><div><span class="eyebrow">YOUR DAILY CHECK-IN</span><h1>Safety Patrol</h1><p>Current activity, follow-ups and inspection history.</p><a class="primary-button" href="#/daily-safety-patrol">${icon('clipboard',19)} Start checklist ${icon('arrow',18)}</a></div><span class="patrol-home-emblem" aria-hidden="true">${icon('shield',78)}</span></section><div class="patrol-home-stats"><div><span>Completed today</span><strong data-patrol-count="today">—</strong></div><div><span>This month</span><strong data-patrol-count="month">—</strong></div><div><span>Awaiting review</span><strong data-patrol-count="awaiting_review">—</strong></div></div><section class="patrol-attention"><div class="exec-section-heading"><h2>Needs attention</h2><a href="#/patrol-overview?attention=1">View all →</a></div><p data-patrol-open class="patrol-attention-count">Checking findings…</p><div data-patrol-attention aria-live="polite"></div></section><section class="patrol-home-week"><div class="exec-section-heading"><h2>Last 7 days</h2><span data-patrol-scope>INSPECTION ACTIVITY</span></div><div data-patrol-week class="patrol-week-bars" aria-label="Daily completed inspections"><p class="patrol-empty">Loading activity…</p></div></section><section class="patrol-home-recent"><div class="exec-section-heading"><h2>Recent inspections</h2><a href="#/patrol-overview">View all →</a></div><div data-patrol-recent aria-live="polite"><p class="patrol-empty">Loading recent inspections…</p></div></section><div class="patrol-home-tools"><a href="#/patrol-overview">${icon('clock',22)}<span><strong>Patrol history</strong><small>Browse reports and follow up</small></span>${icon('chevron',18)}</a><a href="#/checklist-builder">${icon('clipboard',22)}<span><strong>Checklist builder</strong><small>Create or update a checklist</small></span>${icon('chevron',18)}</a></div><p class="form-error" data-patrol-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-patrol-home-refresh>Refresh activity</button></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page patrol-home-page">${patrolNavigation()}<section class="patrol-home-hero"><div><span class="eyebrow">YOUR DAILY CHECK-IN</span><h1>Safety Patrol</h1><p>Current activity, follow-ups and inspection history.</p><a class="primary-button" href="#/daily-safety-patrol">${icon('clipboard',19)} Start checklist ${icon('arrow',18)}</a></div><span class="patrol-home-emblem" aria-hidden="true">${icon('shield',78)}</span></section><div class="patrol-home-stats"><div><span>Completed today</span><strong data-patrol-count="today">—</strong></div><div><span>This month</span><strong data-patrol-count="month">—</strong></div><div><span>Awaiting review</span><strong data-patrol-count="awaiting_review">—</strong></div></div><section class="patrol-attention"><div class="exec-section-heading"><h2>Patrol tracking</h2><a href="#/patrol-overview">View history →</a></div><p data-patrol-open class="patrol-attention-count">Checking findings…</p><div data-patrol-attention aria-live="polite"></div></section><details class="patrol-home-week"><summary>Last 7 days <small data-patrol-scope></small></summary><div data-patrol-week class="patrol-week-bars" aria-label="Daily completed inspections"></div></details><div class="patrol-home-tools"><a href="#/patrol-overview">${icon('clock',22)}<span><strong>Patrol history</strong><small>Browse reports and follow up</small></span>${icon('chevron',18)}</a><a href="#/checklist-builder">${icon('clipboard',22)}<span><strong>Checklist builder</strong><small>Create or update a checklist</small></span>${icon('chevron',18)}</a></div><p class="form-error" data-patrol-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-patrol-home-refresh>Refresh activity</button></div>`);
   const root=content.querySelector('.patrol-home-page');
   delete root.dataset.snapshot;
   root.querySelector('[data-patrol-home-refresh]').onclick=()=>loadPatrolHome(root);
   loadPatrolHome(root);
 }
 
-function patrolOverviewTable(rows,today,attention=false){
-  if(!rows.length)return '<p class="patrol-empty">'+(attention?'No findings need follow-up.':'No inspections yet.')+'</p>';
+function patrolOverviewTable(rows,today){
+  if(!rows.length)return '<p class="patrol-empty">'+'No inspections yet.'+'</p>';
   const timeZone='Asia/Kuala_Lumpur';
   const dayKey=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
   const dateLabel=new Intl.DateTimeFormat('en-MY',{timeZone,day:'numeric',month:'short',year:'numeric'});
@@ -59,11 +59,32 @@ function patrolOverviewTable(rows,today,attention=false){
     const description=[findings?findings+' NOT OK':'No NOT OK items',
       ...issues.slice(0,3).map(item=>[item.label,item.remark].filter(Boolean).join(' · ')),
       !issues.length&&row.remarks,issues.length>3?'+'+(issues.length-3)+' more findings':''].filter(Boolean).join('\n');
-    return {title:row.title,reference:'#'+row.id,date:key===today?'Today':key===previous?'Yesterday':dateLabel.format(date),
-      context:row.inspector,description,status:patrolStatusLabels[row.status]||row.status,
-      photo_url:row.thumbnail_url,after_url:row.after_url,detail_url:'#/daily-safety-patrol/'+row.id+(attention?'?followup=1':''),
-      action:attention?(row.status==='action_taken'&&['admin','executive'].includes(currentUser.role)?'Review action':'Follow up'):''};
+    const status=patrolStatusLabels[row.status]||'Open';
+    const statusTone=row.status==='resolved'?'is-complete':row.status==='action_taken'?'is-in-progress':'is-open';
+    return {patrolId:row.id,title:row.title,reference:'#'+row.id,date:key===today?'Today':key===previous?'Yesterday':dateLabel.format(date),
+      context:row.inspector,description,status,statusTone,needsAttention:row.status!=='resolved',
+      photo_url:row.thumbnail_url,after_url:row.after_url};
   }),0,'Inspector');
+}
+
+function bindPatrolOverviewDetails(table,rows){
+  table.onclick=event=>{
+    const button=event.target.closest('[data-expand-patrol]');
+    if(!button)return;
+    const expanded=table.querySelector('[aria-expanded=true]');
+    expanded?.setAttribute('aria-expanded','false');
+    table.querySelector('.patrol-overview-detail')?.remove();
+    if(expanded===button)return;
+    const patrol=rows.find(row=>String(row.id)===button.dataset.expandPatrol);
+    const detail=button.closest('tr').insertAdjacentElement('afterend',document.createElement('tr'));
+    detail.className='patrol-overview-detail';
+    const issues=patrol.issues||[];
+    const findings=issues.length?'<ul>'+issues.map(issue=>'<li>'+escapeHtml(issue.label)+(issue.remark?' · '+escapeHtml(issue.remark):'')+'</li>').join('')+'</ul>':'';
+    const remarks=patrol.remarks?'<p>'+escapeHtml(patrol.remarks)+'</p>':'';
+    const href='#/daily-safety-patrol/'+patrol.id;
+    detail.innerHTML='<td colspan="7"><div class="patrol-overview-detail-copy"><strong>Patrol #'+escapeHtml(patrol.id)+'</strong>'+(findings+remarks||'<p>No findings recorded.</p>')+'<a class="secondary-button" href="'+href+(patrol.status==='resolved'?'':'?followup=1')+'">'+(patrol.status==='resolved'?'View full patrol':'Open follow-up')+' →</a></div></td>';
+    button.setAttribute('aria-expanded','true');
+  };
 }
 
 async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
@@ -78,11 +99,15 @@ async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
     root.dataset.snapshot=snapshot;
     root.querySelectorAll('[data-patrol-count]').forEach(el=>el.textContent=data.counts[el.dataset.patrolCount]);
     root.querySelector('[data-patrol-open]').textContent=data.attention_total?`${data.attention_total} unresolved ${data.attention_total===1?'patrol':'patrols'} · all dates`:'No unresolved findings';
-    root.querySelector('[data-patrol-attention]').innerHTML=patrolOverviewTable(data.attention||[],data.date,true);
+    const table=root.querySelector('[data-patrol-attention]');
+    const attention=data.attention||[];
+    const attentionIds=new Set(attention.map(row=>row.id));
+    const rows=[...attention,...data.recent.filter(row=>!attentionIds.has(row.id))];
+    table.innerHTML=patrolOverviewTable(rows,data.date);
+    bindPatrolOverviewDetails(table,rows);
     root.querySelector('[data-patrol-scope]').textContent=data.scope==='team'?'TEAM ACTIVITY':'YOUR ACTIVITY';
     const max=Math.max(1,...data.week.map(day=>day.count));
     root.querySelector('[data-patrol-week]').innerHTML=data.week.some(day=>day.count>0)?data.week.map(day=>`<div class="patrol-week-day" ${day.date===data.date?'data-today':''}><strong>${day.count}</strong><span class="patrol-week-track">${day.count>0?`<i style="height:${day.count/max*100}%"></i>`:''}</span><small>${new Date(day.date+'T12:00:00+08:00').toLocaleDateString('en-MY',{weekday:'short',timeZone:'Asia/Kuala_Lumpur'})}</small></div>`).join(''):'<p class="patrol-empty">No completed patrols in the last 7 days.</p>';
-    root.querySelector('[data-patrol-recent]').innerHTML=patrolOverviewTable(data.recent,data.date);
     SHEStats.bindEvidence(root);
     root.querySelector('[data-patrol-home-error]').hidden=true;
   }catch(error){if(root.isConnected&&currentRoute()==='patrol-home'){const box=root.querySelector('[data-patrol-home-error]');if(box){box.textContent=error.message;box.hidden=false;}}}
@@ -144,7 +169,7 @@ let patrolTemplates = [];
 let activePatrolTemplate = null;
 let builderTemplate = null;
 let detailPatrol = null;
-const patrolStatusLabels = {open: 'Open', action_taken: 'Action taken · awaiting review', resolved: 'Resolved'};
+const patrolStatusLabels = {open: 'Open', action_taken: 'In progress', resolved: 'Close'};
 function patrolStatusMarkup(status) { return `<span id="patrolFollowupStatus" class="patrol-status patrol-status-${status}">${patrolStatusLabels[status] || 'Open'}</span>`; }
 
 function patrolThreadMarkup(patrol) {
@@ -165,7 +190,7 @@ function patrolHighlightedMarkup(patrol){
 function renderCompletedPatrol(patrol) {
   detailPatrol = patrol;
   const canResolve = ['admin','executive'].includes(currentUser.role);
-  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<a class="category-back" href="#/patrol-overview">${icon('arrow',16)} Back to daily reports</a><div class="page-heading"><span class="eyebrow dark-eyebrow">PATROL #${patrol.id}</span><h1>${new URLSearchParams(location.hash.split('?')[1]||'').get('followup')==='1'?`Follow up patrol #${patrol.id}`:escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${escapeHtml(patrol.inspector_name)} · ${new Date(patrol.created_at*1000).toLocaleString()} · Submitted by ${escapeHtml(patrol.submitted_by)}</p>${patrolStatusMarkup(patrol.followup_status)}</div><section class="patrol-card"><h2>Original findings</h2><p class="patrol-answer">${escapeHtml(patrol.remarks || 'No overall remarks. Open the checklist below for individual observations.')}</p>${patrolHighlightedMarkup(patrol)}${patrolPhotoMarkup(patrol.id,patrol.attachments)}<details class="patrol-checklist-details"><summary>View full checklist and item remarks · ${'★'.repeat(patrol.rating)}${'☆'.repeat(3-patrol.rating)}</summary>${patrol.template ? customPatrolQuestions(patrol.template,patrol.answers,patrol.attachments,patrol.id,patrol.item_remarks || {}) : patrolSections.map(([group,title,items]) => patrolGrid(group,title,items,patrol.answers,patrol.item_remarks || {})).join('')}</details></section><section class="patrol-card patrol-followup"><div class="patrol-followup-heading"><h2>Follow up this patrol</h2><small id="patrolThreadSync" role="status">Updates every 5 seconds</small></div><p class="patrol-followup-context">Patrol #${patrol.id} · ${new Date(patrol.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(patrol.inspector_name)}</p><p class="patrol-chart-note">Add your action or photo below. ${canResolve?'Verify all findings before resolving.':'Choose Action taken when ready for SHE review.'}</p><div id="patrolThread" aria-live="polite">${patrolThreadMarkup(patrol)}</div><form id="patrolReplyForm" data-patrol-id="${patrol.id}" class="patrol-reply-form"><div class="patrol-field"><label for="patrolReplyMessage">Your reply <small>(optional with photos)</small></label><textarea id="patrolReplyMessage" rows="3" maxlength="2000" placeholder="What action was taken? Ask a question or share an update…"></textarea></div><div class="patrol-field"><label for="patrolReplyPhotos">Add action photos <small>(optional)</small></label><input id="patrolReplyPhotos" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.heic" multiple /><small>Up to 10 photos per reply. Photos stay with this update.</small><div id="patrolReplyPreview" class="patrol-reply-preview"></div></div><fieldset class="patrol-reply-state"><legend>Update status</legend><div class="patrol-answer-buttons">${[['keep','Keep current status'],['action_taken','Action taken'],['open','Open / reopen'],...(canResolve ? [['resolved','Reviewed · resolve']] : [])].map(([value,label]) => `<label class="patrol-answer-button"><input type="radio" name="followup_status" value="${value}" ${value==='keep' ? 'checked' : ''} /><span>${label}</span></label>`).join('')}</div></fieldset><div id="patrolReplyError" class="form-error" hidden role="alert"></div><div class="patrol-reply-footer"><span id="patrolReplyProgress" role="status">Replies and photos are shared with everyone who can access this patrol.</span><button type="submit" class="primary-button">Send update</button></div></form></section></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<a class="category-back" href="#/patrol-overview">${icon('arrow',16)} Back to daily reports</a><div class="page-heading"><span class="eyebrow dark-eyebrow">PATROL #${patrol.id}</span><h1>${new URLSearchParams(location.hash.split('?')[1]||'').get('followup')==='1'?`Follow up patrol #${patrol.id}`:escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${escapeHtml(patrol.inspector_name)} · ${new Date(patrol.created_at*1000).toLocaleString()} · Submitted by ${escapeHtml(patrol.submitted_by)}</p>${patrolStatusMarkup(patrol.followup_status)}</div><details class="patrol-card patrol-detail-collapse"><summary>Original findings</summary><p class="patrol-answer">${escapeHtml(patrol.remarks || 'No overall remarks. Open the checklist below for individual observations.')}</p>${patrolHighlightedMarkup(patrol)}${patrolPhotoMarkup(patrol.id,patrol.attachments)}<details class="patrol-checklist-details"><summary>View full checklist and item remarks · ${'★'.repeat(patrol.rating)}${'☆'.repeat(3-patrol.rating)}</summary>${patrol.template ? customPatrolQuestions(patrol.template,patrol.answers,patrol.attachments,patrol.id,patrol.item_remarks || {}) : patrolSections.map(([group,title,items]) => patrolGrid(group,title,items,patrol.answers,patrol.item_remarks || {})).join('')}</details></details><section class="patrol-card patrol-followup"><div class="patrol-followup-heading"><h2>Follow up this patrol</h2><small id="patrolThreadSync" role="status">Updates every 5 seconds</small></div><p class="patrol-followup-context">Patrol #${patrol.id} · ${new Date(patrol.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(patrol.inspector_name)}</p><p class="patrol-chart-note">Add your action or photo below. ${canResolve?'Verify the findings before closing.':'Choose In progress when ready for SHE review.'}</p><details class="patrol-detail-collapse"><summary>Update history</summary><div id="patrolThread" aria-live="polite">${patrolThreadMarkup(patrol)}</div></details><form id="patrolReplyForm" data-patrol-id="${patrol.id}" data-original-status="${patrol.followup_status}" class="patrol-reply-form"><div class="patrol-field"><label for="patrolReplyMessage">Your reply <small>(optional with photos)</small></label><textarea id="patrolReplyMessage" rows="3" maxlength="2000" placeholder="What action was taken? Ask a question or share an update…"></textarea></div><div class="patrol-field"><label for="patrolReplyPhotos">Add action photos <small>(optional)</small></label><input id="patrolReplyPhotos" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.heic" multiple /><small>Up to 10 photos per reply. Photos stay with this update.</small><div id="patrolReplyPreview" class="patrol-reply-preview"></div></div><fieldset class="patrol-reply-state"><legend>Update status</legend><div class="patrol-answer-buttons">${Object.entries(patrolStatusLabels).filter(([value])=>value!=='resolved'||canResolve||patrol.followup_status==='resolved').map(([value,label]) => `<label class="patrol-answer-button"><input type="radio" name="followup_status" value="${value}" ${value===patrol.followup_status ? 'checked' : ''} /><span>${label}</span></label>`).join('')}</div></fieldset><div id="patrolReplyError" class="form-error" hidden role="alert"></div><div class="patrol-reply-footer"><span id="patrolReplyProgress" role="status">Replies and photos are shared with everyone who can access this patrol.</span><button type="submit" class="primary-button">Send update</button></div></form></section></div>`);
   if(new URLSearchParams(location.hash.split('?')[1]||'').get('followup')==='1')requestAnimationFrame(()=>{
     const form=document.getElementById('patrolReplyForm');form?.scrollIntoView({block:'start'});document.getElementById('patrolReplyMessage')?.focus({preventScroll:true});
   });
@@ -537,10 +562,10 @@ function initPatrolEvents() {
     try {
       validatePatrolFiles(files);
       if (files.some(file => !/\.(jpe?g|png|gif|webp|heic)$/i.test(file.name))) throw new Error('Choose photos for this update.');
-      if (!message.value.trim() && !files.length) throw new Error('Write a reply or add an action photo.');
+      const choice = form.querySelector('input[name="followup_status"]:checked').value;
+      if (!message.value.trim() && !files.length && choice===form.dataset.originalStatus) throw new Error('Change the status, write a reply or add a photo.');
       if (!form.dataset.updateId) {
-        const choice = form.querySelector('input[name="followup_status"]:checked').value;
-        const result = await api(`/api/patrols/${id}/updates`, 'POST', {message: message.value.trim() || 'Added action photos.', status: choice === 'keep' ? detailPatrol.followup_status : choice, expected_status: detailPatrol.followup_status});
+        const result = await api(`/api/patrols/${id}/updates`, 'POST', {message: message.value.trim() || (files.length?'Added action photos.':'Status updated to '+patrolStatusLabels[choice]+'.'), status: choice, expected_status: form.dataset.originalStatus});
         form.dataset.updateId = result.id;
         form.dataset.uploaded = '0';
         message.readOnly = true; photoInput.disabled = true;

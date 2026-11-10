@@ -87,3 +87,17 @@
 @media(min-width:761px){.focused-dashboard-page .she-patrol-sections [data-stat-panel=overview]{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .patrol-home-page .she-record-excerpt{white-space:pre-line;-webkit-line-clamp:4}
+.patrol-home-page .she-record-table .she-record-attention{background:#fff5da}
+.patrol-home-page .she-record-table .she-record-attention:hover{background:#fff0c9}
+.patrol-home-page .she-record-badge{padding:3px 8px;border-radius:12px}
+.patrol-home-page .she-record-badge.is-in-progress{background:#e9f1ff;color:#325b91}
+.patrol-home-page .she-record-badge.is-open{background:#ffedbc;color:#765018}
+.patrol-home-page .patrol-overview-detail td{background:#fff}
+.patrol-overview-detail-copy{max-width:min(640px,calc(100vw - 90px));overflow-wrap:anywhere}
+.patrol-overview-detail-copy ul{margin:6px 0 10px;padding-left:20px}
+.patrol-overview-detail-copy li+li{margin-top:5px}
+.patrol-detail-collapse>summary,.patrol-home-week>summary{cursor:pointer;font-weight:700}
+.patrol-home-week>summary small{margin-left:8px;font-weight:400}
+.patrol-reply-state label:has(input[value=open]){background:#fff3d5;color:#765018}
+.patrol-reply-state label:has(input[value=action_taken]){background:#e9f1ff;color:#325b91}
+.patrol-reply-state label:has(input[value=resolved]){background:#e6f3eb;color:#216e49}

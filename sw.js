@@ -1,4 +1,4 @@
-const CACHE = 'she-shell-overview-v43';
+const CACHE = 'she-shell-hiyari-dashboard-v44';
 const ASSETS = ['/', '/styles.css', '/script.js', '/air-leak-ui.js', '/module-home-ui.js', '/patrol.js', '/cmms-ui.js', '/report', '/reporting-ui.js', '/reporting-alerts.js', '/reporting.css', '/redtag-ui.js', '/redtag.css', '/statistics-ui.js', '/statistics.css', '/monitoring-ui.js', '/monitoring.css', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {

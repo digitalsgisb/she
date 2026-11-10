@@ -16,9 +16,9 @@ const SHEMonitoring = (() => {
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  function chart(items) {
+  function chart(items, showEmptyTracks=true) {
     const max=Math.max(1,...items.map(r=>r.total||0));
-    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total?Math.max(3,r.total/max*154):0;return `<button type="button" data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${display(r.total)}</strong><span class="monitor-track"><svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg></span><span>${names(r.month)}</span></button>`;}).join('')+'</div>';
+    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total?(showEmptyTracks?Math.max(3,r.total/max*154):r.total/max*154):0;return `<button type="button" data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${display(r.total)}</strong><span class="monitor-track">${height||showEmptyTracks?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg>`:''}</span><span>${names(r.month)}</span></button>`;}).join('')+'</div>';
   }
   function stats(items) {
     return '<div class="report-stats">'+items.map(([label,value])=>`<div><strong>${display(value)}</strong><span>${esc(label)}</span></div>`).join('')+'</div>';
@@ -65,16 +65,35 @@ const SHEMonitoring = (() => {
       };
     }
     function drawHiyari() {
-      body.innerHTML=stats([['Total reports',data.total],['Open / in progress',data.open],['Resolved / closed',data.closed],['Completion',data.completion===null?'—':data.completion+'%']])+`<div class="report-admin-links"><a class="primary-button" href="/report?area=hiyari-hatto">New Hiyari Hatto form ↗</a><a class="secondary-button" href="/templates/hiyari-hatto.pdf" target="_blank" rel="noopener">FR-SH-12 blank template ↗</a><a class="secondary-button" href="#/hiyari-hatto">Available forms</a></div><section class="report-detail-card"><h2>Monthly progress · ${year}</h2><p>Uses the event date when supplied; older reports use their submission date in Malaysia. Closure is the current status of reports from each month.</p>${chart(data.months)}<div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th>Progress</th>${data.months.map(r=>`<th>${names(r.month)}</th>`).join('')}</tr></thead><tbody>${['total','open','closed'].map(f=>`<tr><th>${f}</th>${data.months.map(r=>`<td>${r[f]}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section><div class="monitor-breakdowns">${Object.entries(data.categories).map(([field,values])=>`<section class="report-detail-card"><h2>${esc({category:'Status category',rank:'Rank',stop:'STOP 6',section:'Section',pic:'PIC'}[field])}</h2>${Object.keys(values).length?Object.entries(values).map(([label,n])=>`<button class="monitor-breakdown" data-filter-field="${field}" data-filter-value="${esc(label)}"><span>${esc(label)}</span><strong>${n}</strong></button>`).join(''):'<p>No reports recorded.</p>'}</section>`).join('')}</div><section class="report-detail-card"><h2>Matching reports</h2><button class="secondary-button" id="clearHiyariFilter">Show all</button><p id="hiyariFilterLabel"></p><div class="report-inbox-grid" id="hiyariRows"></div></section>`;
-      function records(rows,label='All reports') {
-        body.querySelector('#hiyariFilterLabel').textContent=label+' · '+rows.length;
-        const target=body.querySelector('#hiyariRows');
+      const fields={category:'Report type',rank:'Rank',stop:'STOP 6',section:'Section',pic:'Person in charge'};
+      const groups=[['Month',data.months.map(row=>({value:'month:'+row.month,label:names(row.month),count:row.total}))],
+        ...Object.entries(fields).map(([field,title])=>[title,Object.entries(data.categories[field]||{}).map(([label,count])=>({value:field+':'+label,label,count}))])];
+      body.innerHTML=stats([['Total reports',data.total],['Open / in progress',data.open],['Resolved / closed',data.closed],['Completion',data.completion===null?'—':data.completion+'%']])+
+        `<section class="report-detail-card hiyari-dashboard-reports">
+          <div class="hiyari-dashboard-toolbar"><div><h2>Reports &amp; evidence</h2><p id="hiyariFilterLabel" role="status"></p></div>
+            <label>Filter reports<select id="hiyariFilter"><option value="">All reports</option>${groups.filter(([,options])=>options.length).map(([group,options])=>`<optgroup label="${esc(group)}">${options.map(({value,label,count})=>`<option value="${esc(value)}">${esc(label)} (${count})</option>`).join('')}</optgroup>`).join('')}</select></label>
+          </div><div id="hiyariRows"></div>
+        </section>
+        <section class="report-detail-card hiyari-dashboard-trend"><h2>Reports by month · ${year}</h2>
+          ${data.total?`<p>Grouped by event date, or submission date if missing.</p><div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly report chart">${chart(data.months,false)}</div>`:'<p>No reports recorded this year.</p>'}
+        </section>`;
+      const filter=body.querySelector('#hiyariFilter');
+      const target=body.querySelector('#hiyariRows');
+      function records() {
+        const [field,...parts]=filter.value.split(':');
+        const value=parts.join(':');
+        const rows=!field?data.records:data.records.filter(r=>field==='month'?r.date.startsWith(value):r[field]===value);
+        body.querySelector('#hiyariFilterLabel').textContent=rows.length+(rows.length===1?' report':' reports');
         target.innerHTML=SHEStats.reportTable(rows.map(r=>({...r,title:'Hiyari Hatto',location:r.section==='Unspecified'?r.location:r.section,description:[r.description,'Rank '+r.rank,'STOP '+r.stop,'PIC '+r.pic].filter(Boolean).join(' · ')})));
-        SHEStats.bindEvidence(target);
+        SHEStats.bindEvidence(target,true);
       }
-      body.querySelectorAll('[data-filter-field]').forEach(b=>b.onclick=()=>records(data.records.filter(r=>r[b.dataset.filterField]===b.dataset.filterValue),b.dataset.filterField+': '+b.dataset.filterValue));
-      body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>records(data.records.filter(r=>r.date.startsWith(b.dataset.month)),names(b.dataset.month)+' '+year));
-      body.querySelector('#clearHiyariFilter').onclick=()=>records(data.records);records(data.records);
+      filter.onchange=records;
+      body.querySelectorAll('[data-month]').forEach(button=>button.onclick=()=>{
+        filter.value='month:'+button.dataset.month;
+        records();
+        filter.focus();
+      });
+      records();
     }
     root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;sessionStorage.setItem('she-monitor-year',year);load();}};
     root.querySelector('#monitorRefresh').onclick=load;

@@ -166,28 +166,37 @@ const SHEStats = (() => {
       return '<tr><td>'+(offset+i+1)+'</td><th scope="row">'+link+'<small>'+esc([r.reference,r.date].filter(Boolean).join(' · '))+'</small></th><td>'+esc(r.context||'—')+'</td><td><div class="she-record-excerpt">'+esc(r.description||'—')+'</div></td><td><span class="she-record-badge'+(/^(resolved|closed)$/i.test(status)?' is-complete':'')+'">'+esc(status||'—')+'</span></td><td data-evidence-before>'+(r.photo_url?photo(r.photo_url,'Before · '+label):'<small>No photo</small>')+'</td><td'+evidence+'>'+(r.after_url?photo(r.after_url,'After · '+label):r.order_id?'<button class="she-record-link" type="button" data-load-evidence>Load photos</button>':'<small>No photo</small>')+'</td></tr>';
     }).join('')+'</tbody></table></div>';
   }
-  function bindEvidence(target) {
+  async function loadEvidence(button) {
+    if(!button.isConnected||button.disabled)return;
+    const cell=button.parentElement,{evidenceOrder,evidencePlant}=cell.dataset;
+    button.disabled=true;button.textContent='Loading photos…';
+    try{
+      const plant=encodeURIComponent(evidencePlant);
+      const order=await api('/api/cmms/work-orders/'+encodeURIComponent(evidenceOrder)+'?plant='+plant);
+      if(!cell.isConnected)return;
+      const images=(order.attachments||[]).flatMap(item=>{
+        const match=String(item.url||'').match(/^\/uploads\/work-orders\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9._-]+)$/);
+        return match?[{url:'/api/cmms/media/'+match[1]+'/'+match[2]+'?plant='+plant,kind:item.kind}]:[];
+      });
+      const before=cell.parentElement.querySelector('[data-evidence-before]');
+      if(!before.querySelector('img'))before.innerHTML=images.filter(item=>item.kind==='issue').map(item=>photo(item.url,'Work order issue photo')).join('')||'<small>No photo</small>';
+      cell.innerHTML=images.filter(item=>item.kind!=='issue').map(item=>photo(item.url,'Work order follow-up photo')).join('')||'<small>No photo</small>';
+    }catch{
+      button.disabled=false;button.textContent='Photos unavailable · Retry';
+    }
+  }
+  function bindEvidence(target,automatic=false) {
+    if(automatic){
+      const pending=[...target.querySelectorAll('[data-load-evidence]')];
+      const next=async()=>{while(pending.length&&target.isConnected)await loadEvidence(pending.shift());};
+      const workers=Math.min(4,pending.length);
+      for(let i=0;i<workers;i++)next();
+    }
     if(target.dataset.evidenceBound)return;
     target.dataset.evidenceBound='true';
-    target.addEventListener('click',async event=>{
+    target.addEventListener('click',event=>{
       const button=event.target.closest('[data-load-evidence]');
-      if(!button)return;
-      const cell=button.parentElement,{evidenceOrder,evidencePlant}=cell.dataset;
-      button.disabled=true;button.textContent='Loading…';
-      try{
-        const plant=encodeURIComponent(evidencePlant);
-        const order=await api('/api/cmms/work-orders/'+encodeURIComponent(evidenceOrder)+'?plant='+plant);
-        if(!cell.isConnected)return;
-        const images=(order.attachments||[]).flatMap(item=>{
-          const match=String(item.url||'').match(/^\/uploads\/work-orders\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9._-]+)$/);
-          return match?[{url:'/api/cmms/media/'+match[1]+'/'+match[2]+'?plant='+plant,kind:item.kind}]:[];
-        });
-        const before=cell.parentElement.querySelector('[data-evidence-before]');
-        if(!before.querySelector('img'))before.innerHTML=images.filter(item=>item.kind==='issue').map(item=>photo(item.url,'Work order issue photo')).join('')||'<small>No photo</small>';
-        cell.innerHTML=images.filter(item=>item.kind!=='issue').map(item=>photo(item.url,'Work order follow-up photo')).join('')||'<small>No photo</small>';
-      }catch{
-        button.disabled=false;button.textContent='Photos unavailable · Retry';
-      }
+      if(button)loadEvidence(button);
     });
     target.addEventListener('error',event=>{
       const link=event.target.closest?.('.she-evidence');

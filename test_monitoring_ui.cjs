@@ -40,7 +40,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   for(const key of ['hos_name','hos_employee_no','resolution','pic','team_member','head_of_section','she_officer','manager'])await page.locator('#hh-'+key).fill('QA '+key);
   await page.locator('#hh-stop').selectOption('5');await page.locator('#hh-target_date').fill('2026-10-25');await page.locator('#hiyariReviewForm button').click();await page.locator('#hh-status').waitFor();await page.waitForFunction(()=>document.querySelector('#hh-status')?.value==='closed');
   await page.evaluate(()=>document.body.classList.add('hiyari-print'));await page.emulateMedia({media:'print'});assert(await page.locator('.hiyari-print-values').isVisible());assert(!(await page.locator('#hiyariReviewForm').isVisible()));await page.screenshot({path:'.qa-temp/monitor-hiyari-print.png',fullPage:true});await page.emulateMedia({media:'screen'});await page.evaluate(()=>document.body.classList.remove('hiyari-print'));
-  await page.goto(base+'/#/hiyari-dashboard');await page.locator('[data-filter-field="rank"][data-filter-value="A"]').waitFor();await page.locator('[data-filter-field="rank"][data-filter-value="A"]').click();assert.equal(await page.locator('#hiyariRows .she-record-table tbody tr').count(),1);
+  await page.goto(base+'/#/hiyari-dashboard');await page.locator('#hiyariFilter').selectOption('rank:A');assert.equal(await page.locator('#hiyariRows .she-record-table tbody tr').count(),1);
   await page.screenshot({path:'.qa-temp/monitor-hiyari-summary-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
   for(const route of ['accident-dashboard','compound-dashboard','environmental-findings-dashboard','hiyari-dashboard']){

@@ -2,3 +2,9 @@
 .hiyari-print-values{display:none}.dashboard-hero-controls [data-dashboard-controls]{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}@media print{body.hiyari-print #hiyariReviewForm{display:none!important}body.hiyari-print .hiyari-print-values{display:block}body.hiyari-print .hiyari-print-values dd{white-space:pre-wrap;overflow-wrap:anywhere}body.hiyari-print #hiyariReview{break-inside:auto}}
 .monitor-track svg{display:block;width:100%;height:154px}.monitor-track rect{fill:#25745b}.monitor-month-chart button:hover rect{fill:#439b7a}
 @media print{body.hiyari-print #appShell{display:block!important}body.hiyari-print .main-column,body.hiyari-print #content,body.hiyari-print .page{width:100%!important;max-width:none!important;margin:0!important}body.hiyari-print .hiyari-history{display:none!important}body.hiyari-print .report-definition{display:grid;grid-template-columns:180px minmax(0,1fr);gap:7px 16px}body.hiyari-print .report-definition dt,body.hiyari-print .report-definition dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}body.hiyari-print .report-detail-card{break-inside:auto}}
+.hiyari-dashboard-toolbar{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.hiyari-dashboard-toolbar h2,.hiyari-dashboard-toolbar p{margin:0}
+.hiyari-dashboard-toolbar label{display:grid;gap:5px;min-width:0;max-width:100%;font-weight:650}
+.hiyari-dashboard-toolbar select{max-width:100%;min-height:40px;padding:6px 10px;border:1px solid #cbded8;border-radius:8px;background:#fff;color:#245542;font:inherit}
+.hiyari-dashboard-trend .monitor-track{background:transparent}
+.hiyari-dashboard-reports .she-record-badge{white-space:nowrap}

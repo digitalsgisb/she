@@ -78,4 +78,10 @@
 .she-stacked-sections>section{min-width:0}
 .she-stacked-sections h2{margin:0 0 10px;color:#214b38;font-size:18px}
 .focused-dashboard-page [aria-labelledby="environment-heading-overview"]>.she-charts-grid{align-items:stretch}
+.focused-dashboard-page [data-stat-panel=monthly]{grid-template-columns:minmax(0,1fr)}
+.she-column-scroll{overflow-x:auto}
+.she-column-grid{display:grid;grid-template-columns:repeat(var(--columns),minmax(64px,1fr));gap:10px}
+.she-column{display:grid;grid-template-rows:auto 128px 1fr;gap:6px;justify-items:center;min-width:0;padding:4px;border:0;background:none;color:#244f3c;font:inherit;font-size:12px;text-align:center;overflow-wrap:anywhere}
+.she-column-track{display:flex;align-items:end;justify-content:center;width:100%;border-bottom:1px solid #d5e5dc}
+.she-column-track>span{width:70%;max-width:56px;background:#237d59;border-radius:4px 4px 0 0}
 @media(min-width:761px){.focused-dashboard-page .she-patrol-sections [data-stat-panel=overview]{grid-template-columns:repeat(2,minmax(0,1fr))}}

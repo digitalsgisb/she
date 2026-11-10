@@ -3,8 +3,8 @@ const SHEMonitoring = (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const configs = {
     'accident-dashboard':{kind:'accident',area:'safety',title:'Monthly accident statistic',detail:'On-job accidents by section, off-job accidents and injury frequency rate.'},
-    'compound-dashboard':{kind:'compound',area:'environment',title:'Environmental Enforcement Register',detail:'Monthly counts of compound notices for environmental offences.'},
-    'environmental-findings-dashboard':{kind:'environmental-findings',area:'environment',title:'Environmental Inspection Register',detail:'Spillage, Aedes larvae, stagnant water and other inspection findings.'},
+    'environmental-enforcement-register':{kind:'compound',area:'environment',title:'Environmental Enforcement Register',detail:'Monthly counts of compound notices for environmental offences.'},
+    'environmental-inspection-register':{kind:'environmental-findings',area:'environment',title:'Environmental Inspection Register',detail:'Spillage, Aedes larvae, stagnant water and other inspection findings.'},
     'hiyari-dashboard':{kind:'hiyari',area:'safety',title:'Hiyari Hatto Summary',detail:'Progress, categories, rank, STOP 6 and section follow-up.'}
   };
   const names = month => new Date(month+'-01T12:00:00+08:00').toLocaleDateString('en-MY',{month:'short',timeZone:'Asia/Kuala_Lumpur'});
@@ -38,11 +38,14 @@ const SHEMonitoring = (() => {
     const yearControl=`<label>Year<input id="monitorYear" type="number" min="2000" max="2099" value="${esc(year)}"></label>`;
     const refresh='<button class="secondary-button" id="monitorRefresh">Refresh</button>';
     const bodyMarkup='<div id="monitorBody" aria-live="polite"></div>';
-    if(register){
+    const exportButton='<button class="secondary-button" id="monitorExport">Export CSV</button>';
+    if(config.area==='environment'){
+      root.innerHTML=`<div class="page inner-page environmental-register-page"><a class="back-link" href="#/environmental">← Environmental</a><div class="page-heading"><h1>${config.title}</h1><p>${config.detail}</p></div><div class="she-stat-controls">${yearControl}${refresh}${exportButton}</div>${bodyMarkup}</div>`;
+    }else if(register){
       root.innerHTML=`<div class="page inner-page accident-register-page"><a class="back-link" href="#/safety">← Safety</a><div class="page-heading"><h1>Accident Register</h1><p>Update monthly accident counts and man-hours.</p></div><div class="she-stat-controls">${yearControl}${refresh}<a class="secondary-button" href="#/accident-dashboard">View dashboard</a></div>${bodyMarkup}</div>`;
     }else{
       root.innerHTML=`<div class="page inner-page focused-dashboard-page ${config.kind==='accident'?'accident-dashboard-page':''}">${dashboardHeader(config.area,config.title,config.detail,key)}${bodyMarkup}</div>`;
-      root.querySelector('[data-dashboard-controls]').innerHTML=yearControl+refresh+'<button class="secondary-button" id="monitorExport">Export CSV</button>';
+      root.querySelector('[data-dashboard-controls]').innerHTML=yearControl+refresh+exportButton;
       bindDashboardHeader();
     }
     const body=root.querySelector('#monitorBody');
@@ -60,8 +63,7 @@ const SHEMonitoring = (() => {
       if(register){drawAccidentEditor();return;}
       if(config.kind==='accident'){drawAccident();return;}
       if(config.kind==='hiyari'){drawHiyari();return;}
-      const partial=data.months.some(r=>r.total!==null&&!r.complete);
-      body.innerHTML=stats([['Recorded total'+(partial?' (partial)':''),data.reported_months||data.months.some(r=>r.total!==null)?data.total:null],['Complete months',data.reported_months+' / 12']])+`<section class="report-detail-card"><h2>Monthly trend · ${year}</h2><p>Blank (—) means not reported. NA means not applicable. Zero is a confirmed count. Totals include numeric entries only.</p>${chart(data.months)}</section><section class="report-detail-card"><h2>Monthly register</h2><p>Select a month to enter or correct its statistics. Changes retain the editor and history.</p><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
+      body.innerHTML=`<section class="report-detail-card"><h2>Monthly register</h2><p>Select a month to enter or correct its statistics. Changes retain the editor and history.</p><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{selected=b.dataset.month;editor();body.querySelector('#monitorEditor').scrollIntoView({behavior:'smooth',block:'start'});});
       selected=selected||data.months.find(r=>!r.complete)?.month||data.months[0].month;editor();
     }

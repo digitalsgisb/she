@@ -48,8 +48,8 @@ const routes = {
   'accident-register': { title: 'Accident Register', icon: 'shield' },
   'accident-dashboard': { title: 'Monthly accident statistic', icon: 'shield' },
   'hiyari-dashboard': { title: 'Hiyari Hatto Summary', icon: 'alert' },
-  'compound-dashboard': { title: 'Environmental Enforcement Register', icon: 'leaf' },
-  'environmental-findings-dashboard': { title: 'Environmental Inspection Register', icon: 'leaf' },
+  'environmental-enforcement-register': { title: 'Environmental Enforcement Register', icon: 'leaf' },
+  'environmental-inspection-register': { title: 'Environmental Inspection Register', icon: 'leaf' },
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
@@ -80,7 +80,7 @@ function canAccessRoute(key) {
   if (!currentUser) return false;
   if(key==='red-tag-dashboard'&&!isRedTagDesktop())return false;
   if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records' || key === 'she-summary') return ['admin','executive'].includes(currentUser.role);
-  if (['users','reporting-forms','accident-register'].includes(key)) return ['admin','executive'].includes(currentUser.role);
+  if (['users','reporting-forms','accident-register','environmental-enforcement-register','environmental-inspection-register'].includes(key)) return ['admin','executive'].includes(currentUser.role);
   return Boolean(routes[key]);
 }
 function filterFeatureLinks(root) {
@@ -92,7 +92,7 @@ function filterFeatureLinks(root) {
     }
   });
 }
-const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
+const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting-forms', 'environmental-enforcement-register', 'environmental-inspection-register'];
 const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto', 'accident-register'];
 
 const findingModuleHomes={
@@ -392,8 +392,8 @@ async function renderSheSummary() {
 
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
-  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','compound-dashboard','environmental-findings-dashboard','co2-dashboard']:[];
-  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'Environmental Enforcement Register','environmental-findings-dashboard':'Environmental Inspection Register','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes'};
+  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','co2-dashboard']:[];
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes'};
   return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><h1>'+title+'</h1>'+(detail?'<p>'+detail+'</p>':'')+'<div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
@@ -594,6 +594,8 @@ function openUserModal(kind, user = null) {
 
 function currentRoute() {
   const key = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] || (['admin','executive'].includes(currentUser?.role)?'dashboard':'home');
+  if(key==='compound-dashboard')return 'environmental-enforcement-register';
+  if(key==='environmental-findings-dashboard')return 'environmental-inspection-register';
   return routes[key] ? key : 'home';
 }
 
@@ -654,6 +656,7 @@ function renderPage() {
   else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key==='she-summary')renderSheSummary();
   else if(key==='accident-register')SHEMonitoring.mount('accident-dashboard',true);
+  else if(SHEMonitoring.configs[key]?.area==='environment')SHEMonitoring.mount(key);
   else if(key==='dashboard'||key.endsWith('-dashboard'))renderStatsDashboard(key==='dashboard'?'safety-dashboard':key);
   else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);else if(currentRoute()===key&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')genbaNew();});
   else if (key === 'work-orders') renderWorkOrders();

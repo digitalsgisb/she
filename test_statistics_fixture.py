@@ -18,4 +18,4 @@ def patrol_fixture():
         db.execute('INSERT INTO patrols(inspector_name,answers_json,rating,created_at,template_json,followup_status,completed) VALUES(?,?,?,?,?,?,1)',(['Sara','Aman'][i%2],json.dumps(answers),1+i%3,int(datetime(2026,10,1+i%20,12,tzinfo=s.TZ).timestamp()),'null',['open','action_taken','resolved'][i%3]))
     result=s.patrols(db,selection);db.close();return result
 
-if __name__ == '__main__': print(json.dumps(dict(patrol=patrol_fixture(),red=s.build(red,selection,'red-tag'),environment=dict(s.build(env,selection,'environment'),group='environment',group_label='Environment'))))
+if __name__ == '__main__': print(json.dumps(dict(patrol=patrol_fixture(),red=s.build(red,selection,'red-tag'),environment=dict(s.build(env,selection,'environment'),group='environment',group_label='Environment',monthly_trend=s.trend(env,dict(selection,mode='year'))))))

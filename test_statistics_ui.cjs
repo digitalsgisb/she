@@ -10,7 +10,7 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.route('**/*',async route=>{
    const url=new URL(route.request().url()),p=url.pathname;const json=data=>route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
    if(p==='/api/session')return json({user:{id:1,role,display_name:'SHE Executive',username:'executive',features:['patrol','red-tag','red-tag-pic','reporting','health']},csrf_token:'test'});
-   if(p==='/api/she-monitoring/accident')return json({total:0,reported_months:0,categories:['Maintenance'],months:Array.from({length:12},(_,i)=>({month:'2026-'+String(i+1).padStart(2,'0'),total:null,complete:false,payload:{counts:{}}}))});
+   if(p==='/api/she-monitoring/accident'||p==='/api/she-monitoring/compound')return json({total:0,reported_months:0,categories:[p.endsWith('/compound')?'Compound':'Maintenance'],months:Array.from({length:12},(_,i)=>({month:'2026-'+String(i+1).padStart(2,'0'),total:null,complete:false,payload:{counts:{}}}))});
    if(p.endsWith('/statistics/records')){
      requests.push(url.href);const kind=p.startsWith('/api/patrols')?'patrol':p.startsWith('/api/red-tags')?'red-tag':'environment',values=JSON.parse(url.searchParams.get('values')||'[]');
      const r={id:1,reference:kind==='red-tag'?'RT2610-001':'Test record #1',title:'Packing line',date:'2026-10-13',status:values[0]||'Open',section:'FG Store',pic:'Fareez',inspector:'Sara',plant:'Port Klang',location:'Production',description:'Damaged guard',photo_url:kind==='red-tag'?'/api/red-tags/1/photo':null,matched_count:1,detail_url:kind==='red-tag'?'/#/red-tag/1':kind==='patrol'?'/#/daily-safety-patrol/1':'/#/reporting-inbox/1'};
@@ -58,7 +58,11 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.locator('.dashboard-area-tabs a[href="#/environment-dashboard"]').click();
  await page.getByRole('heading',{name:'Overview table',exact:true}).waitFor();
  assert.equal(await page.locator('[data-stat-group] option[value="environment"]').textContent(),'Green Eyes');
+ assert.deepEqual(await page.locator('[data-dashboard-module] option').evaluateAll(options=>options.map(option=>option.value)),['environment-dashboard','co2-dashboard']);
  assert.equal(await page.locator('.she-chart-tabs').count(),0);
+ assert.equal(await page.locator('[data-stat-panel=categories] button.she-column').count(),4);
+ assert.equal(await page.locator('[data-stat-panel=monthly] .she-column').count(),12);
+ assert.equal(await page.locator('[data-stat-panel=monthly] .she-column-track > span').count(),2);
  const heights=await page.locator('[data-stat-panel=overview] > .she-chart-card').evaluateAll(cards=>cards.map(card=>card.getBoundingClientRect().height));
  assert.equal(heights.length,3);assert.equal(new Set(heights).size,1);
  const afterPhoto=page.locator('[data-stat-panel=records] img[alt="Work order follow-up photo"]');
@@ -68,7 +72,14 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.locator('.she-chart-legend li.she-chart-hit').first().click();await page.locator('.dashboard-records-page .she-record-table tbody tr').waitFor();
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.waitForTimeout(350);await page.screenshot({path:'.qa-temp/area-record-cards-mobile.png',fullPage:true});
  await page.goto('https://she.test/#/patrol-dashboard');await page.getByRole('heading',{name:'Inspection quality',exact:true}).waitFor();assert.equal(await page.locator('.she-chart-tabs').count(),0);await page.locator('.she-patrol-sections .she-record-table').waitFor();await page.locator('[data-stat-panel=quality] .she-chart-legend li.she-chart-hit').first().focus();await page.keyboard.press('Enter');await page.locator('.dashboard-records-page .she-record-table tbody tr').waitFor();assert(page.url().includes('field=answer'));assert((await page.locator('[data-evidence-before]').textContent()).includes('No photo'));await page.locator('.back-link').click();await page.getByRole('heading',{name:'Inspection quality',exact:true}).waitFor();assert(await page.getByRole('heading',{name:'Inspectors & checklists',exact:true}).isVisible());
- await page.setViewportSize({width:1440,height:900});role='user';const count=requests.length;await page.goto('https://she.test/?role=user#/dashboard');await page.waitForURL(url=>!url.hash.includes('dashboard'));assert.equal(await page.locator('.she-summary-card').count(),0);await page.goto('https://she.test/#/safety-dashboard');await page.waitForTimeout(150);assert(!page.url().includes('#/safety-dashboard'));assert.equal(requests.length,count);assert.deepEqual(errors,[]);
+ await page.setViewportSize({width:1440,height:900});
+ await page.goto('https://she.test/#/environmental');
+ await page.locator('.module-card[href="#/environmental-enforcement-register"]').click();
+ await page.getByRole('heading',{name:'Environmental Enforcement Register',exact:true}).waitFor();
+ await page.locator('#monitorForm').waitFor();
+ assert.equal(await page.locator('.dashboard-area-tabs,.monitor-month-chart').count(),0);
+ assert(await page.locator('#environmentSubnav a[href="#/environmental-inspection-register"]').isVisible());
+ role='user';const count=requests.length;await page.goto('https://she.test/?role=user#/dashboard');await page.waitForURL(url=>!url.hash.includes('dashboard'));assert.equal(await page.locator('.she-summary-card').count(),0);await page.goto('https://she.test/#/safety-dashboard');await page.waitForTimeout(150);assert(!page.url().includes('#/safety-dashboard'));assert.equal(requests.length,count);assert.deepEqual(errors,[]);
  console.log('Area dashboard and evidence table checks passed: module selection, header filters, record details, keyboard activation, remembered tabs, phone layout and access controls.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -105,6 +105,7 @@ def reports(db, selection, group):
     rows=report_rows(db,group)
     labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen','air-leak':'Air Leak'}
     result=build(rows,selection,'environment')
+    result['monthly_trend']=trend(rows,dict(selection,mode='year'))
     selected=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
     reporters=defaultdict(set)
     for r in selected:

@@ -56,6 +56,10 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(len(response['trend']['points']),31)
         self.assertEqual(response['trend']['points'][0]['count'],1)
         self.assertEqual(response['trend']['points'][-1]['count'],1)
+        monthly=response['monthly_trend']['points']
+        self.assertEqual(len(monthly),12)
+        self.assertEqual(monthly[9],dict(key='2026-10',label='Oct',count=2))
+        self.assertEqual(sum(point['count'] for point in monthly),4)
         self.assertEqual(sum(x['count'] for x in response['statuses']),2)
         all_areas=self.request('/api/reporting/statistics?month=2026-10&group=all',cookie=self.executive)[1]
         self.assertEqual(all_areas['summary']['total'],3)

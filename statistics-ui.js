@@ -29,6 +29,17 @@ const SHEStats = (() => {
     const rows=bucket(items,limit),max=Math.max(...rows.map(r=>r.count),1);
     return '<article class="she-chart-card">'+header(title,note)+(rows.length?'<ul class="she-bar-list">'+rows.map((r,index)=>'<li'+hit(fields[title],r,r.count,'Recorded during the selected period')+'><div><span title="'+esc(r.label)+'">'+esc(r.label)+'</span><strong>'+number(r.count)+'</strong></div><svg viewBox="0 0 300 12" role="img" aria-label="'+esc(r.label)+': '+r.count+'"><rect width="300" height="12" rx="6" fill="#edf3ef"/><rect width="'+(r.count/max*300)+'" height="12" rx="6" fill="'+palette[index%palette.length]+'"/></svg></li>').join('')+'</ul>':empty())+'</article>';
   }
+  function columns(rows,title,note,field) {
+    const max=Math.max(1,...rows.map(row=>row.count));
+    const chart=rows.map(row=>{
+      const label=esc(row.label);
+      const bar='<strong>'+number(row.count)+'</strong><span class="she-column-track">'+(row.count?'<span style="height:'+(row.count/max*100)+'%"></span>':'')+'</span><span>'+label+'</span>';
+      if(!row.count)return '<div class="she-column">'+bar+'</div>';
+      const filter=field==='date'?{label:row.key}:{label:row.label,other:row.other,exclude:row.exclude};
+      return '<button type="button" class="she-column"'+hit(field,filter,row.count,'',{allDates:field==='date'})+'>'+bar+'</button>';
+    }).join('');
+    return '<article class="she-chart-card">'+header(title,note)+(rows.length?'<div class="she-column-scroll" tabindex="0" role="region" aria-label="'+esc(title)+'"><div class="she-column-grid" style="--columns:'+rows.length+'">'+chart+'</div></div>':empty())+'</article>';
+  }
   function activity(data) {
     const points=data.points,total=points.reduce((s,p)=>s+p.count,0);
     if(!total)return '<article class="she-chart-card she-chart-wide">'+header(data.title,data.note)+empty()+'</article>';
@@ -67,7 +78,8 @@ const SHEStats = (() => {
       const stagnantIntro='<article class="she-chart-card she-risk-summary">'+header('Mosquito Breeding Risk','Standing water reports')+'<div class="she-risk-counts"><strong>'+number(st.total)+'</strong> reported <strong>'+number(st.outstanding)+'</strong> open</div></article>';
       return [
         {id:'overview',label:'Overview',charts:status+distribution+activity(data.trend)},
-        {id:'categories',label:'Issue categories',charts:bars(data.categories,'Reports by category','Every topic reported in this period',12)+bars(data.reporter_categories||[],'People reporting by category','Distinct reporter names per topic'+(data.reporter_total?' · '+number(data.reporter_total)+' people in total':''),12)},
+        {id:'categories',label:'Issue categories',charts:columns(bucket(data.categories,12),'Reports by category','Topics reported in this period','category')+columns(bucket(data.reporter_categories||[],12),'People reporting by category','Distinct reporter names per topic'+(data.reporter_total?' · '+number(data.reporter_total)+' people in total':''),'category')},
+        ...(data.monthly_trend?[{id:'monthly',label:'Monthly activity',charts:columns(data.monthly_trend.points,'Reports by month',data.monthly_trend.note,'date')}]:[]),
         ...(['environment','all'].includes(data.group)?[{id:'stagnant',label:'Mosquito Breeding Risk',charts:stagnantIntro+bars(st.locations,'Stagnant water locations','Where stagnant water was reported in this period')+pie(st.plants,'Stagnant water by factory','')+'<div class="she-inline-records" data-inline-records="stagnant"></div>'}]:[]),
         {id:'locations',label:'Factories & locations',charts:pie(data.plants,'Reports by factory','Distribution across factories')+bars(data.locations,'Reported locations','Leading locations; remaining entries grouped')},
         {id:'orders',label:'Work order follow-up',charts:bars(data.work_orders,'Work order follow-up','SHE workflow; separate from CMMS job status')}

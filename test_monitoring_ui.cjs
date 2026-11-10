@@ -28,9 +28,9 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   assert.equal(await page.locator('#monitorForm').count(),0);
   await page.screenshot({path:'.qa-temp/monitor-accidents-desktop.png',fullPage:true});
   const dl=page.waitForEvent('download');await page.locator('#monitorExport').click();assert((await dl).suggestedFilename().includes('accident-2026'));
-  await page.goto(base+'/#/compound-dashboard');await page.getByRole('heading',{name:'Environmental Enforcement Register',exact:true}).waitFor();await page.locator('#monitorForm').waitFor();
+  await page.goto(base+'/#/environmental');await page.locator('.module-card[href="#/environmental-enforcement-register"]').click();await page.getByRole('heading',{name:'Environmental Enforcement Register',exact:true}).waitFor();await page.locator('#monitorForm').waitFor();
   await page.locator('#monitorCount0').fill('1');await page.locator('#monitorForm button').click();await page.getByText('Last saved by QA Admin · revision 1').waitFor();
-  await page.locator('[data-dashboard-module]').selectOption('environmental-findings-dashboard');await page.getByRole('heading',{name:'Environmental Inspection Register',exact:true}).waitFor();await page.locator('#monitorCount0').waitFor();assert.equal(await page.locator('[data-count]').count(),4);
+  await page.locator('#environmentSubnav a[href="#/environmental-inspection-register"]').click();await page.getByRole('heading',{name:'Environmental Inspection Register',exact:true}).waitFor();await page.locator('#monitorCount0').waitFor();assert.equal(await page.locator('[data-count]').count(),4);
   await page.goto(base+'/#/hiyari-dashboard');await page.getByRole('heading',{name:'Hiyari Hatto Summary',exact:true}).waitFor();await page.locator('#hiyariRows').waitFor();
   await page.goto(base+'/report?area=hiyari-hatto');await page.locator('a.report-menu-topic').first().click();await page.locator('#findingForm').waitFor();
   await page.locator('#reporter').fill('QA Team member');await page.locator('#plant').selectOption('port-klang');await page.locator('#location').fill('Line 2');
@@ -47,8 +47,8 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   await page.goto(base+'/#/hiyari-dashboard');await page.locator('#hiyariFilter').selectOption('rank:A');assert.equal(await page.locator('#hiyariRows .she-record-table tbody tr').count(),1);
   await page.screenshot({path:'.qa-temp/monitor-hiyari-summary-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
-  for(const route of ['accident-dashboard','compound-dashboard','environmental-findings-dashboard','hiyari-dashboard']){
-   await page.goto(base+'/#/'+route);await page.locator('#monitorBody .report-stats').waitFor();
+  for(const route of ['accident-dashboard','environmental-enforcement-register','environmental-inspection-register','hiyari-dashboard']){
+   await page.goto(base+'/#/'+route);await page.locator('#monitorBody > section').first().waitFor();
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Horizontal page overflow: '+route);
    await page.screenshot({path:'.qa-temp/monitor-'+route+'-phone.png',fullPage:true});
   }

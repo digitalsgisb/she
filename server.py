@@ -734,6 +734,11 @@ class Handler(BaseHTTPRequestHandler):
             if len(attention)<50:
                 item['thumbnail_url']=patrol_cards.first_photo(db,row['id'])
                 attention.append(item)
+        overview_rows = recent + attention
+        after_photos = {patrol_id: patrol_cards.latest_followup_photo(db, patrol_id)
+                        for patrol_id in {item['id'] for item in overview_rows}}
+        for item in overview_rows:
+            item['after_url'] = after_photos[item['id']]
         self.send_json(200, dict(scope='team' if team else 'mine', date=today.date().isoformat(), counts=counts, recent=recent,
                                  attention=attention,attention_total=attention_total,
                                  week=[dict(date=(today-timedelta(days=6-i)).date().isoformat(), count=days.get(i,0)) for i in range(7)]))

@@ -176,12 +176,12 @@ const SHEStats = (() => {
   function photo(url,label) {
     return '<a class="she-evidence" href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" alt="'+esc(label)+'" loading="lazy"></a>';
   }
-  function recordsTable(rows,offset=0) {
+  function recordsTable(rows,offset=0,contextLabel='Area / location') {
     if(!rows.length)return '<p class="she-chart-empty">No matching records.</p>';
-    return '<div class="she-record-table-wrap" tabindex="0" role="region" aria-label="Overview table"><table class="she-record-table"><thead><tr>'+['No.','Record','Area / location','Summary','Status','Before','After'].map(title=>'<th scope="col">'+title+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>{
+    return '<div class="she-record-table-wrap" tabindex="0" role="region" aria-label="Overview table"><table class="she-record-table"><thead><tr>'+['No.','Record',contextLabel,'Summary','Status','Before','After'].map(title=>'<th scope="col">'+esc(title)+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>{
       const label=r.reference||r.title;
       const title=esc(r.title||r.reference);
-      const link=r.genbaId?'<button type="button" class="she-record-link" data-genba-id="'+esc(r.genbaId)+'">'+title+'</button>':'<a href="'+esc(r.detail_url)+'">'+title+'</a>';
+      const link=r.genbaId?'<button type="button" class="she-record-link" data-genba-id="'+esc(r.genbaId)+'">'+title+'</button>':'<a href="'+esc(r.detail_url)+'">'+title+(r.action?'<small>'+esc(r.action)+' →</small>':'')+'</a>';
       const evidence=r.order_id?' data-evidence-order="'+esc(r.order_id)+'" data-evidence-plant="'+esc(r.order_plant||r.plant)+'"':'';
       const status=String(r.status||'').replaceAll('_',' ');
       return '<tr><td>'+(offset+i+1)+'</td><th scope="row">'+link+'<small>'+esc([r.reference,r.date].filter(Boolean).join(' · '))+'</small></th><td>'+esc(r.context||'—')+'</td><td><div class="she-record-excerpt">'+esc(r.description||'—')+'</div></td><td><span class="she-record-badge'+(/^(resolved|closed)$/i.test(status)?' is-complete':'')+'">'+esc(status||'—')+'</span></td><td data-evidence-before>'+(r.photo_url?photo(r.photo_url,'Before · '+label):'<small>No photo</small>')+'</td><td'+evidence+'>'+(r.after_url?photo(r.after_url,'After · '+label):r.order_id?'<button class="she-record-link" type="button" data-load-evidence>Load photos</button>':'<small>No photo</small>')+'</td></tr>';

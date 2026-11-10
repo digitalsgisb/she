@@ -9,6 +9,13 @@ def first_photo(db, patrol_id, question_id=None):
     return f"/api/patrols/{patrol_id}/attachments/{row['id']}" if row else ''
 
 
+def latest_followup_photo(db, patrol_id):
+    row = db.execute("""SELECT id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NOT NULL
+        AND mime_type IN ('image/jpeg','image/png','image/webp','image/gif')
+        ORDER BY created_at DESC,id DESC LIMIT 1""", (patrol_id,)).fetchone()
+    return f"/api/patrols/{patrol_id}/attachments/{row['id']}" if row else ''
+
+
 def finding_items(row, default_template):
     template = json.loads(row['template_json'])
     questions = (template or default_template)['questions']

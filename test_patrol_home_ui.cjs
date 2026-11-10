@@ -25,7 +25,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   });
   await page.goto('https://she.test/#/patrol-home');
   await page.locator('[data-patrol-count=today]').filter({hasText:'3'}).waitFor();
-  assert.equal(await page.locator('.patrol-home-record').count(),2);
+  assert.equal(await page.locator('[data-patrol-recent] tbody tr').count(),2);
   assert.equal(await page.locator('.patrol-week-day').count(),7);
   assert.equal(await page.locator('.module-tabs [aria-current]').textContent(),'Overview');
   await page.evaluate(()=>{window.savedPatrolTabs=document.querySelector('.module-tabs');window.savedMobileTabs=document.querySelector('.mobile-tabbar').firstElementChild;});

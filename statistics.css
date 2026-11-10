@@ -85,3 +85,5 @@
 .she-column-track{display:flex;align-items:end;justify-content:center;width:100%;border-bottom:1px solid #d5e5dc}
 .she-column-track>svg{display:block;width:70%;max-width:56px;height:100%;fill:#237d59}
 @media(min-width:761px){.focused-dashboard-page .she-patrol-sections [data-stat-panel=overview]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.patrol-home-page .she-record-excerpt{white-space:pre-line;-webkit-line-clamp:4}

@@ -44,13 +44,26 @@ function renderPatrolHome() {
   loadPatrolHome(root);
 }
 
-function patrolAttentionCard(row,today){
-  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(row.created_at*1000));
-  const yesterday=new Date(today+'T12:00:00+08:00');yesterday.setUTCDate(yesterday.getUTCDate()-1);
-  const previous=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(yesterday);
-  const when=date===today?'Today':date===previous?'Yesterday':new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Kuala_Lumpur'});
-  const action=row.status==='action_taken'&&['admin','executive'].includes(currentUser.role)?'Review action':'Follow up';
-  return `<article class="patrol-attention-card"><div class="patrol-attention-main"><div><small>${when} · ${escapeHtml(row.inspector)} · #${row.id}</small><h3>${escapeHtml(row.title)}</h3><ul>${(row.issues||[]).slice(0,3).map(item=>`<li><strong>${escapeHtml(item.label)}</strong>${item.remark?`<span>${escapeHtml(item.remark)}</span>`:''}</li>`).join('')}</ul>${!row.issues?.length&&row.remarks?`<p>${escapeHtml(row.remarks)}</p>`:''}${(row.issues||[]).length>3?`<small>+${row.issues.length-3} more findings</small>`:''}</div>${issueThumbnail(row.thumbnail_url)}</div><div class="patrol-attention-footer"><span class="patrol-status patrol-status-${row.status}">${escapeHtml(patrolStatusLabels[row.status])}</span><a class="primary-button" href="#/daily-safety-patrol/${row.id}?followup=1">${action} →</a></div></article>`;
+function patrolOverviewTable(rows,today,attention=false){
+  if(!rows.length)return '<p class="patrol-empty">'+(attention?'No findings need follow-up.':'No inspections yet.')+'</p>';
+  const timeZone='Asia/Kuala_Lumpur';
+  const dayKey=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
+  const dateLabel=new Intl.DateTimeFormat('en-MY',{timeZone,day:'numeric',month:'short',year:'numeric'});
+  const yesterday=new Date(today+'T12:00:00+08:00');
+  yesterday.setUTCDate(yesterday.getUTCDate()-1);
+  const previous=dayKey.format(yesterday);
+  return SHEStats.recordsTable(rows.map(row=>{
+    const date=new Date(row.created_at*1000),key=dayKey.format(date);
+    const issues=row.issues||[];
+    const findings=row.findings??issues.length;
+    const description=[findings?findings+' NOT OK':'No NOT OK items',
+      ...issues.slice(0,3).map(item=>[item.label,item.remark].filter(Boolean).join(' · ')),
+      !issues.length&&row.remarks,issues.length>3?'+'+(issues.length-3)+' more findings':''].filter(Boolean).join('\n');
+    return {title:row.title,reference:'#'+row.id,date:key===today?'Today':key===previous?'Yesterday':dateLabel.format(date),
+      context:row.inspector,description,status:patrolStatusLabels[row.status]||row.status,
+      photo_url:row.thumbnail_url,after_url:row.after_url,detail_url:'#/daily-safety-patrol/'+row.id+(attention?'?followup=1':''),
+      action:attention?(row.status==='action_taken'&&['admin','executive'].includes(currentUser.role)?'Review action':'Follow up'):''};
+  }),0,'Inspector');
 }
 
 async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
@@ -65,12 +78,12 @@ async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
     root.dataset.snapshot=snapshot;
     root.querySelectorAll('[data-patrol-count]').forEach(el=>el.textContent=data.counts[el.dataset.patrolCount]);
     root.querySelector('[data-patrol-open]').textContent=data.attention_total?`${data.attention_total} unresolved ${data.attention_total===1?'patrol':'patrols'} · all dates`:'No unresolved findings';
-    root.querySelector('[data-patrol-attention]').innerHTML=(data.attention||[]).length?data.attention.map(row=>patrolAttentionCard(row,data.date)).join(''):'<div class="patrol-attention-empty">No findings need follow-up.</div>';
+    root.querySelector('[data-patrol-attention]').innerHTML=patrolOverviewTable(data.attention||[],data.date,true);
     root.querySelector('[data-patrol-scope]').textContent=data.scope==='team'?'TEAM ACTIVITY':'YOUR ACTIVITY';
     const max=Math.max(1,...data.week.map(day=>day.count));
     root.querySelector('[data-patrol-week]').innerHTML=data.week.some(day=>day.count>0)?data.week.map(day=>`<div class="patrol-week-day" ${day.date===data.date?'data-today':''}><strong>${day.count}</strong><span class="patrol-week-track">${day.count>0?`<i style="height:${day.count/max*100}%"></i>`:''}</span><small>${new Date(day.date+'T12:00:00+08:00').toLocaleDateString('en-MY',{weekday:'short',timeZone:'Asia/Kuala_Lumpur'})}</small></div>`).join(''):'<p class="patrol-empty">No completed patrols in the last 7 days.</p>';
-    root.querySelector('[data-patrol-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="patrol-home-record" href="#/daily-safety-patrol/${row.id}"><span class="patrol-home-record-icon">${icon('clipboard',22)}</span><span><small>${new Date(row.created_at*1000).toLocaleString('en-MY',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.inspector)}</small><strong>${escapeHtml(row.title)}</strong><span>${row.findings?`${row.findings} ${row.findings===1?'finding':'findings'}`:'No NOT OK items'} <span class="patrol-status patrol-status-${row.status}">${escapeHtml(patrolStatusLabels[row.status]||row.status)}</span></span></span>${issueThumbnail(row.thumbnail_url)}${icon('chevron',17)}</a>`).join(''):'<div class="patrol-home-empty">'+icon('clipboard',26)+'<strong>No inspections yet.</strong><p>Start your first checklist to see activity here.</p></div>';
-    bindIssueThumbnails(root);
+    root.querySelector('[data-patrol-recent]').innerHTML=patrolOverviewTable(data.recent,data.date);
+    SHEStats.bindEvidence(root);
     root.querySelector('[data-patrol-home-error]').hidden=true;
   }catch(error){if(root.isConnected&&currentRoute()==='patrol-home'){const box=root.querySelector('[data-patrol-home-error]');if(box){box.textContent=error.message;box.hidden=false;}}}
   finally{delete root.dataset.loading;button.disabled=false;}

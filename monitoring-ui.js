@@ -16,9 +16,10 @@ const SHEMonitoring = (() => {
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  function chart(items, showEmptyTracks=true) {
+  function chart(items) {
+    if(!items.some(row=>row.total>0))return '<p>No positive monthly counts to chart.</p>';
     const max=Math.max(1,...items.map(r=>r.total||0));
-    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total?(showEmptyTracks?Math.max(3,r.total/max*154):r.total/max*154):0;return `<button type="button" data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${display(r.total)}</strong><span class="monitor-track">${height||showEmptyTracks?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg>`:''}</span><span>${names(r.month)}</span></button>`;}).join('')+'</div>';
+    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total>0?r.total/max*154:0;return `<button type="button" data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${display(r.total)}</strong><span class="monitor-track">${height?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg>`:''}</span><span>${names(r.month)}</span></button>`;}).join('')+'</div>';
   }
   function stats(items) {
     return '<div class="report-stats">'+items.map(([label,value])=>`<div><strong>${display(value)}</strong><span>${esc(label)}</span></div>`).join('')+'</div>';
@@ -75,7 +76,7 @@ const SHEMonitoring = (() => {
           </div><div id="hiyariRows"></div>
         </section>
         <section class="report-detail-card hiyari-dashboard-trend"><h2>Reports by month · ${year}</h2>
-          ${data.total?`<p>Grouped by event date, or submission date if missing.</p><div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly report chart">${chart(data.months,false)}</div>`:'<p>No reports recorded this year.</p>'}
+          ${data.total?`<p>Grouped by event date, or submission date if missing.</p><div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly report chart">${chart(data.months)}</div>`:'<p>No reports recorded this year.</p>'}
         </section>`;
       const filter=body.querySelector('#hiyariFilter');
       const target=body.querySelector('#hiyariRows');

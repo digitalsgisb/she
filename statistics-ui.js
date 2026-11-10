@@ -33,7 +33,7 @@ const SHEStats = (() => {
     const points=data.points,total=points.reduce((s,p)=>s+p.count,0);
     if(!total)return '<article class="she-chart-card she-chart-wide">'+header(data.title,data.note)+empty()+'</article>';
     const width=430,height=210,left=38,bottom=176,top=20,max=Math.max(...points.map(p=>p.count),1),step=(width-left-12)/points.length;
-    const marks=points.map((p,i)=>{const h=p.count/max*(bottom-top),x=left+i*step+step*.14;return '<rect'+hit('date',{label:p.key},p.count,data.unit||'findings')+' x="'+x+'" y="'+(bottom-h)+'" width="'+Math.max(2,step*.72)+'" height="'+h+'" rx="2" fill="#298263"><title>'+esc(p.key)+': '+p.count+' '+esc(data.unit||'findings')+'</title></rect>';}).join('');
+    const marks=points.map((p,i)=>{if(p.count<=0)return '';const h=p.count/max*(bottom-top),x=left+i*step+step*.14;return '<rect'+hit('date',{label:p.key},p.count,data.unit||'findings')+' x="'+x+'" y="'+(bottom-h)+'" width="'+Math.max(2,step*.72)+'" height="'+h+'" rx="2" fill="#298263"><title>'+esc(p.key)+': '+p.count+' '+esc(data.unit||'findings')+'</title></rect>';}).join('');
     const labels=points.map((p,i)=>i===0||i===points.length-1||points.length<=12||i%7===0?'<text x="'+(left+(i+.5)*step)+'" y="198" text-anchor="middle" class="she-axis-text">'+esc(p.label)+'</text>':'').join('');
     const rows=[0,...(max>1?[Math.ceil(max/2)]:[]),max];
     const grid=[...new Set(rows)].map(n=>{const y=bottom-n/max*(bottom-top);return '<line x1="'+left+'" x2="422" y1="'+y+'" y2="'+y+'" stroke="#e3ebe6"/><text x="28" y="'+(y+4)+'" text-anchor="end" class="she-axis-text">'+n+'</text>';}).join('');

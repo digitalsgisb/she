@@ -68,7 +68,7 @@ async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
     root.querySelector('[data-patrol-attention]').innerHTML=(data.attention||[]).length?data.attention.map(row=>patrolAttentionCard(row,data.date)).join(''):'<div class="patrol-attention-empty">No findings need follow-up.</div>';
     root.querySelector('[data-patrol-scope]').textContent=data.scope==='team'?'TEAM ACTIVITY':'YOUR ACTIVITY';
     const max=Math.max(1,...data.week.map(day=>day.count));
-    root.querySelector('[data-patrol-week]').innerHTML=data.week.map(day=>`<div class="patrol-week-day" ${day.date===data.date?'data-today':''}><strong>${day.count}</strong><span class="patrol-week-track"><i style="height:${day.count?Math.max(8,day.count/max*100):3}%"></i></span><small>${new Date(day.date+'T12:00:00+08:00').toLocaleDateString('en-MY',{weekday:'short',timeZone:'Asia/Kuala_Lumpur'})}</small></div>`).join('');
+    root.querySelector('[data-patrol-week]').innerHTML=data.week.some(day=>day.count>0)?data.week.map(day=>`<div class="patrol-week-day" ${day.date===data.date?'data-today':''}><strong>${day.count}</strong><span class="patrol-week-track">${day.count>0?`<i style="height:${day.count/max*100}%"></i>`:''}</span><small>${new Date(day.date+'T12:00:00+08:00').toLocaleDateString('en-MY',{weekday:'short',timeZone:'Asia/Kuala_Lumpur'})}</small></div>`).join(''):'<p class="patrol-empty">No completed patrols in the last 7 days.</p>';
     root.querySelector('[data-patrol-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="patrol-home-record" href="#/daily-safety-patrol/${row.id}"><span class="patrol-home-record-icon">${icon('clipboard',22)}</span><span><small>${new Date(row.created_at*1000).toLocaleString('en-MY',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.inspector)}</small><strong>${escapeHtml(row.title)}</strong><span>${row.findings?`${row.findings} ${row.findings===1?'finding':'findings'}`:'No NOT OK items'} <span class="patrol-status patrol-status-${row.status}">${escapeHtml(patrolStatusLabels[row.status]||row.status)}</span></span></span>${issueThumbnail(row.thumbnail_url)}${icon('chevron',17)}</a>`).join(''):'<div class="patrol-home-empty">'+icon('clipboard',26)+'<strong>No inspections yet.</strong><p>Start your first checklist to see activity here.</p></div>';
     bindIssueThumbnails(root);
     root.querySelector('[data-patrol-home-error]').hidden=true;
@@ -361,8 +361,9 @@ function patrolTrendMarkup(rows, start, end) {
       if (bucket) { bucket.count++; bucket.findings += row.counts.not_ok; }
     });
   }
+  if (!buckets.some(bucket => bucket.count > 0)) return '<p class="patrol-empty">No completed patrols in this period.</p>';
   const max = Math.max(1, ...buckets.map(bucket => bucket.count));
-  return `<div class="patrol-trend">${buckets.map(bucket => `<div class="patrol-trend-row"><span>${bucket.label}</span><progress class="patrol-trend-track" max="${max}" value="${bucket.count}" aria-label="${bucket.count} patrols"></progress><strong>${bucket.count}</strong><small>${bucket.findings ? `${bucket.findings} NOT OK` : ''}</small></div>`).join('')}</div><p class="patrol-chart-note">Bars show completed patrols; counts at right show NOT OK checklist answers.</p>`;
+  return `<div class="patrol-trend">${buckets.map(bucket => `<div class="patrol-trend-row"><span>${bucket.label}</span>${bucket.count>0?`<progress class="patrol-trend-track" max="${max}" value="${bucket.count}" aria-label="${bucket.count} patrols"></progress>`:'<span aria-hidden="true"></span>'}<strong>${bucket.count}</strong><small>${bucket.findings ? `${bucket.findings} NOT OK` : ''}</small></div>`).join('')}</div><p class="patrol-chart-note">Bars show completed patrols; counts at right show NOT OK checklist answers.</p>`;
 }
 
 function patrolHistoryUrl(cursor=null){

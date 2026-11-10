@@ -61,6 +61,10 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
    for(const width of [320,390,1280]){
     await page.setViewportSize({width,height:844});await page.waitForTimeout(350);await checkIndicator();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${home} overflows at ${width}`);
+    if(module==='hiyari-hatto'){
+     assert.equal(await page.locator('[data-hiyari-recent-table] table').isVisible(),width>760);
+     assert.equal(await page.locator('.hiyari-recent-cards .module-home-record').isVisible(),width<=760);
+    }
     if(width===390)await page.screenshot({path:`.qa-temp/${home}-mobile.png`,fullPage:true});
    }
    await page.setViewportSize({width:390,height:844});

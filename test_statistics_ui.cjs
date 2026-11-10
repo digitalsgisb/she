@@ -10,6 +10,7 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.route('**/*',async route=>{
    const url=new URL(route.request().url()),p=url.pathname;const json=data=>route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
    if(p==='/api/session')return json({user:{id:1,role,display_name:'SHE Executive',username:'executive',features:['patrol','red-tag','red-tag-pic','reporting','health']},csrf_token:'test'});
+   if(p==='/api/she-monitoring/accident')return json({total:0,reported_months:0,categories:['Maintenance'],months:Array.from({length:12},(_,i)=>({month:'2026-'+String(i+1).padStart(2,'0'),total:null,complete:false,payload:{counts:{}}}))});
    if(p.endsWith('/statistics/records')){
      requests.push(url.href);const kind=p.startsWith('/api/patrols')?'patrol':p.startsWith('/api/red-tags')?'red-tag':'environment',values=JSON.parse(url.searchParams.get('values')||'[]');
      const r={id:1,reference:kind==='red-tag'?'RT2610-001':'Test record #1',title:'Packing line',date:'2026-10-13',status:values[0]||'Open',section:'FG Store',pic:'Fareez',inspector:'Sara',plant:'Port Klang',location:'Production',description:'Damaged guard',photo_url:kind==='red-tag'?'/api/red-tags/1/photo':null,matched_count:1,detail_url:kind==='red-tag'?'/#/red-tag/1':kind==='patrol'?'/#/daily-safety-patrol/1':'/#/reporting-inbox/1'};
@@ -26,7 +27,14 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
    if(!fs.existsSync(file))return route.fulfill({status:404,body:''});const ext=file.split('.').pop();return route.fulfill({contentType:{html:'text/html',js:'application/javascript',css:'text/css',svg:'image/svg+xml',png:'image/png'}[ext]||'text/plain',body:fs.readFileSync(file)});
  });
 
- await page.goto('https://she.test/#/dashboard');await page.getByRole('heading',{name:'SHE dashboards'}).waitFor({timeout:5000}).catch(async error=>{throw new Error(JSON.stringify({url:page.url(),errors,body:(await page.locator('body').innerText()).slice(0,600)}),{cause:error});});assert.equal(await page.locator('.she-summary-card').count(),0);
+ await page.goto('https://she.test/#/dashboard');
+ await page.getByRole('heading',{name:'Monthly accident statistic',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'Monthly register',exact:true}).waitFor();
+ assert.deepEqual(await page.locator('#dashboardSubnav a').allTextContents(),['Dashboard','SHE Summary']);
+ assert.deepEqual(await page.locator('.dashboard-area-tabs a').allTextContents(),['Safety','Health','Environment']);
+ await page.locator('#dashboardSubnav a[href="#/she-summary"]').click();
+ await page.locator('.she-overview-card').first().waitFor();
+ assert.equal(await page.locator('.she-overview-card').count(),6);
  await page.goto('https://she.test/#/patrol-dashboard');await page.locator('.she-chart-tabs').waitFor();assert.equal(await page.locator('[data-dashboard-module]').inputValue(),'patrol-dashboard');
  await page.locator('[data-dashboard-module]').selectOption('red-tag-dashboard');await page.getByRole('heading',{name:'Status distribution',exact:true}).waitFor();
  await page.locator('[data-stat-period]').selectOption('year');await page.waitForFunction(()=>document.querySelector('.she-stat-period')?.textContent.includes('2026'));assert(requests.some(x=>x.includes('period=year')));

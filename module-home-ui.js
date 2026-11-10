@@ -12,6 +12,13 @@ function renderFindingModuleHome(key){
   loadFindingModuleHome(key);
 }
 
+const recentTableDesktop=matchMedia('(min-width:761px)');
+function bindHiyariOverviewEvidence(root){
+  const table=root?.querySelector('[data-hiyari-recent-table]');
+  if(table)SHEStats.bindEvidence(table,recentTableDesktop.matches);
+}
+recentTableDesktop.addEventListener('change',()=>bindHiyariOverviewEvidence(content.querySelector('.finding-module-home')));
+
 async function loadFindingModuleHome(key,quiet=false){
   const root=content.querySelector('.finding-module-home'),config=findingModuleHomes[key];
   if(!root||!config||currentRoute()!==key||root.dataset.homeLoading||(quiet&&key==='red-tag-home'&&!modalBackdrop.hidden))return;
@@ -28,7 +35,15 @@ async function loadFindingModuleHome(key,quiet=false){
         const active=data.active||[];
         root.querySelector('[data-redtag-active]').innerHTML=active.length?genbaCards(active):'<p class="patrol-empty">No active findings.</p>';
         root.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
-      }else root.querySelector('[data-module-recent]').innerHTML=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${issueThumbnail(row.thumbnail_url)}${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong></div>`;
+      }else {
+        const cards=data.recent.length?data.recent.map(row=>`<a class="module-home-record" href="${escapeHtml(row.href)}"><span class="module-home-record-icon">${icon(config.icon,22)}</span><span><small>${new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',timeZone:'Asia/Kuala_Lumpur'})} · ${escapeHtml(row.reporter)}</small><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span><small class="patrol-status patrol-status-${row.status}">${escapeHtml(row.status_label)}</small></span>${issueThumbnail(row.thumbnail_url)}${icon('chevron',18)}</a>`).join(''):`<div class="patrol-home-empty">${icon(config.icon,27)}<strong>No records yet.</strong></div>`;
+        const recent=root.querySelector('[data-module-recent]');
+        if(config.module==='hiyari-hatto'&&data.recent.length){
+          const rows=data.recent.map(row=>({...row,reference:'SHE-'+String(row.id).padStart(6,'0'),location:row.detail,description:row.description||row.reporter}));
+          recent.innerHTML='<div class="hiyari-recent-cards">'+cards+'</div><div data-hiyari-recent-table>'+SHEStats.reportTable(rows)+'</div>';
+          bindHiyariOverviewEvidence(root);
+        }else recent.innerHTML=cards;
+      }
     }
     bindIssueThumbnails(root);
     root.querySelector('[data-module-home-error]').hidden=true;

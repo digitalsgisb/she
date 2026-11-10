@@ -37,7 +37,7 @@ function bindIssueThumbnails(root){
 const routes = {
   home: { title: 'Home', icon: 'grid' },
   'air-leak': { title: 'Air Leak', icon: 'droplet' },
-  dashboard: { title: 'Dashboards', icon: 'grid' },
+  dashboard: { title: 'Dashboard', icon: 'grid' },
   'she-summary': { title: 'SHE Summary', icon: 'shield' },
   'co2-dashboard': { title: 'CO2 Tracking', icon: 'leaf' },
   'safety-dashboard': { title: 'Safety Dashboard', icon: 'shield' },
@@ -236,8 +236,9 @@ function renderMobileNavigation(active) {
 
 function renderNav(active) {
   const previousSubnavs = [...nav.querySelectorAll('.subnav')];
-  nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
-    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['she-summary','safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))||(key==='environment-dashboard'&&active==='co2-dashboard')?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+  const inDashboard=active==='dashboard'||active.endsWith('-dashboard')||active==='dashboard-records';
+  nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${inDashboard||active==='she-summary'?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboard</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
+    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard','she-summary'].filter(canAccessRoute).map(key=>`<a class="subnav-link ${(key==='dashboard'?inDashboard:active===key)?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${(active==='safety'||safetyItems.includes(safetyModule(active))) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
@@ -395,11 +396,6 @@ function dashboardHeader(area,title,detail,key='') {
   return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><h1>'+title+'</h1>'+(detail?'<p>'+detail+'</p>':'')+'<div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
-
-function renderDashboard() {
-  const monitoring=[['she-summary','All areas'],['accident-dashboard','Safety'],['red-tag-dashboard','Safety'],['hiyari-dashboard','Safety'],['compound-dashboard','Environment'],['environmental-findings-dashboard','Environment'],['co2-dashboard','Environment']];
-  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>SHE dashboards</h1><p>A combined SHE summary, Safety dashboards and Environment dashboards.</p></div></section><div class="module-grid">${monitoring.filter(([route])=>canAccessRoute(route)).map(([route,area])=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><small>${area}</small><strong>${route==='red-tag-dashboard'?'SSFM (Redtag) Gemba summary':route==='she-summary'?'SHE Summary — all modules':routes[route].title}</strong></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div><div class="content-heading"><h2>Workspace tools</h2></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, Hiyari Hatto, genba findings and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
-}
 
 function renderSafetyHome() {
   const descriptions = {
@@ -655,7 +651,7 @@ function renderPage() {
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key==='she-summary')renderSheSummary();
-  else if(key.endsWith('-dashboard'))renderStatsDashboard(key);
+  else if(key==='dashboard'||key.endsWith('-dashboard'))renderStatsDashboard(key==='dashboard'?'safety-dashboard':key);
   else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);else if(currentRoute()===key&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')genbaNew();});
   else if (key === 'work-orders') renderWorkOrders();
   else if (key === 'checklist-builder') renderChecklistBuilder();
@@ -666,7 +662,7 @@ function renderPage() {
     else renderPatrolForm();
   }
   else if (['environmental', 'reporting-qr', 'findings', 'hiyari-hatto', 'kaizen', 'reporting-forms', 'reporting-inbox'].includes(key)) SHEReporting.renderStaff(key).then(()=>{if(currentRoute()===key)filterFeatureLinks(content);});
-  else content.innerHTML = key === 'dashboard' ? renderDashboard() : key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
+  else content.innerHTML = key === 'safety' ? renderSafetyHome() : key === 'health' ? renderHealth() : key === 'account' ? renderAccount() : renderPlaceholder(key);
   filterFeatureLinks(content);
   filterFeatureLinks(mobileTabbar);
   if (key === 'dashboard') loadSafetyPulse('dashboardSafetyPulse');

@@ -151,6 +151,8 @@ def module_summary(h, db, kind, user):
         owner, owner_args = ('', ()) if kind!='air-leak' or user['role'] in ('admin','executive') else (' AND user_id=?', (user['id'],))
         where, args = "json_extract(snapshot_json,'$.group')=?" + owner, (group, *owner_args)
         fields = "id,json_extract(snapshot_json,'$.title') AS title,location AS detail,reporter,status,created_at,json_array_length(photos_json) AS photo_count"
+        if kind == 'hiyari-hatto':
+            fields += ",plant,order_id,json_extract(answers_json,'$.description') AS description"
     counts = dict(db.execute(f'''SELECT
         COALESCE(SUM(LOWER(status) NOT IN ('resolved','closed')),0) AS active,
         COALESCE(SUM(created_at>=? AND created_at<?),0) AS today,
@@ -166,6 +168,8 @@ def module_summary(h, db, kind, user):
         recent.append(dict(id=r['id'], title=r['title'], detail=r['detail'], reporter=r['reporter'], status=status,
                            status_label=r['status'].replace('_',' '), created_at=r['created_at'],
                            href=f"#/red-tag/{r['id']}" if kind=='red-tag' else f"#/reporting-inbox/{r['id']}",thumbnail_url=f"/api/red-tags/{r['id']}/photo" if kind=='red-tag' else f"/api/reporting/reports/{r['id']}/photos/0" if r['photo_count'] else ''))
+        if kind == 'hiyari-hatto':
+            recent[-1].update(plant=r['plant'], order_id=r['order_id'], description=str(r['description'] or '')[:240])
     result=dict(counts=counts,recent=recent)
     if kind=='red-tag':
         active = db.execute(f"SELECT {fields} FROM {table} WHERE {where} AND LOWER(status) NOT IN ('resolved','closed') ORDER BY created_at DESC,id DESC LIMIT 500",args).fetchall()

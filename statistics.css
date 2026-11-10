@@ -56,3 +56,20 @@
 
 .focused-dashboard-page .monitor-table thead th{background:#daebe6;color:#17483c}
 .focused-dashboard-page .monitor-table tbody tr:nth-child(even){background:#f0f7f4}
+
+.hiyari-recent-cards{display:none}
+@media(max-width:760px){
+  .hiyari-recent-cards{display:grid;gap:10px}
+  [data-hiyari-recent-table]{display:none}
+}
+
+.she-summary-page .she-overview-card{--summary-accent:#25634d;--summary-tint:#e9f4ed;border-top:3px solid var(--summary-accent);background:linear-gradient(145deg,var(--summary-tint),#fff 55%)}
+.she-summary-page .she-overview-card:nth-child(2){--summary-accent:#8c522e;--summary-tint:#f9efe6}
+.she-summary-page .she-overview-card:nth-child(3){--summary-accent:#3b5d85;--summary-tint:#eaf1f8}
+.she-summary-page .she-overview-card:nth-child(4){--summary-accent:#226670;--summary-tint:#e8f4f5}
+.she-summary-page .she-overview-card:nth-child(5){--summary-accent:#526831;--summary-tint:#eff4e6}
+.she-summary-page .she-overview-card:nth-child(6){--summary-accent:#654d80;--summary-tint:#f1edf7}
+.she-summary-page .she-overview-icon,.she-summary-page .she-overview-figures>div{background:var(--summary-tint)}
+.she-summary-page :is(.she-overview-icon,.she-overview-figures strong,.she-overview-card small){color:var(--summary-accent)}
+.she-summary-page .she-overview-figures span{color:#485950}
+.she-summary-page .she-overview-card:focus-visible{outline:2px solid var(--summary-accent);outline-offset:3px}

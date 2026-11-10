@@ -138,6 +138,7 @@ def init_db() -> None:
                    ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
         reporting.init_air_leak(db)
+        reporting.init_stagnant_water(db)
         reporting.reporting_alerts.init(db)
         she_monitoring.init(db)
         redtag.init(db)
@@ -789,7 +790,8 @@ class Handler(BaseHTTPRequestHandler):
                                 'remarks': row['remarks'],
                                 'followup_status': row['followup_status'],
                                 'update_count':card['update_count'],'thumbnail_url':card['thumbnail_url'],'issues':card['issues'],'needs_attention':card['needs_attention'],
-                                'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL ORDER BY created_at,id', (row['id'],))]})
+                                'attachments': [dict(a) for a in db.execute('SELECT id,filename,mime_type,size,question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL ORDER BY created_at,id', (row['id'],))],
+                                'after_photos': [dict(a) for a in db.execute("SELECT id,filename,mime_type,size FROM patrol_attachments WHERE patrol_id=? AND update_id IS NOT NULL AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at,id", (row['id'],))]})
             self.send_json(200, {"patrols": patrols,"next_cursor":next_cursor})
             return
         match = re.fullmatch(r"/api/patrols/(\d+)(?:/attachments/([0-9a-f]{32}))?", path)

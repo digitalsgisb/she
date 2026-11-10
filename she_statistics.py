@@ -86,9 +86,9 @@ def red_tags(db, user, selection):
     return build(red_tag_rows(db,user),selection,'red-tag')
 
 def report_rows(db, group):
-    if group not in ('environment','hiyari-hatto','kaizen','all'): raise ValueError('Choose a valid reporting area.')
+    if group not in ('environment','hiyari-hatto','kaizen','air-leak','all'): raise ValueError('Choose a valid reporting area.')
     rows=[]
-    labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen'}
+    labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen','air-leak':'Air Leak'}
     orders={'none':'SHE review','issued':'Work order issued','pending':'Work order pending',
             'sending':'Work order needs checking','failed':'Work order needs retry','uncertain':'Work order needs checking'}
     for row in db.execute('SELECT id,reporter,snapshot_json,status,created_at,plant,location,order_state FROM finding_reports'):
@@ -103,8 +103,18 @@ def report_rows(db, group):
 
 def reports(db, selection, group):
     rows=report_rows(db,group)
-    labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen'}
+    labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen','air-leak':'Air Leak'}
     result=build(rows,selection,'environment')
+    selected=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
+    reporters=defaultdict(set)
+    for r in selected:
+        reporters[r['category'] or 'Unspecified'].add((r['reporter'] or '').strip().lower() or 'unspecified')
+    result['reporter_categories']=[dict(label=k,count=len(v)) for k,v in sorted(reporters.items(),key=lambda x:(-len(x[1]),x[0]))]
+    result['reporter_total']=len({name for names in reporters.values() for name in names})
+    stagnant=[r for r in selected if re.search(r'stagnant|bertakung',r['category'] or '',re.I)]
+    result['stagnant']=dict(total=len(stagnant),outstanding=sum(r['status'] not in DONE for r in stagnant),
+                            categories=sorted({r['category'] for r in stagnant}),
+                            locations=counts(stagnant,'location'),plants=counts(stagnant,'plant'))
     result['group']=group
     result['group_label']=labels.get(group,'All reporting areas')
     return result

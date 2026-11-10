@@ -277,6 +277,22 @@ const SHEReporting = (() => {
     root.querySelectorAll('.report-filter input,.report-filter select').forEach(el=>el.addEventListener('input',draw));
     root.querySelector('#refreshReports').addEventListener('click',onRefresh);draw();
   }
+  async function loadOrderAfterPhotos(root,r) {
+    const box=root.querySelector('#orderAfterPhotos');
+    if(!box)return;
+    box.innerHTML='<p>Loading work order photos…</p>';
+    try{
+      const order=await api(`/api/cmms/work-orders/${encodeURIComponent(r.order_id)}?plant=${encodeURIComponent(r.plant)}`);
+      if(!box.isConnected)return;
+      const photos=(order.attachments||[]).map(a=>{
+        const match=String(a.url||'').match(/^\/uploads\/work-orders\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9._-]+)$/);
+        return match?{src:`/api/cmms/media/${match[1]}/${match[2]}?plant=${encodeURIComponent(r.plant)}`,kind:a.kind||''}:null;
+      }).filter(Boolean);
+      const before=photos.filter(p=>p.kind==='issue'), after=photos.filter(p=>p.kind!=='issue');
+      const strip=(items,label)=>items.length?`<div class="report-order-photo-group"><strong>${label}</strong><div class="report-evidence report-order-evidence">${items.map(p=>`<a href="${esc(p.src)}" target="_blank" rel="noopener"><img src="${esc(p.src)}" alt="${esc(label)} photo" loading="lazy"><span>${esc(p.kind.replace('_',' ')||label)}</span></a>`).join('')}</div></div>`:'';
+      box.innerHTML=`<h3 class="report-order-photos-title">Before &amp; after photos</h3>${order.completionNote?`<p><b>Maintenance summary:</b> ${esc(order.completionNote)}</p>`:''}${strip(before,'Before (issue)')+strip(after,'After (action taken)')||'<p>No photos on the work order yet.</p>'}${after.length?'':'<p class="field-hint">The after photo appears here once maintenance attaches its completion evidence to the work order.</p>'}`;
+    }catch(error){if(box.isConnected)box.innerHTML=`<p class="field-hint">Work order photos unavailable: ${esc(error.message)}</p>`;}
+  }
   async function detail(root,id,version) {
     const {report:r}=await api(`/api/reporting/reports/${id}`);
     const elevated=['admin','executive'].includes(currentUser.role);
@@ -297,7 +313,8 @@ const SHEReporting = (() => {
       const orderCard=root.querySelector('a[href^="#/work-orders/"]')?.closest('section');
       if(orderCard){
         const synced=r.order_photo_state==='synced';
-        orderCard.insertAdjacentHTML('beforeend',`<p role="status">${synced?'Report photos copied to CMMS.':r.order_photo_state==='sending'?'Copying report photos to CMMS.':'Report photos still need to be copied to CMMS.'}</p>${r.order_photo_error?`<p class="report-urgent">${esc(r.order_photo_error)}</p>`:''}${elevated&&!synced?'<button type="button" class="secondary-button" id="syncOrderPhotos">Copy photos to work order</button>':''}`);
+        orderCard.insertAdjacentHTML('beforeend',`<p role="status">${synced?'Report photos copied to CMMS.':r.order_photo_state==='sending'?'Copying report photos to CMMS.':'Report photos still need to be copied to CMMS.'}</p>${r.order_photo_error?`<p class="report-urgent">${esc(r.order_photo_error)}</p>`:''}${elevated&&!synced?'<button type="button" class="secondary-button" id="syncOrderPhotos">Copy photos to work order</button>':''}<div id="orderAfterPhotos" aria-live="polite"></div>`);
+        loadOrderAfterPhotos(root,r);
       }
     }
     const perform=async (path,body,button)=>{button.disabled=true;try {await api(path,'POST',body);await renderStaff('reporting-inbox');}catch(error){showError(root,error);button.disabled=false;}};

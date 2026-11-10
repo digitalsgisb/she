@@ -92,6 +92,19 @@ def init_air_leak(db):
     db.execute("INSERT INTO reporting_migrations VALUES('air-leak-v1')")
 
 
+def init_stagnant_water(db):
+    db.execute('CREATE TABLE IF NOT EXISTS reporting_migrations (name TEXT PRIMARY KEY)')
+    if db.execute("SELECT 1 FROM reporting_migrations WHERE name='stagnant-water-v1'").fetchone():
+        return
+    form = dict(title='Stagnant water (Air bertakung)', description='Laporkan air bertakung / report stagnant water, a potential mosquito breeding spot.',
+                icon='drain', group='environment', workflow='she', questions=[
+                    dict(id='description', label='Where exactly is the stagnant water and how big is it?', type='textarea', required=True, options=[]),
+                    dict(id='duration', label='How long has it been there, if known?', type='text', required=False, options=[]),
+                    dict(id='action', label='Any immediate action or suggestion?', type='textarea', required=False, options=[])])
+    db.execute('INSERT INTO reporting_forms(definition_json) VALUES(?)', (json.dumps(form),))
+    db.execute("INSERT INTO reporting_migrations VALUES('stagnant-water-v1')")
+
+
 def token():
     value = f'{int(time.time())}:{secrets.token_hex(16)}'
     return value + ':' + hmac.new(TOKEN_SECRET, value.encode(), hashlib.sha256).hexdigest()

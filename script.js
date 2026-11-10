@@ -38,6 +38,8 @@ const routes = {
   home: { title: 'Home', icon: 'grid' },
   'air-leak': { title: 'Air Leak', icon: 'droplet' },
   dashboard: { title: 'Dashboards', icon: 'grid' },
+  'she-summary': { title: 'SHE Summary', icon: 'shield' },
+  'co2-dashboard': { title: 'CO2 Tracking', icon: 'leaf' },
   'safety-dashboard': { title: 'Safety Dashboard', icon: 'shield' },
   'health-dashboard': { title: 'Health Dashboard', icon: 'heart' },
   'dashboard-records': { title: 'Filtered Dashboard Records', icon: 'clipboard' },
@@ -76,7 +78,7 @@ const routes = {
 function canAccessRoute(key) {
   if (!currentUser) return false;
   if(key==='red-tag-dashboard'&&!isRedTagDesktop())return false;
-  if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records') return ['admin','executive'].includes(currentUser.role);
+  if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records' || key === 'she-summary') return ['admin','executive'].includes(currentUser.role);
   if (['users','reporting-forms'].includes(key)) return ['admin','executive'].includes(currentUser.role);
   return Boolean(routes[key]);
 }
@@ -235,7 +237,7 @@ function renderMobileNavigation(active) {
 function renderNav(active) {
   const previousSubnavs = [...nav.querySelectorAll('.subnav')];
   nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${active==='dashboard'||active.endsWith('-dashboard')?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboards</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
-    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard',...(SHEStats.allowed()?['she-summary','safety-dashboard','health-dashboard','environment-dashboard']:[])].filter(canAccessRoute).map(key=>`<a class="subnav-link ${active===key||(key==='safety-dashboard'&&['patrol-dashboard','red-tag-dashboard'].includes(active))||(key==='environment-dashboard'&&active==='co2-dashboard')?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${(active==='safety'||safetyItems.includes(safetyModule(active))) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
@@ -323,8 +325,11 @@ function moduleCard(key, index) {
 
 function renderStatsDashboard(key) {
   if(key==='safety-dashboard')key=['accident-dashboard','red-tag-dashboard','hiyari-dashboard'].find(canAccessRoute);
-  if(key==='environment-dashboard')key='environmental-findings-dashboard';
   if(SHEMonitoring.configs[key]){SHEMonitoring.mount(key);return;}
+  if(key==='co2-dashboard'){
+    content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('environment','CO2 Tracking','Carbon emission tracking for the SHE programme.','co2-dashboard')+'<div class="placeholder-panel"><div class="placeholder-graphic"><span class="placeholder-ring"></span><span class="placeholder-symbol">'+icon('leaf',72)+'</span></div><span class="placeholder-kicker">PLACEHOLDER · COMING SOON</span><h2>CO2 tracking dashboard</h2><p>Emission figures, monthly trends and reduction targets will appear here once the CO2 data source is connected.</p><span class="placeholder-status"><span></span> Placeholder page</span></div></div>';
+    bindDashboardHeader();return;
+  }
   if(key==='health-dashboard'){
     content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('health','Health Dashboard','Health and wellbeing monitoring.')+'<section class="category-empty">No health modules have been added yet.</section></div>';
     bindDashboardHeader();return;
@@ -341,17 +346,44 @@ function renderStatsDashboard(key) {
   bindDashboardHeader();
 }
 
+async function renderSheSummary() {
+  const requestedHash=location.hash;
+  content.innerHTML=`<div class="page inner-page she-summary-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE MONITORING</span><h1>SHE Summary</h1><p>One combined view across every SHE module — all dates.</p></div><button class="secondary-button" type="button" id="sheSummaryRefresh">Refresh</button></div><div class="she-overview-grid" id="sheSummaryBody" aria-live="polite"><div class="loading-panel">Loading SHE summary…</div></div><p class="field-hint">Outstanding counts open findings and follow-ups that are not yet resolved or closed. Open a card for its full dashboard.</p></div>`;
+  const sources=[
+    {title:'Safety Patrol',icon:'clipboard',link:canAccessRoute('patrol-dashboard')?'patrol-dashboard':'patrol-overview',url:'/api/patrols/statistics?period=all',patrol:true},
+    {title:'Red Tag / Genba',icon:'tag',link:canAccessRoute('red-tag-dashboard')?'red-tag-dashboard':'red-tag-home',url:'/api/red-tags/statistics?period=all'},
+    {title:'Hiyari Hatto',icon:'alert',link:'hiyari-dashboard',url:'/api/reporting/statistics?period=all&group=hiyari-hatto'},
+    {title:'Air Leak',icon:'droplet',link:'air-leak-home',url:'/api/reporting/statistics?period=all&group=air-leak'},
+    {title:'Environment reports',icon:'leaf',link:'environment-dashboard',url:'/api/reporting/statistics?period=all&group=environment'},
+    {title:'Kaizen',icon:'leaf',link:'reporting-inbox',url:'/api/reporting/statistics?period=all&group=kaizen'}
+  ];
+  const results=await Promise.allSettled(sources.map(s=>api(s.url)));
+  if(location.hash!==requestedHash||currentRoute()!=='she-summary')return;
+  const body=document.getElementById('sheSummaryBody');
+  body.innerHTML=sources.map((s,i)=>{
+    const r=results[i];
+    if(r.status==='rejected')return `<div class="she-overview-card she-overview-error"><span class="she-overview-icon">${icon(s.icon,22)}</span><strong>${escapeHtml(s.title)}</strong><p>${escapeHtml(r.reason?.message||'Unavailable')}</p></div>`;
+    const d=r.value,sm=d.summary;
+    const figures=s.patrol
+      ?[[sm.total,'patrols'],[sm.with_findings,'with findings'],[d.backlog.outstanding,'need follow-up']]
+      :[[sm.total,'total'],[d.backlog.outstanding,'outstanding'],[sm.completed,'resolved / closed']];
+    const foot=s.patrol?(sm.ok_rate===null?'No checklist answers yet':`OK rate ${sm.ok_rate}%`):(sm.completion_rate===null?'No records yet':`${sm.completion_rate}% completed`);
+    return `<a class="she-overview-card" href="#/${s.link}"><span class="she-overview-icon">${icon(s.icon,22)}</span><strong>${escapeHtml(s.title)}</strong><div class="she-overview-figures">${figures.map(([value,label])=>`<div><strong>${Number(value||0).toLocaleString('en-MY')}</strong><span>${label}</span></div>`).join('')}</div><small>${escapeHtml(foot)} · Open dashboard →</small></a>`;
+  }).join('');
+  document.getElementById('sheSummaryRefresh')?.addEventListener('click',renderSheSummary);
+}
+
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
-  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['compound-dashboard','environmental-findings-dashboard']:[];
-  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'No. of compound','environmental-findings-dashboard':'No. of environmental findings'};
+  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','compound-dashboard','environmental-findings-dashboard','co2-dashboard']:[];
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'No. of compound','environmental-findings-dashboard':'No. of environmental findings','co2-dashboard':'CO2 tracking','environment-dashboard':'SHE reports & issue categories'};
   return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><span class="eyebrow">SUGIHARA · SHE MONITORING</span><h1>'+title+'</h1><p>'+detail+'</p><div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
 
 function renderDashboard() {
-  const monitoring=[['accident-dashboard','Safety'],['red-tag-dashboard','Safety'],['hiyari-dashboard','Safety'],['compound-dashboard','Environment'],['environmental-findings-dashboard','Environment']];
-  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>SHE dashboards</h1><p>Three Safety dashboards and two Environment dashboards.</p></div></section><div class="module-grid">${monitoring.filter(([route])=>canAccessRoute(route)).map(([route,area])=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><small>${area}</small><strong>${route==='red-tag-dashboard'?'SSFM (Redtag) Gemba summary':routes[route].title}</strong></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div><div class="content-heading"><h2>Workspace tools</h2></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, Hiyari Hatto, genba findings and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
+  const monitoring=[['she-summary','All areas'],['accident-dashboard','Safety'],['red-tag-dashboard','Safety'],['hiyari-dashboard','Safety'],['compound-dashboard','Environment'],['environmental-findings-dashboard','Environment'],['co2-dashboard','Environment']];
+  return `<div class="page dashboard-page compact-main-dashboard"><section class="main-dashboard-welcome"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE WORKSPACE</span><h1>SHE dashboards</h1><p>A combined SHE summary, Safety dashboards and Environment dashboards.</p></div></section><div class="module-grid">${monitoring.filter(([route])=>canAccessRoute(route)).map(([route,area])=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><small>${area}</small><strong>${route==='red-tag-dashboard'?'SSFM (Redtag) Gemba summary':route==='she-summary'?'SHE Summary — all modules':routes[route].title}</strong></span><span class="module-arrow">${icon('arrow',18)}</span></a>`).join('')}</div><div class="content-heading"><h2>Workspace tools</h2></div><div class="section-grid">${sectionCard('safety',1,'Patrol inspections, Hiyari Hatto, genba findings and PIC actions.')}${sectionCard('health',2,'Health and wellbeing features.')}${sectionCard('environmental',3,'Reporting and SHE follow-up.')}</div></div>`;
 }
 
 function renderSafetyHome() {
@@ -487,10 +519,19 @@ function notify(message) {
   notify.timer = setTimeout(() => { toastBox.hidden = true; }, 4000);
 }
 
-function closeModal() {
-  const findingForm=Boolean(modalBody.querySelector('#genbaForm'));
+let modalEditedContent = null;
+function dismissModal() {
   modalBackdrop.hidden = true;
   modalBody.innerHTML = '';
+  modalEditedContent = null;
+}
+function modalHasEdits() {
+  return Boolean(modalEditedContent) && modalEditedContent === modalBody.firstElementChild;
+}
+
+function closeModal() {
+  const findingForm=Boolean(modalBody.querySelector('#genbaForm'));
+  dismissModal();
   if(findingForm&&currentRoute()==='red-tag'&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')location.hash='#/red-tag-home';
 }
 
@@ -565,8 +606,9 @@ let dashboardTransition=null;
 let lastRenderedHash='';
 function render() {
   if(!currentUser)return;
+  if(!modalBackdrop.hidden)dismissModal();
   const hash=location.hash;
-  const dashboardRoute=value=>/^#\/(?:dashboard(?:$|[/?])|(?:patrol|red-tag|environment)-dashboard|dashboard-records)/.test(value);
+  const dashboardRoute=value=>/^#\/(?:dashboard(?:$|[/?])|(?:patrol|red-tag|environment|co2)-dashboard|dashboard-records|she-summary)/.test(value);
   const changing=lastRenderedHash&&lastRenderedHash!==hash&&(dashboardRoute(hash)||dashboardRoute(lastRenderedHash));
   lastRenderedHash=hash;SHEStats.hideTooltip();
   if(dashboardTransition)dashboardTransition.skipTransition();
@@ -582,7 +624,7 @@ function renderPage() {
   const key = currentRoute();
   document.getElementById('headerProfile').open=false;
   SHEStats.hideTooltip();
-  dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records';
+  dashboardsExpanded=key==='dashboard'||key.endsWith('-dashboard')||key==='dashboard-records'||key==='she-summary';
   safetyExpanded = (key==='safety'||safetyItems.includes(safetyModule(key)));
   envExpanded = key === 'environmental' || envItems.includes(key) || key.startsWith('reporting-');
   if (!canAccessRoute(key)) { location.hash = '#/home'; return; }
@@ -597,6 +639,7 @@ function renderPage() {
   else if (key === 'air-leak') renderAirLeak();
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();
+  else if(key==='she-summary')renderSheSummary();
   else if(key.endsWith('-dashboard'))renderStatsDashboard(key);
   else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);else if(currentRoute()===key&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')genbaNew();});
   else if (key === 'work-orders') renderWorkOrders();
@@ -639,7 +682,8 @@ document.addEventListener('keydown', event => {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
 window.addEventListener('hashchange', render);
-modalBackdrop.addEventListener('click', event => { if (event.target === modalBackdrop) closeModal(); });
+modalBody.addEventListener('input', event => { if (event.isTrusted) modalEditedContent = modalBody.firstElementChild; });
+modalBackdrop.addEventListener('click', event => { if (event.target === modalBackdrop && !modalHasEdits()) closeModal(); });
 document.getElementById('modalClose').addEventListener('click', closeModal);
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modalBackdrop.hidden) closeModal(); });
 

@@ -219,6 +219,26 @@ function patrolFilteredRows(rows) {
     .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
 }
 
+function patrolSummaryPhotoCells(row) {
+  const image=p=>/^image\/(jpeg|png|webp|gif)$/.test(p.mime_type);
+  const thumbs=(photos,kind)=>photos.length?`<div class="patrol-summary-photos">${photos.slice(0,3).map(p=>`<a href="/api/patrols/${row.id}/attachments/${p.id}" target="_blank" rel="noopener" aria-label="Open ${kind} photo"><img src="/api/patrols/${row.id}/attachments/${p.id}" alt="${kind} photo for patrol ${row.id}" loading="lazy"></a>`).join('')}${photos.length>3?`<span class="patrol-summary-more">+${photos.length-3}</span>`:''}</div>`:'';
+  const before=(row.attachments||[]).filter(image), after=(row.after_photos||[]).filter(image);
+  const attention=row.needs_attention??(row.followup_status!=='resolved'&&row.counts.not_ok>0);
+  return `<td data-label="Before">${thumbs(before,'before')||'<span class="patrol-summary-none">No photo</span>'}</td><td data-label="After">${thumbs(after,'after')||(attention?'<span class="patrol-summary-none patrol-summary-missing">No fix yet</span>':'<span class="patrol-summary-none">—</span>')}</td>`;
+}
+
+function patrolSummaryTableMarkup(rows) {
+  const attention=row=>row.needs_attention??(row.followup_status!=='resolved'&&row.counts.not_ok>0);
+  const rank=row=>attention(row)&&row.counts.not_ok>0?((row.followup_status||'open')==='open'?0:1):attention(row)?2:3;
+  const ordered=patrolFilteredRows(rows).slice().sort((a,b)=>rank(a)-rank(b)||b.created_at-a.created_at||b.id-a.id);
+  const open=ordered.filter(attention).length;
+  return `<section id="patrolSummaryTable" class="patrol-summary-section"><details class="patrol-summary-details" ${ordered.length?'open':''}><summary><h2>Patrol summary</h2><span>${ordered.length} ${ordered.length===1?'patrol':'patrols'} · ${open} ${open===1?'needs':'need'} follow-up</span></summary><p class="patrol-chart-note">Patrols with NOT OK findings and no completed fix are listed first. Before photos are the original patrol evidence; after photos come from follow-up replies.</p>${ordered.length?`<div class="patrol-summary-scroll"><table class="patrol-summary-grid"><thead><tr><th scope="col">Patrol</th><th scope="col">Findings (NG)</th><th scope="col">Status</th><th scope="col">Before</th><th scope="col">After</th><th scope="col"></th></tr></thead><tbody>${ordered.map(row=>{
+    const needs=attention(row);
+    const issues=(row.issues||[]).slice(0,3).map(issue=>escapeHtml(issue.label)).join('<br>');
+    return `<tr class="${needs?'patrol-summary-attention':''}"><td data-label="Patrol"><a class="patrol-report-open" href="#/daily-safety-patrol/${row.id}"><strong>#${row.id}</strong></a><small>${escapeHtml(new Date(row.created_at*1000).toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'}))}</small><small>${escapeHtml(row.inspector_name)}</small></td><td data-label="Findings">${row.counts.not_ok?`<strong>${row.counts.not_ok} NOT OK</strong>${issues?`<small>${issues}${(row.issues||[]).length>3?'<br>…':''}</small>`:''}`:'<span class="patrol-summary-none">None</span>'}</td><td data-label="Status"><span class="patrol-status patrol-status-${row.followup_status||'open'}">${patrolStatusLabels[row.followup_status||'open']}</span></td>${patrolSummaryPhotoCells(row)}<td data-label=""><a class="secondary-button" href="#/daily-safety-patrol/${row.id}${needs?'?followup=1':''}">${needs?'Follow up →':'View →'}</a></td></tr>`;
+  }).join('')}</tbody></table></div>`:'<p class="patrol-empty">No patrols match these filters.</p>'}</details></section>`;
+}
+
 function patrolDailyReportMarkup(rows) {
   const filtered = patrolFilteredRows(rows);
   const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
@@ -235,6 +255,8 @@ function patrolDailyReportMarkup(rows) {
 }
 
 function updatePatrolResults() {
+  const summary=document.getElementById('patrolSummaryTable');
+  if(summary){const wasOpen=summary.querySelector('details')?.open;summary.outerHTML=patrolSummaryTableMarkup(patrolView.rows);const details=document.getElementById('patrolSummaryTable')?.querySelector('details');if(details)details.open=Boolean(wasOpen);}
   document.getElementById('patrolDailyReports').outerHTML = patrolDailyReportMarkup(patrolView.rows);
   bindIssueThumbnails(content);
 }
@@ -363,7 +385,7 @@ async function loadOlderPatrols(){
   finally{patrolView.loadingOlder=false;}
 }
 function renderPatrolOverviewPage(){
-  renderPatrolContent(`<div class="page inner-page patrol-page patrol-history-page">${patrolNavigation()}<header class="patrol-history-header"><h1>Patrol History</h1><a class="secondary-button" href="#/daily-safety-patrol">New checklist</a></header><div class="patrol-history-toolbar"><label class="patrol-compact-period">Period<select id="patrolPeriodFilter">${[['all','All patrols'],['week','Week'],['month','Month']].map(([value,label])=>`<option value="${value}" ${patrolView.mode===value?'selected':''}>${label}</option>`).join('')}</select></label>${patrolView.mode!=='all'?`<input id="patrolDate" type="${patrolView.mode==='month'?'month':'date'}" aria-label="${patrolView.mode==='month'?'Month':'Week containing'}" value="${patrolLocalDate(patrolView.anchor).slice(0,patrolView.mode==='month'?7:10)}">`:''}<details class="patrol-small-filters"><summary>Filters</summary><div><input id="patrolSearch" type="search" value="${escapeHtml(patrolView.search)}" placeholder="Inspector, checklist or ID" aria-label="Search patrol history"><select id="patrolStatusFilter" aria-label="Follow-up status">${[['all','All statuses'],['attention','Needs attention'],['open','Open'],['action_taken','Awaiting review'],['resolved','Resolved']].map(([value,label])=>`<option value="${value}" ${patrolView.status===value?'selected':''}>${label}</option>`).join('')}</select><label><input id="patrolFindingsOnly" type="checkbox" ${patrolView.findingsOnly?'checked':''}> With findings</label></div></details><small id="patrolSyncStatus" role="status">Live</small></div>${patrolDailyReportMarkup(patrolView.rows)}${patrolView.nextCursor?'<button class="secondary-button" type="button" data-patrol-older>Load older patrols</button>':''}<p class="form-error" data-patrol-history-error role="alert" hidden></p></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page patrol-history-page">${patrolNavigation()}<header class="patrol-history-header"><h1>Patrol History</h1><a class="secondary-button" href="#/daily-safety-patrol">New checklist</a></header><div class="patrol-history-toolbar"><label class="patrol-compact-period">Period<select id="patrolPeriodFilter">${[['all','All patrols'],['week','Week'],['month','Month']].map(([value,label])=>`<option value="${value}" ${patrolView.mode===value?'selected':''}>${label}</option>`).join('')}</select></label>${patrolView.mode!=='all'?`<input id="patrolDate" type="${patrolView.mode==='month'?'month':'date'}" aria-label="${patrolView.mode==='month'?'Month':'Week containing'}" value="${patrolLocalDate(patrolView.anchor).slice(0,patrolView.mode==='month'?7:10)}">`:''}<details class="patrol-small-filters"><summary>Filters</summary><div><input id="patrolSearch" type="search" value="${escapeHtml(patrolView.search)}" placeholder="Inspector, checklist or ID" aria-label="Search patrol history"><select id="patrolStatusFilter" aria-label="Follow-up status">${[['all','All statuses'],['attention','Needs attention'],['open','Open'],['action_taken','Awaiting review'],['resolved','Resolved']].map(([value,label])=>`<option value="${value}" ${patrolView.status===value?'selected':''}>${label}</option>`).join('')}</select><label><input id="patrolFindingsOnly" type="checkbox" ${patrolView.findingsOnly?'checked':''}> With findings</label></div></details><small id="patrolSyncStatus" role="status">Live</small></div>${patrolSummaryTableMarkup(patrolView.rows)}${patrolDailyReportMarkup(patrolView.rows)}${patrolView.nextCursor?'<button class="secondary-button" type="button" data-patrol-older>Load older patrols</button>':''}<p class="form-error" data-patrol-history-error role="alert" hidden></p></div>`);
   bindIssueThumbnails(content);
 }
 

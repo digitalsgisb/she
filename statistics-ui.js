@@ -33,12 +33,13 @@ const SHEStats = (() => {
     const max=Math.max(1,...rows.map(row=>row.count));
     const chart=rows.map(row=>{
       const label=esc(row.label);
-      const bar='<strong>'+number(row.count)+'</strong><span class="she-column-track">'+(row.count?'<span style="height:'+(row.count/max*100)+'%"></span>':'')+'</span><span>'+label+'</span>';
+      const height=row.count/max*100;
+      const bar='<strong>'+number(row.count)+'</strong><span class="she-column-track">'+(height?'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="'+(100-height)+'" width="100" height="'+height+'"/></svg>':'')+'</span><span>'+label+'</span>';
       if(!row.count)return '<div class="she-column">'+bar+'</div>';
       const filter=field==='date'?{label:row.key}:{label:row.label,other:row.other,exclude:row.exclude};
       return '<button type="button" class="she-column"'+hit(field,filter,row.count,'',{allDates:field==='date'})+'>'+bar+'</button>';
     }).join('');
-    return '<article class="she-chart-card">'+header(title,note)+(rows.length?'<div class="she-column-scroll" tabindex="0" role="region" aria-label="'+esc(title)+'"><div class="she-column-grid" style="--columns:'+rows.length+'">'+chart+'</div></div>':empty())+'</article>';
+    return '<article class="she-chart-card">'+header(title,note)+(rows.length?'<div class="she-column-scroll" tabindex="0" role="region" aria-label="'+esc(title)+'"><div class="she-column-grid">'+chart+'</div></div>':empty())+'</article>';
   }
   function activity(data) {
     const points=data.points,total=points.reduce((s,p)=>s+p.count,0);

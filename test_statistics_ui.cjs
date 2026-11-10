@@ -62,7 +62,9 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  assert.equal(await page.locator('.she-chart-tabs').count(),0);
  assert.equal(await page.locator('[data-stat-panel=categories] button.she-column').count(),4);
  assert.equal(await page.locator('[data-stat-panel=monthly] .she-column').count(),12);
- assert.equal(await page.locator('[data-stat-panel=monthly] .she-column-track > span').count(),2);
+ assert.equal(await page.locator('[data-stat-panel=monthly] .she-column-track rect').count(),2);
+ const monthPositions=await page.locator('[data-stat-panel=monthly] .she-column').evaluateAll(months=>months.map(month=>({x:month.offsetLeft,y:month.offsetTop})));
+ assert(monthPositions.every((month,i)=>month.y===monthPositions[0].y&&(!i||month.x>monthPositions[i-1].x)));
  const heights=await page.locator('[data-stat-panel=overview] > .she-chart-card').evaluateAll(cards=>cards.map(card=>card.getBoundingClientRect().height));
  assert.equal(heights.length,3);assert.equal(new Set(heights).size,1);
  const afterPhoto=page.locator('[data-stat-panel=records] img[alt="Work order follow-up photo"]');

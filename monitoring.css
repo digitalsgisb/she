@@ -15,6 +15,7 @@
 
 .accident-dashboard-page .monitor-track rect{fill:#e02836}
 .accident-dashboard-page .accident-positive{display:inline-block;padding:2px 6px;border-radius:5px;background:#ffe5e7;color:#bf1829;font-weight:800}
+.accident-dashboard-page .report-stats strong .accident-positive{font-size:inherit;padding-block:0}
 .accident-unreported{color:#5d7267;font-size:.8em}
 .accident-register-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .accident-register-heading h2{margin:0}

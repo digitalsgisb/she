@@ -74,7 +74,11 @@ const SHEStats = (() => {
       ];
     })();
     sections.splice(1,0,{id:'records',label:'Overview table',charts:'<div class="she-inline-records" data-inline-records="all"></div>'});
-    return '<p class="she-stat-period">'+esc(patrol?'Safety patrol':red?'Red Tag':(data.group==='environment'?'Green Eyes Event':data.group_label))+' · '+esc(data.selection.label)+'</p>'+metrics(data)+'<div'+hit('status',{label:'Outstanding across all dates'},s.outstanding,'All dates',{values:['Open','In progress','Awaiting verification'],allDates:true})+' class="she-backlog"><span>'+(patrol?'Patrols needing follow-up':'Outstanding')+' · all dates</span><strong>'+number(s.outstanding)+'</strong><small>'+number(s.to_do)+(patrol?' open':' to do')+(red||patrol?' · '+number(s.awaiting_review)+' awaiting verification':'')+'</small></div><div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
+    const summary='<p class="she-stat-period">'+esc(patrol?'Safety patrol':red?'Red Tag':(data.group==='environment'?'Green Eyes Event':data.group_label))+' · '+esc(data.selection.label)+'</p>'+metrics(data)+'<div'+hit('status',{label:'Outstanding across all dates'},s.outstanding,'All dates',{values:['Open','In progress','Awaiting verification'],allDates:true})+' class="she-backlog"><span>'+(patrol?'Patrols needing follow-up':'Outstanding')+' · all dates</span><strong>'+number(s.outstanding)+'</strong><small>'+number(s.to_do)+(patrol?' open':' to do')+(red||patrol?' · '+number(s.awaiting_review)+' awaiting verification':'')+'</small></div>';
+    if(patrol)return summary+'<div class="she-patrol-sections">'+sections.map(section=>
+      '<section aria-labelledby="patrol-heading-'+section.id+'"><h2 id="patrol-heading-'+section.id+'">'+section.label+'</h2><div class="she-charts-grid" data-stat-panel="'+section.id+'">'+section.charts+'</div></section>'
+    ).join('')+'</div>';
+    return summary+'<div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
   }
   function recordHash(kind,selection,point) {
     const query={...selection};
@@ -110,6 +114,10 @@ const SHEStats = (() => {
 
   function bindTabs(body,target) {
     const tabs=[...body.querySelectorAll('[data-stat-tab]')];
+    if(!tabs.length){
+      body.querySelectorAll('[data-inline-records]').forEach(panel=>panel.loadRecords());
+      return;
+    }
     const select=(key,focus=false)=>{
       target.dataset.activeStatisticsTab=key;
       tabs.forEach(tab=>{const selected=tab.dataset.statTab===key;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;if(selected&&focus)tab.focus();});

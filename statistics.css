@@ -73,3 +73,7 @@
 .she-summary-page :is(.she-overview-icon,.she-overview-figures strong,.she-overview-card small){color:var(--summary-accent)}
 .she-summary-page .she-overview-figures span{color:#485950}
 .she-summary-page .she-overview-card:focus-visible{outline:2px solid var(--summary-accent);outline-offset:3px}
+
+.she-patrol-sections{display:grid;gap:22px}
+.she-patrol-sections>section{min-width:0}
+.she-patrol-sections h2{margin:0 0 10px;color:#214b38;font-size:18px}

@@ -47,8 +47,8 @@ const routes = {
   'red-tag-dashboard': { title: 'Red Tag Dashboard', icon: 'tag' },
   'accident-dashboard': { title: 'Monthly accident statistic', icon: 'shield' },
   'hiyari-dashboard': { title: 'Hiyari Hatto Summary', icon: 'alert' },
-  'compound-dashboard': { title: 'No. of compound', icon: 'leaf' },
-  'environmental-findings-dashboard': { title: 'No. of environmental findings', icon: 'leaf' },
+  'compound-dashboard': { title: 'Environmental Enforcement Register', icon: 'leaf' },
+  'environmental-findings-dashboard': { title: 'Environmental Inspection Register', icon: 'leaf' },
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
@@ -340,7 +340,7 @@ function renderStatsDashboard(key) {
     'environment-dashboard':{kind:'environment',detail:'Monitor reporting topics, locations, activity, and work-order follow-up.',link:'reporting-inbox',action:'Open SHE reporting inbox'}
   }[key];
   const area=config.kind==='environment'?'environment':'safety';
-  content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader(area,area==='safety'?'Safety Dashboard':'Environment Dashboard',config.detail,key)+'<section id="focusStatistics"></section></div>';
+  content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader(area,area==='safety'?'Safety Dashboard':'Environment Dashboard','',key)+'<section id="focusStatistics"></section></div>';
   SHEStats.mount(document.getElementById('focusStatistics'),config.kind);
   const controls=content.querySelector('.she-stat-controls');content.querySelector('[data-dashboard-controls]').append(controls);
   bindDashboardHeader();
@@ -348,14 +348,14 @@ function renderStatsDashboard(key) {
 
 async function renderSheSummary() {
   const requestedHash=location.hash;
-  content.innerHTML=`<div class="page inner-page she-summary-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE MONITORING</span><h1>SHE Summary</h1><p>One combined view across every SHE module — all dates.</p></div><button class="secondary-button" type="button" id="sheSummaryRefresh">Refresh</button></div><div class="she-overview-grid" id="sheSummaryBody" aria-live="polite"><div class="loading-panel">Loading SHE summary…</div></div><p class="field-hint">Outstanding counts open findings and follow-ups that are not yet resolved or closed. Open a card for its full dashboard.</p></div>`;
+  content.innerHTML=`<div class="page inner-page she-summary-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SUGIHARA · SHE MONITORING</span><h1>SHE Summary</h1><p>One combined view across every SHE module — all dates.</p></div><button class="secondary-button" type="button" id="sheSummaryRefresh">Refresh</button></div><div class="she-overview-grid" id="sheSummaryBody" aria-live="polite"><div class="loading-panel">Loading SHE summary…</div></div><section class="she-summary-records" id="sheSummaryRecords"></section></div>`;
   const sources=[
     {title:'Safety Patrol',icon:'clipboard',link:canAccessRoute('patrol-dashboard')?'patrol-dashboard':'patrol-overview',url:'/api/patrols/statistics?period=all',patrol:true},
     {title:'Red Tag / Genba',icon:'tag',link:canAccessRoute('red-tag-dashboard')?'red-tag-dashboard':'red-tag-home',url:'/api/red-tags/statistics?period=all'},
     {title:'Hiyari Hatto',icon:'alert',link:'hiyari-dashboard',url:'/api/reporting/statistics?period=all&group=hiyari-hatto'},
     {title:'Air Leak',icon:'droplet',link:'air-leak-home',url:'/api/reporting/statistics?period=all&group=air-leak'},
-    {title:'Environment reports',icon:'leaf',link:'environment-dashboard',url:'/api/reporting/statistics?period=all&group=environment'},
-    {title:'Kaizen',icon:'leaf',link:'reporting-inbox',url:'/api/reporting/statistics?period=all&group=kaizen'}
+    {title:'Green Eyes Event',icon:'leaf',link:'environment-dashboard',url:'/api/reporting/statistics?period=all&group=environment'},
+    {title:'Kaizen',icon:'leaf',link:'reporting-inbox?area=kaizen',url:'/api/reporting/statistics?period=all&group=kaizen'}
   ];
   const results=await Promise.allSettled(sources.map(s=>api(s.url)));
   if(location.hash!==requestedHash||currentRoute()!=='she-summary')return;
@@ -370,14 +370,29 @@ async function renderSheSummary() {
     const foot=s.patrol?(sm.ok_rate===null?'No checklist answers yet':`OK rate ${sm.ok_rate}%`):(sm.completion_rate===null?'No records yet':`${sm.completion_rate}% completed`);
     return `<a class="she-overview-card" href="#/${s.link}"><span class="she-overview-icon">${icon(s.icon,22)}</span><strong>${escapeHtml(s.title)}</strong><div class="she-overview-figures">${figures.map(([value,label])=>`<div><strong>${Number(value||0).toLocaleString('en-MY')}</strong><span>${label}</span></div>`).join('')}</div><small>${escapeHtml(foot)} · Open dashboard →</small></a>`;
   }).join('');
+  const records=document.getElementById('sheSummaryRecords');
+  const available=sources.filter((_,i)=>results[i].status==='fulfilled');
+  if(available.length){
+    records.innerHTML='<div class="she-record-heading"><h2>Overview table</h2><label>Module <select data-summary-module>'+available.map((source,index)=>'<option value="'+index+'">'+escapeHtml(source.title)+'</option>').join('')+'</select></label></div><div data-summary-records aria-live="polite"></div>';
+    const select=records.querySelector('[data-summary-module]');
+    const draw=()=>{
+      const source=available[Number(select.value)];
+      const kind=source.patrol?'patrol':source.url.startsWith('/api/red-tags/')?'red-tag':'environment';
+      const target=document.createElement('div');
+      records.querySelector('[data-summary-records]').replaceChildren(target);
+      SHEStats.mountRecordResults(target,kind,new URLSearchParams(source.url.split('?')[1]));
+    };
+    select.onchange=draw;
+    draw();
+  }
   document.getElementById('sheSummaryRefresh')?.addEventListener('click',renderSheSummary);
 }
 
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
   const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','compound-dashboard','environmental-findings-dashboard','co2-dashboard']:[];
-  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'No. of compound','environmental-findings-dashboard':'No. of environmental findings','co2-dashboard':'CO2 tracking','environment-dashboard':'SHE reports & issue categories'};
-  return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><span class="eyebrow">SUGIHARA · SHE MONITORING</span><h1>'+title+'</h1><p>'+detail+'</p><div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','compound-dashboard':'Environmental Enforcement Register','environmental-findings-dashboard':'Environmental Inspection Register','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes Event'};
+  return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><h1>'+title+'</h1>'+(detail?'<p>'+detail+'</p>':'')+'<div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
 

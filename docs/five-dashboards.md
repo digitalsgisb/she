@@ -7,8 +7,8 @@ The dashboard landing page has five primary dashboards, grouped as requested:
 | Safety | Monthly accident statistic | Executive monthly register: ten sections, off-job count and man-hours |
 | Safety | SSFM (Redtag) Gemba summary | Existing Red Tag findings, status, rank, STOP classification, sections and PIC workload |
 | Safety | Hiyari Hatto Summary | Hiyari Hatto reports with their event date and saved SHE review |
-| Environment | No. of compound | Executive monthly compound register |
-| Environment | No. of environmental findings | Executive monthly register for Spillage, Aedes Larvae, Stagnant Water and Others |
+| Environment | Environmental Enforcement Register | Monthly counts of environmental compound notices |
+| Environment | Environmental Inspection Register | Executive monthly register for Spillage, Aedes Larvae, Stagnant Water and Others |
 
 Safety Patrol remains available as an additional operational dashboard. Health and the existing reporting inbox remain available. Hiyari Hatto now has a form link in Safety.
 

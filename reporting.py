@@ -329,7 +329,8 @@ def get(h, db, path):
     if path == '/api/reporting/air-leak':
         form = next((f for f in forms(db) if f['group'] == 'air-leak'), None)
         rows = db.execute("SELECT * FROM finding_reports WHERE (user_id=? OR ? IN ('admin','executive')) ORDER BY id DESC LIMIT 500", (user['id'], user['role'])).fetchall()
-        h.send_json(200, dict(form=form, token=token(), reports=[dict(**receipt(r), id=r['id'], status=r['status'], plant=r['plant'], location=r['location'], created_at=r['created_at']) for r in rows if json.loads(r['snapshot_json'])['group'] == 'air-leak']))
+        h.send_json(200, dict(form=form, token=token(), reports=[dict(**receipt(r), id=r['id'], status=r['status'], plant=r['plant'], location=r['location'], created_at=r['created_at'],
+            thumbnail_url=f"/api/reporting/reports/{r['id']}/photos/0" if json.loads(r['photos_json']) else '') for r in rows if json.loads(r['snapshot_json'])['group'] == 'air-leak']))
         return
     if path in ('/api/reporting/statistics','/api/reporting/statistics/records'):
         she_statistics.get(h, db, user, 'environment')
@@ -340,9 +341,9 @@ def get(h, db, path):
     if path == '/api/reporting/forms':
         h.send_json(200, dict(forms=forms(db)))
     elif path == '/api/reporting/reports':
-        rows = db.execute('SELECT id,snapshot_json,reporter,plant,location,status,created_at,order_state,order_id,json_array_length(photos_json) AS photo_count FROM finding_reports ORDER BY id DESC LIMIT 500').fetchall()
+        rows = db.execute('SELECT id,snapshot_json,answers_json,reporter,plant,location,status,created_at,order_state,order_id,json_array_length(photos_json) AS photo_count FROM finding_reports ORDER BY id DESC LIMIT 500').fetchall()
         h.send_json(200, dict(reports=[dict(id=r['id'], **receipt(r), title=json.loads(r['snapshot_json'])['title'],
-            group=json.loads(r['snapshot_json'])['group'], reporter=r['reporter'], plant=r['plant'], location=r['location'],
+            group=json.loads(r['snapshot_json'])['group'], description=str(json.loads(r['answers_json']).get('description') or '')[:240], reporter=r['reporter'], plant=r['plant'], location=r['location'],
             status=r['status'], created_at=r['created_at'],thumbnail_url=f"/api/reporting/reports/{r['id']}/photos/0" if r['photo_count'] else '') for r in rows]))
     elif re.fullmatch(r'/api/reporting/reports/\d+/photos/[0-2]', path):
         row=db.execute('SELECT photos_json FROM finding_reports WHERE id=?',(int(path.split('/')[-3]),)).fetchone()

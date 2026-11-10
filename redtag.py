@@ -74,6 +74,11 @@ def settings(db, user=None):
 def finding(row):
     return {k: row[k] for k in row.keys() if k not in ('photo', 'photo_mime', 'request_key', 'request_json')}
 
+def latest_action_photo(db, finding_id):
+    update = db.execute('SELECT id FROM redtag_updates WHERE finding_id=? AND after_photo IS NOT NULL ORDER BY id DESC LIMIT 1', (finding_id,)).fetchone()
+    return f"/api/red-tags/{finding_id}/updates/{update['id']}/photo" if update else ''
+
+
 def send_bytes(h, content, mime, filename=None):
     h.send_response(200)
     h.send_header('Content-Type', mime)
@@ -147,7 +152,7 @@ def get(h, db, path, user):
                 writer.writerow(["'" + str(v) if str(v).lstrip().startswith(('=', '+', '-', '@')) else v for v in values])
             send_bytes(h, ('\ufeff' + output.getvalue()).encode('utf-8'), 'text/csv; charset=utf-8', 'genba-' + day + '.csv')
         else:
-            h.send_json(200, dict(date=day, findings=[finding(r) for r in rows]))
+            h.send_json(200, dict(date=day, findings=[dict(finding(r), after_url=latest_action_photo(db, r['id'])) for r in rows]))
     except ValueError as error:
         h.error_json(400, str(error))
 

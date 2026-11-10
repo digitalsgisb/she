@@ -218,15 +218,20 @@ def filtered_records(db,user,kind,selection,query):
             result['detail_url']='/#/daily-safety-patrol/'+str(row['id'])
             attachment=db.execute("SELECT id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at,id LIMIT 1",(row['id'],)).fetchone()
             if attachment: result['photo_url']=f"/api/patrols/{row['id']}/attachments/{attachment['id']}"
+            after=db.execute("SELECT id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NOT NULL AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at DESC,id DESC LIMIT 1",(row['id'],)).fetchone()
+            if after: result['after_url']=f"/api/patrols/{row['id']}/attachments/{after['id']}"
             remarks=db.execute('SELECT remarks FROM patrols WHERE id=?',(row['id'],)).fetchone()
             result['description']=remarks['remarks'][:240]
         elif kind=='red-tag':
             result['detail_url']='/#/red-tag/'+str(row['id'])
             result['photo_url']=f"/api/red-tags/{row['id']}/photo"
             result['description']=result['description'][:240]
+            update=db.execute('SELECT id FROM redtag_updates WHERE finding_id=? AND after_photo IS NOT NULL ORDER BY id DESC LIMIT 1',(row['id'],)).fetchone()
+            if update: result['after_url']=f"/api/red-tags/{row['id']}/updates/{update['id']}/photo"
         else:
             result['detail_url']='/#/reporting-inbox/'+str(row['id'])
-            report=db.execute('SELECT photos_json,answers_json FROM finding_reports WHERE id=?',(row['id'],)).fetchone()
+            report=db.execute('SELECT photos_json,answers_json,order_id,plant FROM finding_reports WHERE id=?',(row['id'],)).fetchone()
+            result.update(order_id=report['order_id'], order_plant=report['plant'])
             if json.loads(report['photos_json']): result['photo_url']=f"/api/reporting/reports/{row['id']}/photos/0"
             result['description']=' · '.join(str(v) for v in json.loads(report['answers_json']).values() if v is not None)[:240]
         records.append(result)

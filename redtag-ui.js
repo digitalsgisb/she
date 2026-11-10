@@ -29,6 +29,11 @@ function genbaError(error, target=content) {
 function genbaCards(rows,assigned=false){
   return rows.map(r=>`<button class="genba-record" data-genba-id="${r.id}"><img src="/api/red-tags/${r.id}/photo" alt="Finding at ${escapeHtml(r.section)}" loading="lazy"><span class="genba-record-body"><strong>${escapeHtml(r.red_tag_id)}</strong><span class="state-badge">${escapeHtml(r.status==='Action taken · awaiting review'?'For review':r.status)}</span><h2>${escapeHtml(r.section)}</h2><span>${escapeHtml(r.machine)} · PIC ${escapeHtml(r.pic)}</span><p>${escapeHtml(r.hazard)}</p><span class="genba-card-action">${assigned?'Update action':'View finding'} →</span></span></button>`).join('');
 }
+function genbaTable(rows){
+  return SHEStats.recordsTable(rows.map(r=>({genbaId:r.id,title:r.section,reference:r.red_tag_id,date:r.finding_date,
+    context:[r.machine,r.pic].filter(Boolean).join(' · '),description:r.hazard,status:r.status,
+    photo_url:'/api/red-tags/'+r.id+'/photo',after_url:r.after_url})));
+}
 async function refreshGenbaSource(){
   if(currentRoute()==='red-tag-home')await loadFindingModuleHome('red-tag-home');
   else if(genbaRouteActive())await renderGenba();
@@ -45,7 +50,8 @@ async function renderGenba(quiet=false){
     genbaSettings=config;genbaRows=result.findings;
     const rows=genbaInbox()&&!genbaShowCompleted?genbaRows.filter(r=>!['Resolved','Closed'].includes(r.status)):genbaRows;
     const title=genbaInbox()?'Assigned to me':moduleView()==='history'?'Red Tag history':'Red Tag';
-    renderSafetyModuleContent(`<div class="page inner-page"><div class="page-heading genba-compact-heading"><div><h1>${title}</h1>${genbaInbox()?'<p>Cases assigned to you as PIC.</p>':''}</div><small class="genba-live-status" role="status">Live</small></div>${genbaInbox()?`<label class="genba-completed-toggle"><input id="genbaCompleted" type="checkbox" ${genbaShowCompleted?'checked':''}> Show completed</label>`:''}<div class="genba-grid">${genbaCards(rows,genbaInbox())}</div>${!rows.length?`<p class="category-empty">${genbaInbox()?'No cases assigned to you.':moduleView()==='history'?'No completed findings.':'No active findings.'}</p>`:''}</div>`);
+    renderSafetyModuleContent(`<div class="page inner-page"><div class="page-heading genba-compact-heading"><div><h1>${title}</h1>${genbaInbox()?'<p>Cases assigned to you as PIC.</p>':''}</div><small class="genba-live-status" role="status">Live</small></div>${genbaInbox()?`<label class="genba-completed-toggle"><input id="genbaCompleted" type="checkbox" ${genbaShowCompleted?'checked':''}> Show completed</label>`:''}<div data-genba-records>${rows.length?genbaTable(rows):''}</div>${!rows.length?`<p class="category-empty">${genbaInbox()?'No cases assigned to you.':moduleView()==='history'?'No completed findings.':'No active findings.'}</p>`:''}</div>`);
+    SHEStats.bindEvidence(content.querySelector('[data-genba-records]'));
     document.getElementById('genbaCompleted')?.addEventListener('change',event=>{genbaShowCompleted=event.target.checked;renderGenba();});
     content.querySelectorAll('[data-genba-id]').forEach(button=>button.onclick=()=>genbaDetail(button.dataset.genbaId));
   }catch(error){if(genbaRouteActive()&&location.hash===hash&&sequence===genbaRenderSequence)genbaError(error);}

@@ -3,8 +3,8 @@ const SHEMonitoring = (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const configs = {
     'accident-dashboard':{kind:'accident',area:'safety',title:'Monthly accident statistic',detail:'On-job accidents by section, off-job accidents and injury frequency rate.'},
-    'compound-dashboard':{kind:'compound',area:'environment',title:'No. of compound',detail:'Monthly environmental compound counts.'},
-    'environmental-findings-dashboard':{kind:'environmental-findings',area:'environment',title:'No. of environmental findings',detail:'Spillage, Aedes larvae, stagnant water and other inspection findings.'},
+    'compound-dashboard':{kind:'compound',area:'environment',title:'Environmental Enforcement Register',detail:'Monthly counts of compound notices for environmental offences.'},
+    'environmental-findings-dashboard':{kind:'environmental-findings',area:'environment',title:'Environmental Inspection Register',detail:'Spillage, Aedes larvae, stagnant water and other inspection findings.'},
     'hiyari-dashboard':{kind:'hiyari',area:'safety',title:'Hiyari Hatto Summary',detail:'Progress, categories, rank, STOP 6 and section follow-up.'}
   };
   const names = month => new Date(month+'-01T12:00:00+08:00').toLocaleDateString('en-MY',{month:'short',timeZone:'Asia/Kuala_Lumpur'});
@@ -66,7 +66,12 @@ const SHEMonitoring = (() => {
     }
     function drawHiyari() {
       body.innerHTML=stats([['Total reports',data.total],['Open / in progress',data.open],['Resolved / closed',data.closed],['Completion',data.completion===null?'—':data.completion+'%']])+`<div class="report-admin-links"><a class="primary-button" href="/report?area=hiyari-hatto">New Hiyari Hatto form ↗</a><a class="secondary-button" href="/templates/hiyari-hatto.pdf" target="_blank" rel="noopener">FR-SH-12 blank template ↗</a><a class="secondary-button" href="#/hiyari-hatto">Available forms</a></div><section class="report-detail-card"><h2>Monthly progress · ${year}</h2><p>Uses the event date when supplied; older reports use their submission date in Malaysia. Closure is the current status of reports from each month.</p>${chart(data.months)}<div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th>Progress</th>${data.months.map(r=>`<th>${names(r.month)}</th>`).join('')}</tr></thead><tbody>${['total','open','closed'].map(f=>`<tr><th>${f}</th>${data.months.map(r=>`<td>${r[f]}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section><div class="monitor-breakdowns">${Object.entries(data.categories).map(([field,values])=>`<section class="report-detail-card"><h2>${esc({category:'Status category',rank:'Rank',stop:'STOP 6',section:'Section',pic:'PIC'}[field])}</h2>${Object.keys(values).length?Object.entries(values).map(([label,n])=>`<button class="monitor-breakdown" data-filter-field="${field}" data-filter-value="${esc(label)}"><span>${esc(label)}</span><strong>${n}</strong></button>`).join(''):'<p>No reports recorded.</p>'}</section>`).join('')}</div><section class="report-detail-card"><h2>Matching reports</h2><button class="secondary-button" id="clearHiyariFilter">Show all</button><p id="hiyariFilterLabel"></p><div class="report-inbox-grid" id="hiyariRows"></div></section>`;
-      function records(rows,label='All reports') {body.querySelector('#hiyariFilterLabel').textContent=label+' · '+rows.length;body.querySelector('#hiyariRows').innerHTML=rows.length?rows.map(r=>`<a class="report-inbox-card" href="#/reporting-inbox/${r.id}"><strong>${esc(r.reference)} · ${esc(r.status.replace('_',' '))}</strong><h3>${esc(r.description||r.location)}</h3><p>${esc(r.date)} · ${esc(r.section)}</p><p>Rank ${esc(r.rank)} · STOP ${esc(r.stop)} · ${esc(r.pic)}</p></a>`).join(''):'<p>No matching reports.</p>';}
+      function records(rows,label='All reports') {
+        body.querySelector('#hiyariFilterLabel').textContent=label+' · '+rows.length;
+        const target=body.querySelector('#hiyariRows');
+        target.innerHTML=SHEStats.reportTable(rows.map(r=>({...r,title:'Hiyari Hatto',location:r.section==='Unspecified'?r.location:r.section,description:[r.description,'Rank '+r.rank,'STOP '+r.stop,'PIC '+r.pic].filter(Boolean).join(' · ')})));
+        SHEStats.bindEvidence(target);
+      }
       body.querySelectorAll('[data-filter-field]').forEach(b=>b.onclick=()=>records(data.records.filter(r=>r[b.dataset.filterField]===b.dataset.filterValue),b.dataset.filterField+': '+b.dataset.filterValue));
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>records(data.records.filter(r=>r.date.startsWith(b.dataset.month)),names(b.dataset.month)+' '+year));
       body.querySelector('#clearHiyariFilter').onclick=()=>records(data.records);records(data.records);

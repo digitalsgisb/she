@@ -132,7 +132,9 @@ def hiyari(db, year):
             continue
         review = json.loads(r['review_json']) if r['review_json'] else {}
         records.append(dict(id=r['id'], reference=f"SHE-{r['id']:06d}", date=date_value, reporter=r['reporter'],
-                            location=r['location'], category=answers.get('category') or 'Unclassified',
+                            location=r['location'], plant=r['plant'], order_id=r['order_id'],
+                            photo_url=f"/api/reporting/reports/{r['id']}/photos/0" if json.loads(r['photos_json']) else '',
+                            category=answers.get('category') or 'Unclassified',
                             section=answers.get('section') or 'Unspecified', rank=review.get('rank') or 'Unclassified',
                             stop=review.get('stop') or answers.get('stop') or 'Unclassified', status=r['status'],
                             pic=review.get('pic') or 'Unassigned', description=answers.get('description','')))

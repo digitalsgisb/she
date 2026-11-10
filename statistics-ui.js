@@ -64,17 +64,17 @@ const SHEStats = (() => {
       {id:'followup',label:'PIC follow-up',charts:workload(data)}
     ]:(()=>{
       const st=data.stagnant||{total:0,outstanding:0,categories:[],locations:[],plants:[]};
-      const stagnantIntro='<article class="she-chart-card she-chart-wide"><div class="she-chart-heading"><h3>Air bertakung · Stagnant water</h3><p>Reports whose topic mentions stagnant water (air bertakung). The monthly inspection register is kept in “No. of environmental findings”.</p></div><div class="she-metrics she-stagnant-metrics"><div'+(st.total?hit('category',{label:'Stagnant water (air bertakung)'},st.total,'Reports in this period',{values:st.categories}):'')+' class="she-metric she-metric-0"><span>Reports</span><strong>'+number(st.total)+'</strong><small>'+esc(data.selection.label)+'</small></div><div class="she-metric she-metric-1"><span>Still open</span><strong>'+number(st.outstanding)+'</strong><small>Not resolved / closed</small></div></div>'+(st.total?'<p class="she-stat-note">Click the report count to open each stagnant water report, or use the location chart to see where it was found.</p>':'<p class="she-stat-note">No stagnant water reports in this period. Employees report air bertakung through the “Stagnant water (Air bertakung)” form on the reporting page; each report records its factory and location, which appear here.</p>')+'<div class="report-admin-links"><a class="secondary-button" href="#/environmental-findings-dashboard">Monthly findings register →</a><a class="secondary-button" href="#/reporting-qr">Reporting QR →</a></div></article>';
+      const stagnantIntro='<article class="she-chart-card she-risk-summary">'+header('Mosquito Breeding Risk','Standing water reports')+'<div class="she-risk-counts"><strong>'+number(st.total)+'</strong> reported <strong>'+number(st.outstanding)+'</strong> open</div></article>';
       return [
         {id:'overview',label:'Overview',charts:status+distribution+activity(data.trend)},
         {id:'categories',label:'Issue categories',charts:bars(data.categories,'Reports by category','Every topic reported in this period',12)+bars(data.reporter_categories||[],'People reporting by category','Distinct reporter names per topic'+(data.reporter_total?' · '+number(data.reporter_total)+' people in total':''),12)},
-        {id:'stagnant',label:'Air bertakung',charts:stagnantIntro+bars(st.locations,'Stagnant water locations','Where stagnant water was reported in this period')+pie(st.plants,'Stagnant water by factory','Distribution across factories')},
+        ...(['environment','all'].includes(data.group)?[{id:'stagnant',label:'Mosquito Breeding Risk',charts:stagnantIntro+bars(st.locations,'Stagnant water locations','Where stagnant water was reported in this period')+pie(st.plants,'Stagnant water by factory','')+'<div class="she-inline-records" data-inline-records="stagnant"></div>'}]:[]),
         {id:'locations',label:'Factories & locations',charts:pie(data.plants,'Reports by factory','Distribution across factories')+bars(data.locations,'Reported locations','Leading locations; remaining entries grouped')},
         {id:'orders',label:'Work order follow-up',charts:bars(data.work_orders,'Work order follow-up','SHE workflow; separate from CMMS job status')}
       ];
     })();
-    const note=patrol?'Completed submissions only. Original NOT OK answers count as findings; OK rate excludes N/A.':'Current status of findings recorded during the selected period. Resolved / closed counts as completed.';
-    return '<p class="she-stat-period">'+esc(patrol?'Safety patrol':red?'Red Tag':data.group_label)+' · '+esc(data.selection.label)+'</p>'+metrics(data)+'<div'+hit('status',{label:'Outstanding across all dates'},s.outstanding,'All dates',{values:['Open','In progress','Awaiting verification'],allDates:true})+' class="she-backlog"><span>'+(patrol?'Patrols needing follow-up':'Outstanding')+' · all dates</span><strong>'+number(s.outstanding)+'</strong><small>'+number(s.to_do)+(patrol?' open':' to do')+(red||patrol?' · '+number(s.awaiting_review)+' awaiting verification':'')+'</small></div><p class="she-stat-note">'+note+'</p><div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
+    sections.splice(1,0,{id:'records',label:'Overview table',charts:'<div class="she-inline-records" data-inline-records="all"></div>'});
+    return '<p class="she-stat-period">'+esc(patrol?'Safety patrol':red?'Red Tag':(data.group==='environment'?'Green Eyes Event':data.group_label))+' · '+esc(data.selection.label)+'</p>'+metrics(data)+'<div'+hit('status',{label:'Outstanding across all dates'},s.outstanding,'All dates',{values:['Open','In progress','Awaiting verification'],allDates:true})+' class="she-backlog"><span>'+(patrol?'Patrols needing follow-up':'Outstanding')+' · all dates</span><strong>'+number(s.outstanding)+'</strong><small>'+number(s.to_do)+(patrol?' open':' to do')+(red||patrol?' · '+number(s.awaiting_review)+' awaiting verification':'')+'</small></div><div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
   }
   function recordHash(kind,selection,point) {
     const query={...selection};
@@ -113,7 +113,7 @@ const SHEStats = (() => {
     const select=(key,focus=false)=>{
       target.dataset.activeStatisticsTab=key;
       tabs.forEach(tab=>{const selected=tab.dataset.statTab===key;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;if(selected&&focus)tab.focus();});
-      body.querySelectorAll('[data-stat-panel]').forEach(panel=>{const selected=panel.dataset.statPanel===key;panel.hidden=!selected;if(selected)animatePanel(panel);});hideTooltip();
+      body.querySelectorAll('[data-stat-panel]').forEach(panel=>{const selected=panel.dataset.statPanel===key;panel.hidden=!selected;if(selected){animatePanel(panel);panel.querySelector("[data-inline-records]")?.loadRecords?.();}});hideTooltip();
     };
     tabs.forEach((tab,index)=>{
       tab.onclick=()=>select(tab.dataset.statTab);
@@ -128,18 +128,18 @@ const SHEStats = (() => {
     if(!allowed()||!target)return;
     const saved=views.get(kind);const selection=saved?{...saved.selection}:{period:'month',month:month(),...(kind==='environment'?{group:'environment'}:{})};
     target.className='she-statistics';if(saved)target.dataset.activeStatisticsTab=saved.tab;
-    target.innerHTML='<div class="she-stat-heading"><div><h2>'+(kind==='patrol'?'Patrol statistics':kind==='red-tag'?'Red Tag statistics':'Environmental statistics')+'</h2></div><div class="she-stat-controls"><label>Period<select data-stat-period><option value="month">Month</option><option value="year">Year</option><option value="all">All dates</option></select></label><label data-stat-month-label>Month<input type="month" data-stat-month value="'+selection.month+'" min="2000-01" max="2099-12"></label>'+(kind==='environment'?'<label>Reporting area<select data-stat-group><option value="environment">Environment</option><option value="hiyari-hatto">Hiyari Hatto</option><option value="kaizen">Kaizen</option><option value="all">All areas</option></select></label>':'')+'<button type="button" class="secondary-button" data-stat-refresh>Refresh statistics</button><span class="she-refresh-status" data-stat-refresh-status role="status"></span></div></div><div data-stat-body aria-live="polite"></div>';
+    target.innerHTML='<div class="she-stat-heading"><div><h2>'+(kind==='patrol'?'Patrol statistics':kind==='red-tag'?'Red Tag statistics':'Environmental statistics')+'</h2></div><div class="she-stat-controls"><label>Period<select data-stat-period><option value="month">Month</option><option value="year">Year</option><option value="all">All dates</option></select></label><label data-stat-month-label>Month<input type="month" data-stat-month value="'+selection.month+'" min="2000-01" max="2099-12"></label>'+(kind==='environment'?'<label>Reporting area<select data-stat-group><option value="environment">Green Eyes Event</option><option value="hiyari-hatto">Hiyari Hatto</option><option value="kaizen">Kaizen</option><option value="air-leak">Air Leak</option><option value="all">All areas</option></select></label>':'')+'<button type="button" class="secondary-button" data-stat-refresh>Refresh</button><span class="she-refresh-status" data-stat-refresh-status role="status"></span></div></div><div data-stat-body aria-live="polite"></div>';
     const controlsRoot=target.closest('.focused-dashboard-page')||target;
     const body=target.querySelector('[data-stat-body]');let version=0,inflight=false,lastData='';
     const load=async(quiet=false)=>{
       if(!target.isConnected||!allowed())return;
       const current=++version;inflight=true;
       if(!quiet&&!lastData)body.innerHTML='<p class="she-chart-empty" role="status">Loading statistics…</p>';body.setAttribute('aria-busy','true');controlsRoot.querySelector('[data-stat-refresh-status]').textContent=lastData?'Updating…':'';
-      try{const data=await api(endpoint(kind,selection));if(current===version&&target.isConnected&&allowed()){const serialized=JSON.stringify(data);if(!quiet||serialized!==lastData){target.statsData=data;const focused=document.activeElement?.dataset.statHit;hideTooltip();body.innerHTML=focus(data);bindTabs(body,target);bindInteractive(body,target,data,selection);rememberView(kind,target,selection);lastData=serialized;if(quiet&&focused)body.querySelector('[data-stat-hit="'+focused+'"]')?.focus();}}}
+      try{const data=await api(endpoint(kind,selection));if(current===version&&target.isConnected&&allowed()){const serialized=JSON.stringify(data);if(!quiet||serialized!==lastData){target.statsData=data;const focused=document.activeElement?.dataset.statHit;hideTooltip();body.innerHTML=focus(data);prepareInlineRecords(body,target.statsData,selection);bindTabs(body,target);bindInteractive(body,target,data,selection);rememberView(kind,target,selection);lastData=serialized;if(quiet&&focused)body.querySelector('[data-stat-hit="'+focused+'"]')?.focus();}}}
       catch(error){if(current===version&&target.isConnected)body.innerHTML='<p role="alert" class="form-error">'+esc(error.message)+'</p>';}
       finally{if(current===version){inflight=false;body.setAttribute('aria-busy','false');controlsRoot.querySelector('[data-stat-refresh-status]').textContent='';}}
     };
-    if(saved?.data&&saved.user_id===currentUser.id){target.statsData=saved.data;body.innerHTML=focus(saved.data);bindTabs(body,target);bindInteractive(body,target,saved.data,selection);lastData=JSON.stringify(saved.data);}
+    if(saved?.data&&saved.user_id===currentUser.id){target.statsData=saved.data;body.innerHTML=focus(saved.data);prepareInlineRecords(body,target.statsData,selection);bindTabs(body,target);bindInteractive(body,target,saved.data,selection);lastData=JSON.stringify(saved.data);}
     controlsRoot.querySelector('[data-stat-period]').value=selection.period;
     const anchor=controlsRoot.querySelector('[data-stat-month]');anchor.type=selection.period==='year'?'number':'month';anchor.min=selection.period==='year'?'2000':'2000-01';anchor.max=selection.period==='year'?'2099':'2099-12';anchor.value=selection.period==='year'?selection.month.slice(0,4):selection.month;controlsRoot.querySelector('[data-stat-month-label]').firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';
     if(kind==='environment')controlsRoot.querySelector('[data-stat-group]').value=selection.group;
@@ -152,6 +152,70 @@ const SHEStats = (() => {
     load();
   }
 
+  function photo(url,label) {
+    return '<a class="she-evidence" href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" alt="'+esc(label)+'" loading="lazy"></a>';
+  }
+  function recordsTable(rows,offset=0) {
+    if(!rows.length)return '<p class="she-chart-empty">No matching records.</p>';
+    return '<div class="she-record-table-wrap" tabindex="0" role="region" aria-label="Overview table"><table class="she-record-table"><thead><tr>'+['No.','Record','Area / location','Summary','Status','Before','After'].map(title=>'<th scope="col">'+title+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>{
+      const label=r.reference||r.title;
+      const title=esc(r.title||r.reference);
+      const link=r.genbaId?'<button type="button" class="she-record-link" data-genba-id="'+esc(r.genbaId)+'">'+title+'</button>':'<a href="'+esc(r.detail_url)+'">'+title+'</a>';
+      const evidence=r.order_id?' data-evidence-order="'+esc(r.order_id)+'" data-evidence-plant="'+esc(r.order_plant||r.plant)+'"':'';
+      const status=String(r.status||'').replaceAll('_',' ');
+      return '<tr><td>'+(offset+i+1)+'</td><th scope="row">'+link+'<small>'+esc([r.reference,r.date].filter(Boolean).join(' · '))+'</small></th><td>'+esc(r.context||'—')+'</td><td><div class="she-record-excerpt">'+esc(r.description||'—')+'</div></td><td><span class="she-record-badge'+(/^(resolved|closed)$/i.test(status)?' is-complete':'')+'">'+esc(status||'—')+'</span></td><td data-evidence-before>'+(r.photo_url?photo(r.photo_url,'Before · '+label):'<small>No photo</small>')+'</td><td'+evidence+'>'+(r.after_url?photo(r.after_url,'After · '+label):r.order_id?'<button class="she-record-link" type="button" data-load-evidence>Load photos</button>':'<small>No photo</small>')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+  }
+  function bindEvidence(target) {
+    if(target.dataset.evidenceBound)return;
+    target.dataset.evidenceBound='true';
+    target.addEventListener('click',async event=>{
+      const button=event.target.closest('[data-load-evidence]');
+      if(!button)return;
+      const cell=button.parentElement,{evidenceOrder,evidencePlant}=cell.dataset;
+      button.disabled=true;button.textContent='Loading…';
+      try{
+        const plant=encodeURIComponent(evidencePlant);
+        const order=await api('/api/cmms/work-orders/'+encodeURIComponent(evidenceOrder)+'?plant='+plant);
+        if(!cell.isConnected)return;
+        const images=(order.attachments||[]).flatMap(item=>{
+          const match=String(item.url||'').match(/^\/uploads\/work-orders\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9._-]+)$/);
+          return match?[{url:'/api/cmms/media/'+match[1]+'/'+match[2]+'?plant='+plant,kind:item.kind}]:[];
+        });
+        const before=cell.parentElement.querySelector('[data-evidence-before]');
+        if(!before.querySelector('img'))before.innerHTML=images.filter(item=>item.kind==='issue').map(item=>photo(item.url,'Work order issue photo')).join('')||'<small>No photo</small>';
+        cell.innerHTML=images.filter(item=>item.kind!=='issue').map(item=>photo(item.url,'Work order follow-up photo')).join('')||'<small>No photo</small>';
+      }catch{
+        button.disabled=false;button.textContent='Photos unavailable · Retry';
+      }
+    });
+    target.addEventListener('error',event=>{
+      const link=event.target.closest?.('.she-evidence');
+      if(link)link.textContent='Open photo';
+    },true);
+  }
+  function reportTable(rows) {
+    return recordsTable(rows.map(r=>({...r,title:r.title||r.location,context:[r.location,r.plant==='port-klang'?'Port Klang':r.plant==='sendayan'?'Sendayan':r.plant].filter(Boolean).join(' · '),date:r.date||(r.created_at?new Date(r.created_at*1000).toLocaleDateString('en-MY',{timeZone:'Asia/Kuala_Lumpur'}):''),photo_url:r.photo_url||r.thumbnail_url,detail_url:'#/reporting-inbox/'+r.id})));
+  }
+  function prepareInlineRecords(body,data,selection) {
+    body.querySelectorAll('[data-inline-records]').forEach(target=>{
+      const stagnant=target.dataset.inlineRecords==='stagnant';
+      const categories=data.stagnant?.categories||[];
+      const point=stagnant?{field:'category',values:categories,label:'Mosquito Breeding Risk'}:{};
+      target.loadRecords=()=>{
+        if(target.dataset.loaded)return;
+        target.dataset.loaded='true';
+        if(stagnant&&!categories.length){target.innerHTML=recordsTable([]);return;}
+        const hash=recordHash(data.kind,selection,point);
+        mountRecordResults(target,data.kind,new URLSearchParams(hash.split('?')[1]));
+      };
+    });
+  }
+  function statRecordRows(rows,kind,answerCount) {
+    return rows.map(r=>({...r,context:kind==='patrol'?r.inspector:kind==='red-tag'?[r.section,r.pic].filter(Boolean).join(' · '):[r.plant,r.location].filter(Boolean).join(' · '),
+      description:kind==='patrol'?[number(r.not_ok)+' NOT OK',answerCount?number(r.matched_count)+' matching answers':'',r.description].filter(Boolean).join(' · '):r.description}));
+  }
+
   function recordCard(r,kind,answerCount) {
     const details=kind==='patrol'?[['Inspector',r.inspector],['Checklist findings',number(r.not_ok)+' NOT OK']]:kind==='red-tag'?[['Section',r.section],['PIC',r.pic],['Rank',r.rank]]:[['Factory',r.plant],['Location',r.location],['Reporter',r.reporter]];
     return '<a class="she-record-row she-record-card" href="'+esc(r.detail_url)+'"><div class="she-record-photo">'+(r.photo_url?'<img src="'+esc(r.photo_url)+'" alt="Photo for '+esc(r.reference)+'" loading="lazy">':'<span>No photo attached</span>')+'</div><div class="she-record-copy"><div class="she-record-top"><strong>'+esc(r.reference)+'</strong><span class="she-record-badge">'+esc(r.status)+'</span></div><h2>'+esc(r.title)+'</h2><small>'+esc(r.date)+'</small><dl>'+details.map(([label,value])=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value||'—')+'</dd></div>').join('')+'</dl>'+(r.description?'<p>'+esc(r.description)+'</p>':'')+(answerCount?'<small>'+number(r.matched_count)+' matching checklist answers</small>':'')+'<span class="she-record-open">View full details →</span></div></a>';
@@ -160,31 +224,39 @@ const SHEStats = (() => {
   async function renderRecords() {
     const hash=location.hash,raw=hash.split('?')[0].split('/')[2],kind=raw;
     if(!allowed()||!['patrol','red-tag','environment'].includes(kind))return;
-    const names={patrol:'Patrol', 'red-tag':'Red Tag', environment:'Environmental'};
+    const names={patrol:'Patrol', 'red-tag':'Red Tag', environment:'Reporting'};
     const back={patrol:'patrol-dashboard','red-tag':'red-tag-dashboard',environment:'environment-dashboard'};
     const query=new URLSearchParams(hash.split('?')[1]||'');
     const label=query.get('label')||'All records';
     const selection={period:query.get('period')||'month',month:query.get('month')||month(),...(kind==='environment'?{group:query.get('group')||'environment'}:{})};
     const saved=views.get(kind);if(!saved)views.set(kind,{selection,tab:'overview'});
-    let page=Number(query.get('page')||1),version=0;
     content.innerHTML='<div class="page inner-page dashboard-records-page"><a class="back-link" href="#/'+back[kind]+'">← Back to '+names[kind]+' Dashboard</a><div class="page-heading"><span class="eyebrow dark-eyebrow">DASHBOARD / FILTERED RECORDS</span><h1>'+names[kind]+' · matching records</h1><p>Open a record to review its details and follow-up.</p></div><div class="she-record-filter"><strong>'+esc(label)+'</strong><span data-record-period></span><a class="secondary-button" href="'+recordHash(kind,selection,{label:'All records'})+'">Clear chart filter</a></div><div data-record-results aria-live="polite"></div></div>';
     const target=content.querySelector('[data-record-results]');
+    mountRecordResults(target,kind,query,data=>{
+      content.querySelector('[data-record-period]').textContent=data.selection.label+(query.get('section')?' · '+query.get('section'):'');
+    });
+  }
+
+  function mountRecordResults(target,kind,query,onLoad) {
+    let page=Number(query.get('page')||1),version=0,showCards=false;
+    bindEvidence(target);
     const load=async()=>{
       const current=++version;target.innerHTML='<p role="status" class="she-chart-empty">Loading matching records…</p>';
       const params=new URLSearchParams(query);params.delete('label');params.set('page',String(page));
       try{
         const data=await api(endpoint(kind,{}).split('?')[0]+'/records?'+params);
-        if(current!==version||location.hash!==hash||!target.isConnected)return;
+        if(current!==version||!target.isConnected)return;
         page=data.page;
-        content.querySelector('[data-record-period]').textContent=data.selection.label+(query.get('section')?' · '+query.get('section'):'');
+        onLoad?.(data);
         const answerCount=kind==='patrol'&&['answer','section'].includes(data.field);
         const countNote=number(data.total)+' matching '+(kind==='patrol'?'patrols':kind==='red-tag'?'findings':'reports')+(answerCount?' · '+number(data.matched_items)+' matching checklist answers':'');
-        target.innerHTML='<div class="she-record-heading"><strong>'+countNote+'</strong><span>Page '+data.page+' of '+data.pages+'</span></div>'+(data.records.length?'<div class="she-record-list">'+data.records.map(r=>recordCard(r,kind,answerCount)).join('')+'</div><div class="she-record-paging"><button class="secondary-button" data-record-prev '+(data.page===1?'disabled':'')+'>Previous</button><span>'+number((data.page-1)*25+1)+'–'+number(Math.min(data.page*25,data.total))+' of '+number(data.total)+'</span><button class="secondary-button" data-record-next '+(data.page===data.pages?'disabled':'')+'>Next</button></div>':'<div class="she-chart-empty">No records match this chart selection.</div>');
+        const draw=()=>{target.innerHTML='<div class="she-record-heading"><strong>'+countNote+'</strong>'+(data.records.length?'<button class="secondary-button" type="button" data-record-layout>'+(showCards?'Overview table':'Cards')+'</button>':'')+'</div>'+(data.records.length?(showCards?'<div class="she-record-list">'+data.records.map(r=>recordCard(r,kind,answerCount)).join('')+'</div>':recordsTable(statRecordRows(data.records,kind,answerCount),(data.page-1)*data.page_size))+'<div class="she-record-paging"><button class="secondary-button" data-record-prev '+(data.page===1?'disabled':'')+'>Previous</button><span>'+number((data.page-1)*data.page_size+1)+'–'+number(Math.min(data.page*data.page_size,data.total))+' of '+number(data.total)+'</span><button class="secondary-button" data-record-next '+(data.page===data.pages?'disabled':'')+'>Next</button></div>':'<div class="she-chart-empty">No records match this chart selection.</div>');
+        target.querySelector('[data-record-layout]')?.addEventListener('click',()=>{showCards=!showCards;draw();target.querySelector('[data-record-layout]')?.focus();});
         target.querySelector('[data-record-prev]')?.addEventListener('click',()=>{page--;load();});
-        target.querySelector('[data-record-next]')?.addEventListener('click',()=>{page++;load();});
+        target.querySelector('[data-record-next]')?.addEventListener('click',()=>{page++;load();});};draw();
       }catch(error){if(current===version&&target.isConnected)target.innerHTML='<p role="alert" class="form-error">'+esc(error.message)+'</p><button class="secondary-button" data-record-retry>Try again</button>';target.querySelector('[data-record-retry]')?.addEventListener('click',load);}
     };
-    target.addEventListener('error',e=>{if(e.target.tagName==='IMG'){const fallback=document.createElement('span');fallback.textContent='Photo unavailable';e.target.replaceWith(fallback);}},true);
+    target.addEventListener('error',e=>{if(e.target.closest?.('.she-record-card')&&e.target.tagName==='IMG'){const fallback=document.createElement('span');fallback.textContent='Photo unavailable';e.target.replaceWith(fallback);}},true);
     load();
   }
 
@@ -204,5 +276,5 @@ const SHEStats = (() => {
     const originalLoad=load;target.refreshStatistics=async()=>{await originalLoad();if(!target.isConnected)return;target.summaryPoints=[{field:'',label:'This month',count:target.statsData?.summary.total||0},{field:'status',label:'Outstanding across all dates',values:['Open','In progress','Awaiting verification'],allDates:true,count:target.statsData?.backlog.outstanding||0},{field:patrol?'answer':'status',label:patrol?'NOT OK items':'Completed findings',values:patrol?['NOT OK']:['Resolved','Closed'],count:patrol?target.statsData?.summary.not_ok_items||0:target.statsData?.summary.completed||0}];if(target.statsData)bindInteractive(target.querySelector('[data-summary-body]'),target,target.statsData,summarySelection);};target.refreshStatistics();
   }
   setInterval(()=>{if(!allowed()||document.hidden)return;document.querySelectorAll('.she-statistics,.she-summary-card').forEach(target=>target.refreshStatistics?.());},30000);
-  return {allowed,mount,mainSummary,focus,recordHash,hideTooltip,views,renderRecords};
+  return {allowed,mount,mainSummary,focus,recordHash,hideTooltip,views,renderRecords,mountRecordResults,recordsTable,reportTable,bindEvidence};
 })();

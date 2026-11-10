@@ -32,6 +32,12 @@ const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-
  await page.getByRole('heading',{name:'Monthly register',exact:true}).waitFor();
  assert.deepEqual(await page.locator('#dashboardSubnav a').allTextContents(),['Dashboard','SHE Summary']);
  assert.deepEqual(await page.locator('.dashboard-area-tabs a').allTextContents(),['Safety','Health','Environment']);
+ assert.equal(await page.locator('#monitorForm').count(),0);
+ await page.getByRole('link',{name:'Update accident data'}).click();
+ await page.getByRole('heading',{name:'Accident Register',exact:true}).waitFor();
+ await page.locator('#accidentMonth').selectOption('2026-03');
+ await page.getByRole('heading',{name:'Update Mar 2026',exact:true}).waitFor();
+ await page.getByRole('link',{name:'View dashboard'}).click();
  await page.locator('#dashboardSubnav a[href="#/she-summary"]').click();
  await page.locator('.she-overview-card').first().waitFor();
  assert.equal(await page.locator('.she-overview-card').count(),6);

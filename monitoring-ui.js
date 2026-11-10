@@ -10,27 +10,41 @@ const SHEMonitoring = (() => {
   const names = month => new Date(month+'-01T12:00:00+08:00').toLocaleDateString('en-MY',{month:'short',timeZone:'Asia/Kuala_Lumpur'});
   const now = () => new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',timeZone:'Asia/Kuala_Lumpur'}).format(new Date()).match(/\d{4}/)?.[0] || '2026';
   const display = value => value===null || value===undefined ? '—' : String(value);
+  function accidentValue(value,highlight=true) {
+    if(value==null)return '<span class="accident-unreported" title="Not reported">NR</span>';
+    if(value===0)return '<span title="Confirmed zero">–</span>';
+    const text=esc(value);
+    return highlight&&value>0?'<span class="accident-positive">'+text+'</span>':text;
+  }
   let generation=0;
   function download(rows,name) {
     const cell=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  function chart(items) {
+  function chart(items,readOnly=false) {
     if(!items.some(row=>row.total>0))return '<p>No positive monthly counts to chart.</p>';
     const max=Math.max(1,...items.map(r=>r.total||0));
-    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total>0?r.total/max*154:0;return `<button type="button" data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${display(r.total)}</strong><span class="monitor-track">${height?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg>`:''}</span><span>${names(r.month)}</span></button>`;}).join('')+'</div>';
+    const tag=readOnly?'div':'button';
+    return '<div class="monitor-month-chart" aria-label="Monthly totals">'+items.map(r=>{const height=r.total>0?r.total/max*154:0;return `<${tag} class="monitor-month-point" ${readOnly?'':'type="button"'} data-month="${esc(r.month)}" aria-label="${names(r.month)}: ${r.total===null?'not reported':r.total}"><strong>${readOnly?accidentValue(r.total):display(r.total)}</strong><span class="monitor-track">${height?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${154-height}" width="100" height="${height}" rx="4"/></svg>`:''}</span><span>${names(r.month)}</span></${tag}>`;}).join('')+'</div>';
   }
   function stats(items) {
     return '<div class="report-stats">'+items.map(([label,value])=>`<div><strong>${display(value)}</strong><span>${esc(label)}</span></div>`).join('')+'</div>';
   }
-  async function mount(key) {
+  async function mount(key,register=false) {
     const config=configs[key], root=document.getElementById('content'), version=++generation, routeKey=currentRoute();
     if(!config)return;
     let year=sessionStorage.getItem('she-monitor-year')||now(), data, selected, requestSequence=0;
-    root.innerHTML=`<div class="page inner-page focused-dashboard-page">${dashboardHeader(config.area,config.title,config.detail,key)}<div id="monitorBody" aria-live="polite"></div></div>`;
-    root.querySelector('[data-dashboard-controls]').innerHTML=`<label>Year<input id="monitorYear" type="number" min="2000" max="2099" value="${esc(year)}"></label><button class="secondary-button" id="monitorRefresh">Refresh</button><button class="secondary-button" id="monitorExport">Export CSV</button>`;
-    bindDashboardHeader();
+    const yearControl=`<label>Year<input id="monitorYear" type="number" min="2000" max="2099" value="${esc(year)}"></label>`;
+    const refresh='<button class="secondary-button" id="monitorRefresh">Refresh</button>';
+    const bodyMarkup='<div id="monitorBody" aria-live="polite"></div>';
+    if(register){
+      root.innerHTML=`<div class="page inner-page accident-register-page"><a class="back-link" href="#/safety">← Safety</a><div class="page-heading"><h1>Accident Register</h1><p>Update monthly accident counts and man-hours.</p></div><div class="she-stat-controls">${yearControl}${refresh}<a class="secondary-button" href="#/accident-dashboard">View dashboard</a></div>${bodyMarkup}</div>`;
+    }else{
+      root.innerHTML=`<div class="page inner-page focused-dashboard-page ${config.kind==='accident'?'accident-dashboard-page':''}">${dashboardHeader(config.area,config.title,config.detail,key)}${bodyMarkup}</div>`;
+      root.querySelector('[data-dashboard-controls]').innerHTML=yearControl+refresh+'<button class="secondary-button" id="monitorExport">Export CSV</button>';
+      bindDashboardHeader();
+    }
     const body=root.querySelector('#monitorBody');
     async function load() {
       const sequence=++requestSequence;
@@ -43,14 +57,34 @@ const SHEMonitoring = (() => {
       finally{body.setAttribute('aria-busy','false');}
     }
     function draw() {
+      if(register){drawAccidentEditor();return;}
+      if(config.kind==='accident'){drawAccident();return;}
       if(config.kind==='hiyari'){drawHiyari();return;}
       const partial=data.months.some(r=>r.total!==null&&!r.complete);
-      const hours=data.months.filter(r=>r.complete&&r.payload.man_hours>0);
-      const allHours=hours.length===data.months.filter(r=>r.total!==null).length&&hours.length>0;
-      const ifr=allHours?(hours.reduce((s,r)=>s+r.total,0)*1e6/hours.reduce((s,r)=>s+r.payload.man_hours,0)).toFixed(2):null;
-      body.innerHTML=stats([['Recorded total'+(partial?' (partial)':''),data.reported_months||data.months.some(r=>r.total!==null)?data.total:null],['Complete months',data.reported_months+' / 12'],...(config.kind==='accident'?[['Off-job accidents (recorded)',data.months.some(r=>Number.isInteger(r.payload.off_job))?data.months.reduce((s,r)=>s+(Number.isInteger(r.payload.off_job)?r.payload.off_job:0),0):null],['IFR (per million hours)',ifr]]:[])])+`<section class="report-detail-card"><h2>Monthly trend · ${year}</h2><p>Blank (—) means not reported. NA means not applicable. Zero is a confirmed count. Totals include numeric entries only.</p>${chart(data.months)}</section><section class="report-detail-card"><h2>Monthly register</h2><p>Select a month to enter or correct its statistics. Changes retain the editor and history.</p><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">${config.kind==='accident'?'On-job total':'Total'}</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr>${config.kind==='accident'?['off_job','man_hours','ifr'].map((f,i)=>`<tr><th scope="row">${['Off-job accidents','Man-hours','IFR / million hours'][i]}</th>${data.months.map(r=>`<td>${display(f==='ifr'?r.ifr:r.payload[f])}</td>`).join('')}</tr>`).join(''):''}</tbody></table></div><p class="field-hint">* Partial total.${config.kind==='accident'?' IFR = on-job accidents × 1,000,000 ÷ man-hours; shown only with complete counts and positive hours.':''}</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
+      body.innerHTML=stats([['Recorded total'+(partial?' (partial)':''),data.reported_months||data.months.some(r=>r.total!==null)?data.total:null],['Complete months',data.reported_months+' / 12']])+`<section class="report-detail-card"><h2>Monthly trend · ${year}</h2><p>Blank (—) means not reported. NA means not applicable. Zero is a confirmed count. Totals include numeric entries only.</p>${chart(data.months)}</section><section class="report-detail-card"><h2>Monthly register</h2><p>Select a month to enter or correct its statistics. Changes retain the editor and history.</p><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{selected=b.dataset.month;editor();body.querySelector('#monitorEditor').scrollIntoView({behavior:'smooth',block:'start'});});
       selected=selected||data.months.find(r=>!r.complete)?.month||data.months[0].month;editor();
+    }
+    function drawAccident() {
+      const months=data.months;
+      const recorded=months.filter(row=>row.total!==null);
+      const partial=recorded.some(row=>!row.complete);
+      const hours=recorded.length&&recorded.every(row=>row.complete&&row.payload.man_hours>0)?recorded.reduce((sum,row)=>sum+row.payload.man_hours,0):0;
+      const ifr=hours?Number((data.total*1e6/hours).toFixed(2)):null;
+      const offJob=months.map(row=>row.payload.off_job).filter(Number.isInteger);
+      const metrics=[['On-job accidents'+(partial?' (partial)':''),recorded.length?data.total:null],['Off-job accidents',offJob.length?offJob.reduce((sum,value)=>sum+value,0):null],['Complete months',data.reported_months+' / 12'],['IFR / million hours',ifr]];
+      const rows=[['On-job total',row=>row.total],...data.categories.map(category=>[category,row=>row.payload.counts[category]]),['Off-job accidents',row=>row.payload.off_job],['Man-hours',row=>row.payload.man_hours],['IFR / million hours',row=>row.ifr]];
+      body.innerHTML=`<div class="report-stats">${metrics.map(([label,value],i)=>`<div><strong>${accidentValue(value,i<2)}</strong><span>${esc(label)}</span></div>`).join('')}</div>
+        <section class="report-detail-card"><h2>On-job accidents by month · ${year}</h2><div class="monitor-table-wrap">${chart(months,true)}</div></section>
+        <section class="report-detail-card"><div class="accident-register-heading"><h2>Monthly register</h2><a class="secondary-button" href="#/accident-register">Update accident data →</a></div>
+        <p>– Confirmed zero · NR Not reported · NA Not applicable · * Partial total</p>
+        <div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly accident figures"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${months.map(row=>`<th scope="col">${names(row.month)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label,value],i)=>`<tr ${i===0?'class="monitor-total"':''}><th scope="row">${esc(label)}</th>${months.map(row=>`<td>${accidentValue(value(row),i<rows.length-2)}${i===0&&row.total!==null&&!row.complete?' *':''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
+    }
+    function drawAccidentEditor() {
+      selected=selected||data.months.find(row=>!row.complete)?.month||data.months[0].month;
+      body.innerHTML=`<section class="report-detail-card"><label for="accidentMonth">Reporting month</label><select id="accidentMonth">${data.months.map(row=>`<option value="${row.month}"${row.month===selected?' selected':''}>${names(row.month)} ${year}</option>`).join('')}</select><p>Enter 0 for a confirmed zero, NA if it does not apply, or leave it blank if unreported.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
+      body.querySelector('#accidentMonth').onchange=event=>{selected=event.target.value;editor();};
+      editor();
     }
     function editor() {
       const row=data.months.find(r=>r.month===selected), panel=body.querySelector('#monitorEditor');
@@ -98,7 +132,7 @@ const SHEMonitoring = (() => {
     }
     root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;sessionStorage.setItem('she-monitor-year',year);load();}};
     root.querySelector('#monitorRefresh').onclick=load;
-    root.querySelector('#monitorExport').onclick=()=>{
+    if(!register)root.querySelector('#monitorExport').onclick=()=>{
       if(!data)return;
       const rows=config.kind==='hiyari'?[['Reference','Date','Reporter','Section','Category','Rank','STOP','PIC','Status','Description'],...data.records.map(r=>['reference','date','reporter','section','category','rank','stop','pic','status','description'].map(k=>r[k]))]:[['Category',...data.months.map(r=>r.month)],...data.categories.map(c=>[c,...data.months.map(r=>r.payload.counts[c])]),['Total',...data.months.map(r=>r.total)],...(config.kind==='accident'?['off_job','man_hours','ifr'].map(f=>[f,...data.months.map(r=>f==='ifr'?r.ifr:r.payload[f])]):[])];
       download(rows,config.kind+'-'+year+'.csv');

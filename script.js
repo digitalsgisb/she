@@ -45,6 +45,7 @@ const routes = {
   'dashboard-records': { title: 'Filtered Dashboard Records', icon: 'clipboard' },
   'patrol-dashboard': { title: 'Patrol Dashboard', icon: 'grid' },
   'red-tag-dashboard': { title: 'Red Tag Dashboard', icon: 'tag' },
+  'accident-register': { title: 'Accident Register', icon: 'shield' },
   'accident-dashboard': { title: 'Monthly accident statistic', icon: 'shield' },
   'hiyari-dashboard': { title: 'Hiyari Hatto Summary', icon: 'alert' },
   'compound-dashboard': { title: 'Environmental Enforcement Register', icon: 'leaf' },
@@ -79,7 +80,7 @@ function canAccessRoute(key) {
   if (!currentUser) return false;
   if(key==='red-tag-dashboard'&&!isRedTagDesktop())return false;
   if (key === 'dashboard' || key.endsWith('-dashboard') || key === 'dashboard-records' || key === 'she-summary') return ['admin','executive'].includes(currentUser.role);
-  if (['users','reporting-forms'].includes(key)) return ['admin','executive'].includes(currentUser.role);
+  if (['users','reporting-forms','accident-register'].includes(key)) return ['admin','executive'].includes(currentUser.role);
   return Boolean(routes[key]);
 }
 function filterFeatureLinks(root) {
@@ -92,7 +93,7 @@ function filterFeatureLinks(root) {
   });
 }
 const envItems = ['reporting-qr', 'reporting-inbox', 'co2', 'kaizen', 'reporting-forms'];
-const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto'];
+const safetyItems = ['daily-safety-patrol', 'red-tag', 'air-leak', 'hiyari-hatto', 'accident-register'];
 
 const findingModuleHomes={
   'red-tag-home':{module:'red-tag',title:'Red Tag',icon:'tag',description:'Report hazards. Track action.',start:'Findings',startHref:'#/red-tag?new=1'},
@@ -111,7 +112,7 @@ function moduleView() {
 }
 function moduleNavigation() {
   const key = currentRoute(), module = safetyModule(key);
-  if (!safetyItems.includes(module)) return '';
+  if (!safetyItems.includes(module)||module==='accident-register') return '';
   const patrol = module === 'daily-safety-patrol';
   const links = patrol
     ? [['patrol-home','Overview'],['daily-safety-patrol','Checklist'],['patrol-overview','History'],['checklist-builder','Checklist Builder']]
@@ -241,7 +242,7 @@ function renderNav(active) {
     <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard','she-summary'].filter(canAccessRoute).map(key=>`<a class="subnav-link ${(key==='dashboard'?inDashboard:active===key)?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
     <div class="nav-parent"><a class="nav-link ${(active==='safety'||safetyItems.includes(safetyModule(active))) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
-    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
+    <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
@@ -399,6 +400,7 @@ function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?
 
 function renderSafetyHome() {
   const descriptions = {
+    'accident-register':'Update monthly accident counts, man-hours, and review saved revisions.',
     'daily-safety-patrol':'Complete a checklist, review patrol history, or build a checklist.',
     'red-tag':'Record findings, follow current actions, and review history.',
     'air-leak':'Report leaks, track current active reports, and review history.',
@@ -651,6 +653,7 @@ function renderPage() {
   else if (key === 'users') renderUsers();
   else if(key==='dashboard-records')SHEStats.renderRecords();
   else if(key==='she-summary')renderSheSummary();
+  else if(key==='accident-register')SHEMonitoring.mount('accident-dashboard',true);
   else if(key==='dashboard'||key.endsWith('-dashboard'))renderStatsDashboard(key==='dashboard'?'safety-dashboard':key);
   else if (['red-tag','red-tag-pic'].includes(key)) renderGenba().then(()=>{const id=location.hash.split('/')[2];if(currentRoute()===key&&/^\d+$/.test(id||''))genbaDetail(id);else if(currentRoute()===key&&new URLSearchParams(location.hash.split('?')[1]||'').get('new')==='1')genbaNew();});
   else if (key === 'work-orders') renderWorkOrders();

@@ -162,6 +162,47 @@ body { padding-left: var(--sa-left); padding-right: var(--sa-right); background:
 .nav-label-spaced { margin-top: 20px; }
 @media (max-width: 760px) { .page { padding-top: 16px; } .inner-page { padding-top: 14px; } }
 
+/* ---------- Sidebar moving box ---------- */
+#nav { position: relative; isolation: isolate; }
+.ds-nav-box {
+  position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; border-radius: 10px;
+  background: oklch(1 0 0 / .14); opacity: 0;
+  transition: transform var(--dur-base) var(--ease-out), width var(--dur-base) var(--ease-out), height var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.ds-nav-box::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--ds-accent); }
+#nav .nav-link:hover, #nav .nav-link.active, #nav .subnav-link:hover, #nav .subnav-link.active,
+.sidebar .nav-link.active, .sidebar .subnav-link:hover { background: transparent !important; box-shadow: none !important; transform: none !important; }
+#nav .nav-link, #nav .subnav-link { position: relative; }
+
+/* ---------- Drop redundant labels and filler ---------- */
+.eyebrow, .dark-eyebrow, .banner-kicker, .placeholder-kicker, .login-kicker, .exec-kicker, .committee-kicker, .report-kicker,
+.exec-hero-footnote, .exec-home-note, .exec-welcome-symbol, .exec-welcome-copy > p, .exec-stats small, .exec-tools small,
+.module-copy small, .exec-next small, .exec-incoming small, .nav-label, .breadcrumb-root, .breadcrumb-chevron, .profile-label, .patrol-home-emblem, .login-card-icon,
+.exec-section-heading > span { display: none !important; }
+.nav-parent:has(a[href="#/safety"]), .nav-link[href="#/work-orders"] { margin-top: 14px; }
+
+/* ---------- Balanced headlines ---------- */
+h1, h2, h3, .exec-welcome h1, .page-heading h1, .hero h1 { text-wrap: balance; }
+p, li, .page-heading p { text-wrap: pretty; }
+
+/* ---------- Enlarge the main feature ---------- */
+.exec-welcome { min-height: 360px; }
+.exec-welcome h1 { font-size: clamp(44px, 5vw, 72px); line-height: 1.05; letter-spacing: -.04em; max-width: 14ch; }
+.exec-hero-actions a { padding: 16px 24px; font-size: 14px; border-radius: 12px; }
+.exec-stats strong { font-size: clamp(40px, 4vw, 60px); line-height: 1; }
+.exec-stats > a { padding: 26px 28px; }
+.page-heading h1 { font-size: clamp(36px, 3.6vw, 56px); }
+.primary-button { padding: 14px 22px; font-size: 13px; border-radius: 11px; }
+.dashboard-hero h1, .dashboard-hero h2, .patrol-home-hero h1 { font-size: clamp(32px, 3.6vw, 52px); }
+
+/* ---------- Flat surfaces: no ornamental shadows, gradients or rings ---------- */
+.page :not(.ds-pulse):not(.she-chart-tooltip) { box-shadow: none !important; }
+.exec-welcome, .dashboard-hero, .patrol-home-hero, .hero { background: var(--ds-brand-900) !important; background-image: none !important; }
+.exec-welcome::before, .exec-welcome::after, .dashboard-hero::before, .dashboard-hero::after,
+.patrol-home-hero::before, .patrol-home-hero::after, .login-story::after { display: none !important; }
+.environment-banner { background: var(--ds-brand-100); }
+.hero-action:hover, .section-card:hover, .module-card:hover { transform: none; }
+
 /* ---------- Keyframes ---------- */
 @keyframes ds-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes ds-fade { from { opacity: 0; } to { opacity: 1; } }

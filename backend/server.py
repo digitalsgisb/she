@@ -35,7 +35,9 @@ import she_monitoring
 import redtag
 
 
-ROOT = Path(__file__).resolve().parent
+BACKEND = Path(__file__).resolve().parent
+ROOT = BACKEND.parent
+WEB = ROOT / "web"
 DB_PATH = Path(os.environ.get("SAFETY_DB_PATH", str(ROOT / "data" / "safety.db")))
 def patrol_files() -> Path:
     return DB_PATH.parent / "patrol-attachments"
@@ -135,7 +137,7 @@ def init_db() -> None:
             """
         )
         db.execute('INSERT OR IGNORE INTO patrol_default_template(id,definition_json) VALUES(0,?)',
-                   ((ROOT / 'patrol-default.json').read_text(encoding='utf-8'),))
+                   ((BACKEND / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
         reporting.init_air_leak(db)
         reporting.init_stagnant_water(db)
@@ -439,22 +441,22 @@ class Handler(BaseHTTPRequestHandler):
                 if self.authorize(db):
                     self.cmms_get(path)
             return
-        assets = {"/": ROOT / "index.html", "/index.html": ROOT / "index.html", "/styles.css": ROOT / "styles.css", "/script.js": ROOT / "script.js", "/patrol.js": ROOT / "patrol.js", "/cmms-ui.js": ROOT / "cmms-ui.js", "/favicon.svg": ROOT / "favicon.svg", "/manifest.webmanifest": ROOT / "manifest.webmanifest", "/sw.js": ROOT / "sw.js"}
-        assets.update({"/statistics-ui.js": ROOT / "statistics-ui.js", "/statistics.css": ROOT / "statistics.css"})
-        assets.update({"/design-system.css": ROOT / "design-system.css", "/design-system.js": ROOT / "design-system.js"})
-        assets["/air-leak-ui.js"] = ROOT / "air-leak-ui.js"
-        assets['/module-home-ui.js'] = ROOT / 'module-home-ui.js'
-        assets['/reporting-alerts.js'] = ROOT / 'reporting-alerts.js'
-        assets['/reporting-push/sw.js'] = ROOT / 'reporting-push-sw.js'
-        assets["/redtag-print.js"] = ROOT / "redtag-print.js"
-        assets.update({'/monitoring-ui.js': ROOT / 'monitoring-ui.js', '/monitoring.css': ROOT / 'monitoring.css',
-                       '/templates/hiyari-hatto.pdf': ROOT / 'public' / 'templates' / 'hiyari-hatto.pdf'})
-        assets.update({"/redtag-ui.js": ROOT / "redtag-ui.js", "/redtag.css": ROOT / "redtag.css"})
-        assets.update({'/report': ROOT / 'report.html', '/report/': ROOT / 'report.html',
-                       '/report.html': ROOT / 'report.html', '/reporting-ui.js': ROOT / 'reporting-ui.js',
-                       '/reporting.css': ROOT / 'reporting.css'})
+        assets = {"/": WEB / "index.html", "/index.html": WEB / "index.html", "/styles.css": WEB / "styles.css", "/script.js": WEB / "script.js", "/patrol.js": WEB / "patrol.js", "/cmms-ui.js": WEB / "cmms-ui.js", "/favicon.svg": WEB / "favicon.svg", "/manifest.webmanifest": WEB / "manifest.webmanifest", "/sw.js": WEB / "sw.js"}
+        assets.update({"/statistics-ui.js": WEB / "statistics-ui.js", "/statistics.css": WEB / "statistics.css"})
+        assets.update({"/design-system.css": WEB / "design-system.css", "/design-system.js": WEB / "design-system.js"})
+        assets["/air-leak-ui.js"] = WEB / "air-leak-ui.js"
+        assets['/module-home-ui.js'] = WEB / 'module-home-ui.js'
+        assets['/reporting-alerts.js'] = WEB / 'reporting-alerts.js'
+        assets['/reporting-push/sw.js'] = WEB / 'reporting-push-sw.js'
+        assets["/redtag-print.js"] = WEB / "redtag-print.js"
+        assets.update({'/monitoring-ui.js': WEB / 'monitoring-ui.js', '/monitoring.css': WEB / 'monitoring.css',
+                       '/templates/hiyari-hatto.pdf': WEB / 'public' / 'templates' / 'hiyari-hatto.pdf'})
+        assets.update({"/redtag-ui.js": WEB / "redtag-ui.js", "/redtag.css": WEB / "redtag.css"})
+        assets.update({'/report': WEB / 'report.html', '/report/': WEB / 'report.html',
+                       '/report.html': WEB / 'report.html', '/reporting-ui.js': WEB / 'reporting-ui.js',
+                       '/reporting.css': WEB / 'reporting.css'})
         if re.fullmatch(r"/brand/[1-4]\.png|/icons/(?:icon-192|icon-512|maskable-512|apple-touch-icon)\.png", path):
-            assets[path] = ROOT / "public" / path.lstrip("/")
+            assets[path] = WEB / "public" / path.lstrip("/")
         file = assets.get(path)
         if not file or not file.is_file():
             self.error_json(404, "Not found.")

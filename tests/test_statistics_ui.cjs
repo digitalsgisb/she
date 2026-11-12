@@ -1,7 +1,7 @@
 const fs=require('fs'),assert=require('assert'),cp=require('child_process');
 const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
 fs.mkdirSync('.qa-temp',{recursive:true});
-const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-c',fs.readFileSync('test_statistics_fixture.py','utf8')],{encoding:'utf8'}));
+const fixture=JSON.parse(cp.execFileSync(process.env.SHE_QA_PYTHON||'python',['-c',fs.readFileSync('../tests/test_statistics_fixture.py','utf8')],{encoding:'utf8',env:{...process.env,PYTHONPATH:'../backend'}}));
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.SHE_QA_BROWSER?{executablePath:process.env.SHE_QA_BROWSER}:{})});
  try{

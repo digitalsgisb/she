@@ -3,6 +3,10 @@
 README.md
 node_modules
 data
+output
+tests
+docs
 __pycache__
 *.pyc
 .env
+.qa-temp

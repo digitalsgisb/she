@@ -6,7 +6,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),errors=[];
   const hiyari={id:9,revision:1,title:'Hiyari Hatto',group:'hiyari-hatto',workflow:'she',icon:'alert',questions:[]};
   const air={id:11,revision:1,title:'Air Leak',group:'air-leak',workflow:'maintenance',questions:[]};
-  const template={id:0,is_default:true,revision:1,user_id:null,...JSON.parse(fs.readFileSync('patrol-default.json','utf8'))};
+  const template={id:0,is_default:true,revision:1,user_id:null,...JSON.parse(fs.readFileSync('../backend/patrol-default.json','utf8'))};
   let delay=true;
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=>{

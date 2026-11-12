@@ -18,7 +18,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   if(path==='/api/reporting/air-leak')return json({form:{id:1,revision:1},reports:reports.filter(r=>r.group==='air-leak'),token:'test'});
   if(path==='/api/red-tags/settings')return json({sections:[{name:'FG Store',pics:[]}],assignments:[]});
   if(path==='/api/reporting/public')return json({forms:[{id:9,revision:1,title:'Hiyari Hatto',group:'hiyari-hatto',workflow:'she',questions:[]}],token:'test'});
-  if(path==='/api/patrol-templates')return json({templates:[{id:0,revision:1,is_default:true,...JSON.parse(fs.readFileSync('patrol-default.json','utf8'))}]});
+  if(path==='/api/patrol-templates')return json({templates:[{id:0,revision:1,is_default:true,...JSON.parse(fs.readFileSync('../backend/patrol-default.json','utf8'))}]});
   if(path.startsWith('/api/'))return json({patrols:[],findings:[],forms:[]});
   let file=path==='/'?'index.html':path.slice(1);if(/^(brand|icons)\//.test(file))file='public/'+file;
   if(!fs.existsSync(file))return route.fulfill({status:404,body:''});

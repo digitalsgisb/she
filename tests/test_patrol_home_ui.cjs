@@ -4,7 +4,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
  const browser=await chromium.launch({headless:true,executablePath:process.env.SHE_QA_BROWSER});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),errors=[];
-  const template={id:0,is_default:true,revision:1,user_id:null,...JSON.parse(fs.readFileSync('patrol-default.json','utf8'))};
+  const template={id:0,is_default:true,revision:1,user_id:null,...JSON.parse(fs.readFileSync('../backend/patrol-default.json','utf8'))};
   let delayed=false,fail=false,requests=0,empty=false;
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=>{

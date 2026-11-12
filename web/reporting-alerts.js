@@ -11,7 +11,8 @@ const SHEReportAlerts = (() => {
     const button=document.getElementById('reportNotificationButton');
     if (!button) return;
     button.hidden=!allowed();
-    button.textContent=count ? `Reports (${count})` : 'Reports';
+    const label=count ? `Reports (${count})` : 'Reports';
+    if(button.textContent!==label){const first=!button.textContent;button.textContent=label;if(!first)SHEUI.tick(button);}
     button.setAttribute('aria-label',`${count} unread SHE report notifications. Open inbox.`);
     button.onclick=()=>{location.hash='/reporting-inbox';};
   }
@@ -24,8 +25,8 @@ const SHEReportAlerts = (() => {
     const description=document.createElement('p');
     description.textContent=result.reports?.[0] ? `${result.reports[0].reference} · ${result.reports[0].title}` : 'New reports are waiting in the SHE inbox.';
     const open=document.createElement('a'); open.className='primary-button'; open.href='#/reporting-inbox'; open.textContent='Open inbox';
-    open.onclick=()=>card.remove();
-    const close=document.createElement('button'); close.type='button'; close.className='secondary-button'; close.textContent='Dismiss'; close.onclick=()=>card.remove();
+    open.onclick=()=>SHEUI.dismiss(card);
+    const close=document.createElement('button'); close.type='button'; close.className='secondary-button'; close.textContent='Dismiss'; close.onclick=()=>SHEUI.dismiss(card);
     card.append(title,description,open,close); document.body.append(card);
   }
   async function poll() {
@@ -54,9 +55,12 @@ const SHEReportAlerts = (() => {
   }
   async function markRead() {
     if(!allowed())return;
-    const through=latest;
-    await api('/api/reporting/notifications/read','POST',{through_id:through});
-    document.getElementById('reportAlertPopup')?.remove(); await poll();
+    const through=latest, button=document.getElementById('reportNotificationButton'), before=button?.textContent;
+    const popupCard=document.getElementById('reportAlertPopup');
+    badge(0); if(popupCard)SHEUI.dismiss(popupCard);
+    try { await api('/api/reporting/notifications/read','POST',{through_id:through}); }
+    catch(error) { if(button&&before){button.textContent=before;SHEUI.tick(button);} throw error; }
+    notify('Notifications marked as read.'); await poll();
   }
   async function enable() {
     if(!window.isSecureContext || !('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) throw new Error('Phone notifications need HTTPS and a browser that supports Web Push. On iPhone, install SHE Digital on the Home Screen first.');

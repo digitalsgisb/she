@@ -235,3 +235,105 @@ p, li, .page-heading p { text-wrap: pretty; }
   contain-intrinsic-size: auto 180px;
 }
 img { content-visibility: auto; }
+
+/* ================= Feedback & motion layer ================= */
+:root {
+  --ds-accent-ink: oklch(0.36 0.09 135);
+  --ds-accent-soft: oklch(0.86 0.13 128 / .22);
+  --dur-exit: 160ms;
+  accent-color: var(--ds-brand-600); /* native checkboxes, radios, range, progress */
+  caret-color: var(--ds-brand-600);
+}
+::selection { background: var(--ds-accent-soft); }
+h1, h2, h3, strong, b, td, th, time, output { font-variant-numeric: tabular-nums; }
+
+/* Skeleton hand-off: whatever replaces a skeleton fades up once; collections stagger. */
+.ds-reveal { animation: ds-rise var(--dur-base) var(--ease-out) both; }
+.ds-reveal[data-ds-stagger] > *, .ds-reveal [data-ds-stagger] > * {
+  animation: ds-rise var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+
+/* Toast: icon + message, slides out instead of vanishing. */
+.toast { display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100vw - 30px)); padding: 12px 16px 12px 12px; line-height: 1.35; text-align: left; box-shadow: 0 10px 30px oklch(0.3 0.06 160 / .28); }
+.toast[hidden] { display: none; }
+.toast.is-leaving { animation: ds-toast-out var(--dur-exit) var(--ease-out) both; }
+.toast[data-kind="error"] { background: var(--ds-danger); }
+.ds-toast-icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: oklch(1 0 0 / .16); }
+.toast[data-kind="success"] .ds-toast-icon { background: var(--ds-accent); color: var(--ds-brand-900); animation: ds-check-pop 420ms var(--ease-out) both; }
+.ds-toast-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.toast[data-kind="success"] .ds-toast-icon path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: ds-draw 320ms var(--ease-out) 120ms forwards; }
+@media (max-width: 760px) { .toast { justify-content: center; max-width: none; } }
+
+/* Modal: exits through a short-lived ghost so closing stays synchronous for the app. */
+.ds-ghost { pointer-events: none; animation: ds-fade-out var(--dur-exit) var(--ease-out) both; }
+.ds-ghost .modal-card { animation: ds-pop-out var(--dur-exit) var(--ease-out) both; }
+.ds-ghost.report-alert-popup, .report-alert-popup.is-leaving { animation: ds-toast-out var(--dur-exit) var(--ease-out) both; pointer-events: none; }
+.report-alert-popup { animation: ds-toast-in var(--dur-slow) var(--ease-out) both; }
+
+/* Menus and disclosures drop in from their trigger. */
+.header-profile[open] > .profile-popover { transform-origin: top right; animation: ds-drop var(--dur-base) var(--ease-out) both; }
+.header-profile .profile-chevron { display: inline-block; transition: transform var(--dur-base) var(--ease-out); }
+.header-profile[open] .profile-chevron { transform: rotate(180deg); }
+#content details[open] > :not(summary) { animation: ds-drop var(--dur-base) var(--ease-out) both; transform-origin: top center; }
+
+/* Busy controls show a spinner; errors arrive with a nudge; counts tick when they change. */
+button.ds-busy::after, a.ds-busy::after, button[disabled].ds-sending::after {
+  content: ''; flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 8px; vertical-align: -1px;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: ds-spin 600ms linear infinite;
+}
+.form-error:not([hidden]) { animation: ds-nudge 320ms var(--ease-out) both; }
+.form-error.success:not([hidden]) { animation: ds-rise var(--dur-base) var(--ease-out) both; }
+.ds-tick { animation: ds-tick 420ms var(--ease-out) 1; }
+.ds-optimistic { opacity: .6; }
+.ds-optimistic-note { font-size: 11px; color: var(--ds-text-muted); }
+.ds-leave { animation: ds-collapse var(--dur-base) var(--ease-out) both; pointer-events: none; }
+
+/* Inputs: one focus treatment */
+input, select, textarea { transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+input[type="checkbox"], input[type="radio"] { transition: none; }
+
+/* ---------- Mobile app ---------- */
+@media (hover: none) {
+  .page:not(.executive-home) :is(.section-card, .module-card):active, :is(.section-card, .module-card, .she-record-row, .patrol-card, .genba-record, .module-home-record, .patrol-home-record, .exec-recent-row, .cmms-order-card, .user-row):active {
+    transform: scale(.985); transition: transform 80ms var(--ease-out);
+  }
+  .mobile-tab svg { transition: transform var(--dur-fast) var(--ease-out); }
+  .mobile-tab:active svg { transform: scale(.86); }
+  .mobile-tab:hover { background: transparent; }
+}
+.mobile-tab.active svg { animation: ds-tab-pop 320ms var(--ease-out) 1; }
+@media (max-width: 760px) {
+  /* Simple dialogs become bottom sheets; full-screen finding forms keep their own layout. */
+  .modal-backdrop:not(:has(#genbaForm, .genba-details, .genba-pic-action)) { place-items: end center; padding: calc(12px + var(--sa-top)) 0 0; }
+  .modal-backdrop:not(:has(#genbaForm, .genba-details, .genba-pic-action)) .modal-card { width: 100%; max-width: none; max-height: calc(100dvh - 24px - var(--sa-top)); border-radius: 20px 20px 0 0; padding: 26px 20px calc(24px + var(--sa-bottom)); animation: ds-sheet-in var(--dur-slow) var(--ease-out) both; overscroll-behavior: contain; }
+  .modal-backdrop.ds-ghost:not(:has(.genba-form, .genba-details, .genba-pic-action)) .modal-card { animation: ds-sheet-out var(--dur-exit) var(--ease-out) both; }
+  .modal-backdrop:not(:has(#genbaForm, .genba-details, .genba-pic-action)) .modal-actions > * { flex: 1; min-height: 46px; }
+  .report-alert-popup { left: 12px; right: 12px; width: auto; bottom: calc(90px + var(--sa-bottom)); }
+  input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
+  .primary-button, .secondary-button { min-height: 44px; }
+}
+
+@keyframes ds-fade-out { to { opacity: 0; } }
+@keyframes ds-pop-out { to { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes ds-toast-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes ds-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes ds-sheet-out { to { transform: translateY(100%); } }
+@keyframes ds-drop { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+@keyframes ds-draw { to { stroke-dashoffset: 0; } }
+@keyframes ds-check-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+@keyframes ds-nudge { 0% { opacity: 0; transform: translateX(-6px); } 50% { transform: translateX(3px); } 100% { opacity: 1; transform: none; } }
+@keyframes ds-tick { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes ds-tab-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.1); } 100% { transform: none; } }
+@keyframes ds-collapse { to { opacity: 0; transform: translateX(-8px); } }
+@media (prefers-reduced-motion: reduce) { button.ds-busy::after { animation-duration: 1.2s !important; animation-iteration-count: infinite !important; } }
+
+/* Stat numbers shimmer until their value arrives (falls back to the dash if it never does). */
+.ds-count-loading {
+  display: inline-block; min-width: 1.6em; border-radius: 8px; color: transparent !important; user-select: none;
+  background: linear-gradient(100deg, var(--ds-skel-a) 30%, var(--ds-skel-b) 50%, var(--ds-skel-a) 70%); background-size: 250% 100%;
+  animation: ds-shimmer 1.5s ease-in-out 8, ds-count-fallback 1ms 12s forwards;
+}
+@keyframes ds-count-fallback { to { color: inherit; background: none; } }

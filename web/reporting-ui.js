@@ -281,7 +281,7 @@ const SHEReporting = (() => {
   async function loadOrderAfterPhotos(root,r) {
     const box=root.querySelector('#orderAfterPhotos');
     if(!box)return;
-    box.innerHTML='<p>Loading work order photos…</p>';
+    box.innerHTML=SHEUI.skeleton('cards',2,'Loading work order photos');
     try{
       const order=await api(`/api/cmms/work-orders/${encodeURIComponent(r.order_id)}?plant=${encodeURIComponent(r.plant)}`);
       if(!box.isConnected)return;

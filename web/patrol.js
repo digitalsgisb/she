@@ -37,7 +37,7 @@ const patrolSections = [
 
 const isPatrolRoute=key=>['patrol-home','daily-safety-patrol','patrol-overview','checklist-builder'].includes(key);
 function renderPatrolHome() {
-  renderPatrolContent(`<div class="page inner-page patrol-page patrol-home-page">${patrolNavigation()}<section class="patrol-home-hero"><div><h1>Safety Patrol</h1><a class="primary-button" href="#/daily-safety-patrol">${icon('clipboard',19)} Start checklist ${icon('arrow',18)}</a></div><span class="patrol-home-emblem" aria-hidden="true">${icon('shield',78)}</span></section><div class="patrol-home-stats"><div><span>Completed today</span><strong data-patrol-count="today">—</strong></div><div><span>This month</span><strong data-patrol-count="month">—</strong></div><div><span>Awaiting review</span><strong data-patrol-count="awaiting_review">—</strong></div></div><section class="patrol-attention"><div class="exec-section-heading"><h2>Patrol tracking</h2><a href="#/patrol-overview">View history →</a></div><p data-patrol-open class="patrol-attention-count">Checking findings…</p><div data-patrol-attention aria-live="polite"></div></section><details class="patrol-home-week"><summary>Last 7 days <small data-patrol-scope></small></summary><div data-patrol-week class="patrol-week-bars" aria-label="Daily completed inspections"></div></details><div class="patrol-home-tools"><a href="#/patrol-overview">${icon('clock',22)}<span><strong>Patrol history</strong><small>Browse reports and follow up</small></span>${icon('chevron',18)}</a><a href="#/checklist-builder">${icon('clipboard',22)}<span><strong>Checklist builder</strong><small>Create or update a checklist</small></span>${icon('chevron',18)}</a></div><p class="form-error" data-patrol-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-patrol-home-refresh>Refresh activity</button></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page patrol-home-page">${patrolNavigation()}<section class="patrol-home-hero"><div><h1>Safety Patrol</h1><a class="primary-button" href="#/daily-safety-patrol">${icon('clipboard',19)} Start checklist ${icon('arrow',18)}</a></div></section><div class="patrol-home-stats"><div><span>Completed today</span><strong data-patrol-count="today" class="ds-count-loading">—</strong></div><div><span>This month</span><strong data-patrol-count="month" class="ds-count-loading">—</strong></div><div><span>Awaiting review</span><strong data-patrol-count="awaiting_review" class="ds-count-loading">—</strong></div></div><section class="patrol-attention"><div class="exec-section-heading"><h2>Patrol tracking</h2><a href="#/patrol-overview">View history →</a></div><p data-patrol-open class="patrol-attention-count">Checking findings…</p><div data-patrol-attention aria-live="polite"></div></section><details class="patrol-home-week"><summary>Last 7 days <small data-patrol-scope></small></summary><div data-patrol-week class="patrol-week-bars" aria-label="Daily completed inspections"></div></details><div class="patrol-home-tools"><a href="#/patrol-overview">${icon('clock',22)}<span><strong>Patrol history</strong><small>Browse reports and follow up</small></span>${icon('chevron',18)}</a><a href="#/checklist-builder">${icon('clipboard',22)}<span><strong>Checklist builder</strong><small>Create or update a checklist</small></span>${icon('chevron',18)}</a></div><p class="form-error" data-patrol-home-error role="alert" hidden></p><button type="button" class="secondary-button" data-patrol-home-refresh>Refresh activity</button></div>`);
   const root=content.querySelector('.patrol-home-page');
   delete root.dataset.snapshot;
   root.querySelector('[data-patrol-home-refresh]').onclick=()=>loadPatrolHome(root);
@@ -110,7 +110,7 @@ async function loadPatrolHome(root=content.querySelector('.patrol-home-page')) {
     root.querySelector('[data-patrol-week]').innerHTML=data.week.some(day=>day.count>0)?data.week.map(day=>`<div class="patrol-week-day" ${day.date===data.date?'data-today':''}><strong>${day.count}</strong><span class="patrol-week-track">${day.count>0?`<i style="height:${day.count/max*100}%"></i>`:''}</span><small>${new Date(day.date+'T12:00:00+08:00').toLocaleDateString('en-MY',{weekday:'short',timeZone:'Asia/Kuala_Lumpur'})}</small></div>`).join(''):'<p class="patrol-empty">No completed patrols in the last 7 days.</p>';
     SHEStats.bindEvidence(root);
     root.querySelector('[data-patrol-home-error]').hidden=true;
-  }catch(error){if(root.isConnected&&currentRoute()==='patrol-home'){const box=root.querySelector('[data-patrol-home-error]');if(box){box.textContent=error.message;box.hidden=false;}}}
+  }catch(error){SHEUI.settle(root);if(root.isConnected&&currentRoute()==='patrol-home'){const box=root.querySelector('[data-patrol-home-error]');if(box){box.textContent=error.message;box.hidden=false;}}}
   finally{delete root.dataset.loading;button.disabled=false;}
 }
 
@@ -226,7 +226,7 @@ function customPatrolQuestions(template, answers = null, attachments = [], patro
 
 async function renderChecklistBuilder() {
   const requestedHash=location.hash;
-  renderPatrolContent('<div class="loading-panel">Loading checklist builder…</div>');
+  renderPatrolContent('<div class="loading-panel">'+SHEUI.skeleton('text',6,'Loading checklist builder')+'</div>');
   try {
     const {templates} = await api('/api/patrol-templates');
     if (currentRoute() !== 'checklist-builder'||location.hash!==requestedHash) return;
@@ -484,7 +484,7 @@ function restorePatrolDraft() {
 
 async function renderPatrolForm() {
   const requestedHash=location.hash;
-  renderPatrolContent('<div class="loading-panel">Loading checklists…</div>');
+  renderPatrolContent('<div class="loading-panel">'+SHEUI.skeleton('list',5,'Loading checklists')+'</div>');
   try { patrolTemplates = (await api('/api/patrol-templates')).templates; }
   catch (error) { if(location.hash!==requestedHash)return;renderPatrolContent('<div class="form-error">' + escapeHtml(error.message) + '</div>'); return; }
   if (location.hash!==requestedHash || currentRoute() !== 'daily-safety-patrol' || /^\d+$/.test(location.hash.split('?')[0].split('/')[2] || '')) return;

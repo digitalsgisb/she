@@ -71,6 +71,54 @@
     if (toast) pulse(toast);
   }
 
+  // Toast: icon + message, animated in and out. Kind is inferred from the wording unless given.
+  const ICONS = { success: 'M3.5 8.5l3 3 6-7', error: 'M8 4v5M8 11.6v.4', info: 'M8 7.2V12M8 4v.4' };
+  let toastTimer, toastLeave;
+  function toast(message, kind) {
+    const box = document.getElementById('toast');
+    if (!box) return;
+    kind = kind || (/(saved|submitted|issued|updated|shared|created|added|enabled|deleted|confirmed|sent|reset|copied)/i.test(message) ? 'success'
+      : /(fail|error|could not|couldn.t|cannot|unable|not allowed|try again|offline)/i.test(message) ? 'error' : 'info');
+    clearTimeout(toastTimer); clearTimeout(toastLeave);
+    box.classList.remove('is-leaving');
+    box.dataset.kind = kind;
+    const icon = document.createElement('span');
+    icon.className = 'ds-toast-icon'; icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = '<svg viewBox="0 0 16 16"><path d="' + ICONS[kind] + '"/></svg>';
+    const text = document.createElement('span');
+    text.textContent = message;
+    box.replaceChildren(icon, text);
+    box.hidden = true; void box.offsetWidth; box.hidden = false; // restart the entrance
+    if (kind === 'success') pulse(box);
+    toastTimer = setTimeout(() => {
+      if (reduceMotion()) { box.hidden = true; return; }
+      box.classList.add('is-leaving');
+      toastLeave = setTimeout(() => { box.hidden = true; box.classList.remove('is-leaving'); }, 170);
+    }, 4000);
+  }
+
+  // Exit animation without delaying app logic: a non-interactive copy fades out while the
+  // real element is hidden/removed synchronously by the caller.
+  function ghost(el) {
+    if (!el || el.hidden || !el.isConnected || reduceMotion()) return;
+    const copy = el.cloneNode(true);
+    copy.removeAttribute('id');
+    copy.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    copy.querySelectorAll('[name]').forEach(node => node.removeAttribute('name'));
+    copy.setAttribute('aria-hidden', 'true'); copy.inert = true;
+    copy.classList.add('ds-ghost');
+    el.after(copy);
+    setTimeout(() => copy.remove(), 180);
+  }
+  // Remove an element with its exit animation.
+  function dismiss(el) { ghost(el); el && el.remove(); }
+  // Bump a counter/label when its value changes.
+  function tick(el) {
+    if (!el || reduceMotion()) return;
+    el.classList.remove('ds-tick'); void el.offsetWidth; el.classList.add('ds-tick');
+    el.addEventListener('animationend', () => el.classList.remove('ds-tick'), { once: true });
+  }
+
   // Stagger: tag direct children of known collection containers with an index.
   const STAGGER = '.section-grid,.module-grid,.genba-grid,.she-record-list,.she-overview-grid,.topic-grid,.patrol-list,.patrol-card-grid,.user-list';
   function stagger(root) {
@@ -84,7 +132,20 @@
     const content = document.getElementById('content');
     if (!content) return;
     let queued = false;
-    new MutationObserver(() => {
+    // Skeleton hand-off: when a skeleton leaves, the content that takes its place fades up once.
+    const hadSkeleton = node => node.nodeType === 1 && (node.classList.contains('ds-skeleton') || node.querySelector('.ds-skeleton'));
+    const reveal = node => {
+      if (node.nodeType !== 1 || node.classList.contains('ds-skeleton') || node.querySelector('.ds-skeleton') || document.body.classList.contains('ds-routing')) return;
+      node.classList.add('ds-reveal');
+      setTimeout(() => node.classList.remove('ds-reveal'), 900);
+    };
+    new MutationObserver(records => {
+      for (const record of records) {
+        // A stat tile received its number: stop the shimmer and tick it in.
+        if (record.target.classList && record.target.classList.contains('ds-count-loading')) { record.target.classList.remove('ds-count-loading'); tick(record.target); }
+        if (!record.addedNodes.length || !Array.from(record.removedNodes).some(hadSkeleton)) continue;
+        record.addedNodes.forEach(reveal);
+      }
       if (queued) return;
       queued = true;
       requestAnimationFrame(() => { queued = false; stagger(content); });
@@ -214,7 +275,10 @@
   const tabsReady = () => initTabBox();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tabsReady); else tabsReady();
 
-  window.SHEUI = { skeleton, pulse, optimistic, confirm, begin, stagger };
+  // A load failed: stat placeholders stop shimmering and show their dash.
+  function settle(root) { (root || document).querySelectorAll('.ds-count-loading').forEach(el => el.classList.remove('ds-count-loading')); }
+
+  window.SHEUI = { settle, skeleton, pulse, optimistic, confirm, begin, stagger, toast, ghost, dismiss, tick };
 })();
 
 /* Rendering performance: lazy-load and async-decode images that are off screen, pre-decode the brand logo. */

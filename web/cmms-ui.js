@@ -26,7 +26,7 @@ function cmmsError(error) {
 
 function cmmsPlantControl() {
   const plants = cmmsState.config?.plants || [];
-  if (plants.length < 2) return `<span class="count-pill">${plants[0] === 'sendayan' ? 'Sendayan' : 'Port Klang'}</span>`;
+  if (plants.length < 2) return '';
   return `<label class="cmms-plant">Plant <select id="cmmsPlant"><option value="port-klang" ${cmmsState.plant === 'port-klang' ? 'selected' : ''}>Port Klang</option><option value="sendayan" ${cmmsState.plant === 'sendayan' ? 'selected' : ''}>Sendayan</option></select></label>`;
 }
 
@@ -122,7 +122,7 @@ function mountFindingWorkOrder(parent,kind,id,before=null) {
   if(!['admin','executive'].includes(currentUser?.role))return;
   const card=document.createElement('section');
   card.className='finding-order-card';
-  card.innerHTML='<h3>Work order</h3><p role="status">Checking linked work order…</p>';
+  card.innerHTML='<h3>Work order</h3>'+SHEUI.skeleton('text',2,'Checking linked work order')+'';
   parent.insertBefore(card,before);
   const path=`/api/finding-orders/${kind}/${id}`,userId=currentUser.id;
   const load=async()=>{
@@ -210,7 +210,23 @@ async function cmmsRenderDetail(id) {
   body.querySelector('.cmms-refresh').addEventListener('click', () => cmmsRenderDetail(id).catch(cmmsError));
   document.getElementById('cmmsCommentForm').addEventListener('submit', async event => {
     event.preventDefault(); const form = event.currentTarget;
-    await cmmsAction(async () => api(`/api/cmms/work-orders/${id}/comments`, 'POST', {plant: cmmsState.plant, message: form.message.value}), id);
+    const message = form.message.value.trim(); if (!message) return;
+    // Optimistic: the note appears straight away, marked as sending; a failed save puts the text back.
+    const note = document.createElement('div');
+    note.className = 'ds-optimistic ds-enter';
+    note.innerHTML = `<strong>note</strong><small class="ds-optimistic-note">Sending…</small><p>${escapeHtml(message)}</p>`;
+    const list = body.querySelector('.cmms-activity');
+    list.querySelector(':scope > p')?.remove();
+    list.append(note); form.message.value = '';
+    const error = document.getElementById('cmmsDetailError'); if (error) error.hidden = true;
+    try {
+      await SHEUI.optimistic(note, { commit: () => api(`/api/cmms/work-orders/${id}/comments`, 'POST', {plant: cmmsState.plant, message}) });
+      note.classList.remove('ds-optimistic'); note.querySelector('small').textContent = 'Just now';
+      notify('Note added.'); await cmmsRenderDetail(id);
+    } catch (failure) {
+      note.remove(); if (form.isConnected && !form.message.value) form.message.value = message;
+      if (error) { error.textContent = failure.message; error.hidden = false; }
+    }
   });
   document.getElementById('cmmsPhotoForm').addEventListener('submit', async event => {
     event.preventDefault(); const photo = event.currentTarget.photo.files[0];

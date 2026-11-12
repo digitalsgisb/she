@@ -238,15 +238,15 @@ function renderMobileNavigation(active) {
 function renderNav(active) {
   const previousSubnavs = [...nav.querySelectorAll('.subnav')];
   const inDashboard=active==='dashboard'||active.endsWith('-dashboard')||active==='dashboard-records';
-  nav.innerHTML = `<div class="nav-label">OVERVIEW</div>${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${inDashboard||active==='she-summary'?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboard</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
+  nav.innerHTML = `${routeLink('home', `nav-link ${active==='home'?'active':''}`)}<div class="nav-parent"><a class="nav-link ${inDashboard||active==='she-summary'?'active':''}" href="#/dashboard"><span class="link-icon">${icon('grid')}</span><span>Dashboard</span></a><button class="nav-toggle ${dashboardsExpanded?'expanded':''}" id="dashboardToggle" type="button" aria-label="${dashboardsExpanded?'Collapse':'Expand'} dashboards" aria-expanded="${dashboardsExpanded}" aria-controls="dashboardSubnav">${icon('chevron',16)}</button></div>
     <div class="subnav ${dashboardsExpanded?'expanded':''}" id="dashboardSubnav"><div class="subnav-content">${['dashboard','she-summary'].filter(canAccessRoute).map(key=>`<a class="subnav-link ${(key==='dashboard'?inDashboard:active===key)?'active':''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
-    <div class="nav-label nav-label-spaced">SHE SECTIONS</div>
+    
     <div class="nav-parent"><a class="nav-link ${(active==='safety'||safetyItems.includes(safetyModule(active))) ? 'active' : ''}" href="#/safety"><span class="link-icon">${icon('shield')}</span><span>Safety</span></a><button class="nav-toggle ${safetyExpanded ? 'expanded' : ''}" id="safetyToggle" type="button" aria-label="${safetyExpanded ? 'Collapse' : 'Expand'} Safety subsections" aria-expanded="${safetyExpanded}" aria-controls="safetySubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${safetyExpanded ? 'expanded' : ''}" id="safetySubnav" ><div class="subnav-content">${safetyItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${safetyModule(active) === key ? 'active' : ''}" href="#/${moduleEntryRoute(key)}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
     ${routeLink('health', `nav-link ${active === 'health' ? 'active' : ''}`)}
     <div class="nav-parent"><a class="nav-link ${active === 'environmental' || envItems.includes(active) ? 'active' : ''}" href="#/environmental"><span class="link-icon">${icon('leaf')}</span><span>Environmental</span></a><button class="nav-toggle ${envExpanded ? 'expanded' : ''}" id="envToggle" type="button" aria-label="${envExpanded ? 'Collapse' : 'Expand'} Environmental subsections" aria-expanded="${envExpanded}" aria-controls="environmentSubnav">${icon('chevron', 16)}</button></div>
     <div class="subnav ${envExpanded ? 'expanded' : ''}" id="environmentSubnav" ><div class="subnav-content">${envItems.filter(canAccessRoute).map(key => `<a class="subnav-link ${active === key ? 'active' : ''}" href="#/${key}"><span class="subnav-dot"></span>${routes[key].title}</a>`).join('')}</div></div>
-    <div class="nav-label nav-label-spaced">WORKSPACE</div>
+    
     ${routeLink('work-orders', `nav-link ${active === 'work-orders' ? 'active' : ''}`)}
     ${['admin','executive'].includes(currentUser?.role) ? routeLink('users', `nav-link ${active === 'users' ? 'active' : ''}`) : ''}
     ${routeLink('account', `nav-link ${active === 'account' ? 'active' : ''}`)}`;
@@ -295,7 +295,7 @@ function renderExecutiveHome() {
   const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'numeric',hourCycle:'h23'}).format(new Date()));
   const greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const tools=[['daily-safety-patrol','New patrol','clipboard'],['environmental','Environment','leaf'],['dashboard','Dashboards','grid'],['reporting-qr','Reporting QR','camera']];
-  return `<div class="page inner-page executive-home"><header class="exec-heading"><span>${escapeHtml(day)}</span></header><section class="exec-welcome"><div class="exec-welcome-copy"><h1>${greeting},<br>${escapeHtml(currentUser.display_name.split(' ')[0])}.</h1><p>Here is what needs you today.</p><div class="exec-hero-actions"><a href="#/reporting-inbox">Review reports ${icon('arrow',18)}</a><a href="#/work-orders">Work orders ${icon('briefcase',18)}</a></div></div><span class="exec-welcome-symbol" aria-hidden="true">${icon('shield',92)}</span></section><div class="exec-stats" aria-label="Open findings"><a href="#/reporting-inbox"><span>Reports to review</span><strong data-overview-count="reports">—</strong></a><a href="#/red-tag?view=active"><span>Active Genba</span><strong data-overview-count="genba">—</strong></a><a href="#/patrol-overview"><span>Patrol follow-ups</span><strong data-overview-count="patrols">—</strong></a></div><section class="exec-next"><div class="exec-section-heading"><h2>Keep things moving</h2></div><div class="exec-action-grid"><a class="exec-action-card exec-genba" href="#/red-tag-home"><span class="exec-action-icon">${icon('tag',25)}</span><div><h3>Genba &amp; Red Tag</h3></div>${icon('arrow',22)}</a><a class="exec-action-card exec-orders" href="#/work-orders"><span class="exec-action-icon">${icon('briefcase',25)}</span><div><h3>SHE work orders</h3></div>${icon('arrow',22)}</a></div></section><section class="exec-incoming"><div class="exec-section-heading"><h2>Needs your attention</h2><a href="#/reporting-inbox">View inbox →</a></div><div data-exec-recent aria-live="polite">${SHEUI.skeleton('list',3,'Loading the latest open findings')}</div></section><section class="exec-tools"><div class="exec-section-heading"><h2>Around the workspace</h2></div><div class="exec-tool-grid">${tools.filter(([route])=>canAccessRoute(route)).map(([route,label,symbol])=>`<a href="#/${route}">${icon(symbol,24)}<span>${label}</span></a>`).join('')}</div></section></div>`;
+  return `<div class="page inner-page executive-home"><header class="exec-heading"><span>${escapeHtml(day)}</span></header><section class="exec-welcome"><div class="exec-welcome-copy"><h1>${greeting},<br>${escapeHtml(currentUser.display_name.split(' ')[0])}.</h1><p>Here is what needs you today.</p><div class="exec-hero-actions"><a href="#/reporting-inbox">Review reports ${icon('arrow',18)}</a><a href="#/work-orders">Work orders ${icon('briefcase',18)}</a></div></div><span class="exec-welcome-symbol" aria-hidden="true">${icon('shield',92)}</span></section><div class="exec-stats" aria-label="Open findings"><a href="#/reporting-inbox"><span>Reports to review</span><strong data-overview-count="reports" class="ds-count-loading">—</strong></a><a href="#/red-tag?view=active"><span>Active Genba</span><strong data-overview-count="genba" class="ds-count-loading">—</strong></a><a href="#/patrol-overview"><span>Patrol follow-ups</span><strong data-overview-count="patrols" class="ds-count-loading">—</strong></a></div><section class="exec-next"><div class="exec-section-heading"><h2>Keep things moving</h2></div><div class="exec-action-grid"><a class="exec-action-card exec-genba" href="#/red-tag-home"><span class="exec-action-icon">${icon('tag',25)}</span><div><h3>Genba &amp; Red Tag</h3></div>${icon('arrow',22)}</a><a class="exec-action-card exec-orders" href="#/work-orders"><span class="exec-action-icon">${icon('briefcase',25)}</span><div><h3>SHE work orders</h3></div>${icon('arrow',22)}</a></div></section><section class="exec-incoming"><div class="exec-section-heading"><h2>Needs your attention</h2><a href="#/reporting-inbox">View inbox →</a></div><div data-exec-recent aria-live="polite">${SHEUI.skeleton('list',3,'Loading the latest open findings')}</div></section><section class="exec-tools"><div class="exec-section-heading"><h2>Around the workspace</h2></div><div class="exec-tool-grid">${tools.filter(([route])=>canAccessRoute(route)).map(([route,label,symbol])=>`<a href="#/${route}">${icon(symbol,24)}<span>${label}</span></a>`).join('')}</div></section></div>`;
 }
 
 async function loadExecutiveOverview() {
@@ -307,7 +307,7 @@ async function loadExecutiveOverview() {
     root.querySelectorAll('[data-overview-count]').forEach(el=>el.textContent=overview.counts[el.dataset.overviewCount]??'—');
     root.querySelector('[data-exec-recent]').innerHTML=overview.recent.length?overview.recent.map(r=>`<a class="exec-recent-row" href="${escapeHtml(r.href)}"><span class="exec-recent-icon">${icon(r.kind==='Genba'?'tag':r.kind==='Patrol'?'clipboard':'leaf',21)}</span><span><small>${escapeHtml(r.kind)} · ${new Date(r.created_at*1000).toLocaleDateString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short'})}</small><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.detail)}</span></span>${issueThumbnail(r.thumbnail_url)}${icon('chevron',18)}</a>`).join(''):'<div class="exec-empty">'+icon('shield',25)+'<strong>You’re up to date.</strong><p>No open findings or patrol follow-ups to review.</p></div>';
     bindIssueThumbnails(root);
-  }catch(error){if(root.isConnected)root.querySelector('[data-exec-recent]').innerHTML=`<p class="exec-loading">${escapeHtml(error.message)} <button type="button" class="secondary-button" data-overview-retry>Refresh</button></p>`;root.querySelector('[data-overview-retry]')?.addEventListener('click',loadExecutiveOverview);}
+  }catch(error){SHEUI.settle(root);if(root.isConnected)root.querySelector('[data-exec-recent]').innerHTML=`<p class="exec-loading">${escapeHtml(error.message)} <button type="button" class="secondary-button" data-overview-retry>Refresh</button></p>`;root.querySelector('[data-overview-retry]')?.addEventListener('click',loadExecutiveOverview);}
 }
 
 function renderCommitteeHome() {
@@ -450,16 +450,16 @@ function renderAccount() {
 
 function renderUserRow(user) {
   const self = user.id === currentUser.id;
-  return `<div class="user-row"><span class="user-avatar">${escapeHtml(user.display_name.charAt(0).toUpperCase())}</span><div class="user-primary"><strong>${escapeHtml(user.display_name)}${self ? ' <small>(you)</small>' : ''}</strong><span>@${escapeHtml(user.username)}</span></div><span class="role-badge">${roleLabel(user.role)}</span><span class="state-badge ${user.active ? 'enabled' : 'disabled'}"><i></i>${user.active ? 'Active' : 'Inactive'}</span><div class="user-actions"><button type="button" data-edit-user="${user.id}">Edit</button><button type="button" data-reset-user="${user.id}">Reset password</button></div></div>`;
+  return `<div class="user-row" data-user-row="${user.id}"><span class="user-avatar">${escapeHtml(user.display_name.charAt(0).toUpperCase())}</span><div class="user-primary"><strong>${escapeHtml(user.display_name)}${self ? ' <small>(you)</small>' : ''}</strong><span>@${escapeHtml(user.username)}</span></div><span class="role-badge">${roleLabel(user.role)}</span><span class="state-badge ${user.active ? 'enabled' : 'disabled'}"><i></i>${user.active ? 'Active' : 'Inactive'}</span><div class="user-actions"><button type="button" data-edit-user="${user.id}">Edit</button><button type="button" data-reset-user="${user.id}">Reset password</button></div></div>`;
 }
 
-async function renderUsers() {
-  content.innerHTML = `<div class="page inner-page"><div class="page-heading"><h1>User Management</h1></div><div class="loading-panel">${SHEUI.skeleton('list',4,'Loading users')}</div></div>`;
+async function renderUsers(quiet = false) {
+  if (!quiet || !content.querySelector('.users-list')) content.innerHTML = `<div class="page inner-page"><div class="page-heading"><h1>User Management</h1></div><div class="loading-panel">${SHEUI.skeleton('list',4,'Loading users')}</div></div>`;
   try {
     const result = await api('/api/users');
     if (currentRoute() !== 'users') return;
     managedUsers = result.users;
-    content.innerHTML = `<div class="page inner-page"><div class="page-heading page-heading-actions"><div><h1>User Management</h1></div><button class="primary-button" type="button" data-create-user>+ Add user</button></div><div class="users-summary"><span class="users-summary-icon">${icon('users', 23)}</span><div><strong>${managedUsers.length} ${managedUsers.length === 1 ? 'account' : 'accounts'}</strong><span>${managedUsers.filter(user => user.active).length} active in this workspace</span></div></div><section class="users-list"><div class="users-list-heading"><span>TEAM MEMBERS</span><span>ACCESS & STATUS</span></div>${managedUsers.map(renderUserRow).join('')}</section><p class="users-help">Share passwords through an approved internal channel. Resetting a password signs the user out everywhere.</p></div>`;
+    content.innerHTML = `<div class="page inner-page"><div class="page-heading page-heading-actions"><div><h1>User Management</h1></div><button class="primary-button" type="button" data-create-user>+ Add user</button></div><div class="users-summary"><span class="users-summary-icon">${icon('users', 23)}</span><div><strong>${managedUsers.length} ${managedUsers.length === 1 ? 'account' : 'accounts'}</strong><span>${managedUsers.filter(user => user.active).length} active in this workspace</span></div></div><section class="users-list">${managedUsers.map(renderUserRow).join('')}</section><p class="users-help">Share passwords through an approved internal channel. Resetting a password signs the user out everywhere.</p></div>`;
   } catch (error) {
     content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div></div>`;
   }
@@ -529,15 +529,12 @@ function showApp(session) {
 }
 
 function notify(message) {
-  toastBox.textContent = message;
-  toastBox.hidden = false;
-  clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => { toastBox.hidden = true; }, 4000);
-  if (/(saved|submitted|issued|updated|shared|created|added|enabled|deleted)/i.test(message)) window.SHEUI?.confirm();
+  SHEUI.toast(message);
 }
 
 let modalEditedContent = null;
 function dismissModal() {
+  SHEUI.ghost(modalBackdrop);
   modalBackdrop.hidden = true;
   modalBody.innerHTML = '';
   modalEditedContent = null;
@@ -576,18 +573,40 @@ function openUserModal(kind, user = null) {
     const submit = form.querySelector('button[type="submit"]');
     const data = Object.fromEntries(new FormData(form));
     if (kind === 'edit') data.active = data.active === 'true';
+    if (kind === 'edit') {
+      // Optimistic: the row shows the change at once; a rejected save restores it and reopens the form.
+      const row = content.querySelector(`[data-user-row="${user.id}"]`);
+      const before = {...user};
+      const paint = () => { if (row) { const next = document.createElement('div'); next.innerHTML = renderUserRow(user); row.innerHTML = next.firstElementChild.innerHTML; } };
+      closeModal();
+      try {
+        const result = await SHEUI.optimistic(row, {
+          apply: () => { Object.assign(user, {display_name: data.display_name, role: data.role, active: data.active}); paint(); return () => { Object.assign(user, before); paint(); }; },
+          commit: () => api(`/api/users/${user.id}`, 'PATCH', data)
+        });
+        Object.assign(user, result.user);
+        if (user.id === currentUser.id) { currentUser = result.user; headerUser.textContent = currentUser.display_name; }
+        notify('User updated.');
+        if (currentRoute() === 'users') await renderUsers(true);
+      } catch (error) {
+        if (currentRoute() !== 'users' || !currentUser) return;
+        openUserModal('edit', user);
+        const output = document.getElementById('modalError');
+        if (output) { output.hidden = false; output.textContent = error.message; }
+        const name = document.getElementById('displayName'); if (name) name.value = data.display_name;
+        const role = document.getElementById('userRole'); if (role) role.value = data.role;
+        const state = document.getElementById('userStatus'); if (state) state.value = String(data.active);
+      }
+      return;
+    }
     submit.disabled = true;
     try {
       if (kind === 'create') await api('/api/users', 'POST', data);
-      if (kind === 'edit') {
-        const result = await api(`/api/users/${user.id}`, 'PATCH', data);
-        if (user.id === currentUser.id) { currentUser = result.user; headerUser.textContent = currentUser.display_name; }
-      }
       if (kind === 'reset') await api(`/api/users/${user.id}/reset-password`, 'POST', data);
       closeModal();
       if (kind === 'reset' && user.id === currentUser.id) { await showLogin('Password updated. Please sign in again.'); return; }
-      notify(kind === 'create' ? 'User created.' : kind === 'edit' ? 'User updated.' : 'Password reset.');
-      await renderUsers();
+      notify(kind === 'create' ? 'User created.' : 'Password reset.');
+      await renderUsers(true);
     } catch (error) {
       const output = document.getElementById('modalError');
       if (output) { output.hidden = false; output.textContent = error.message; }

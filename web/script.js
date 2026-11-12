@@ -193,7 +193,7 @@ function addPasswordToggles(root) {
 
 function installHelpCard() {
   if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return '';
-  return `<section class="settings-card install-card"><h2>Use SHE Digital on your phone</h2><p>Install it to your Home Screen for quick access to the Safety Patrol. An internet connection is needed to sign in and submit patrols; draft answers are saved on this device while you fill the form.</p><button class="primary-button" type="button" data-install-app ${installPrompt ? '' : 'hidden'}>Install app</button><div class="install-instructions"><strong>iPhone or iPad</strong><span>Open this site in Safari, tap Share, then Add to Home Screen.</span><strong>Android</strong><span>Open this site in Chrome and use Install app or Add to Home screen from the browser menu.</span></div></section>`;
+  return `<section class="settings-card install-card"><h2>Use SHE Digital on your phone</h2><p>Add it to your Home Screen for quick access. Signing in and submitting need internet.</p><button class="primary-button" type="button" data-install-app ${installPrompt ? '' : 'hidden'}>Install app</button><div class="install-instructions"><strong>iPhone or iPad</strong><span>Open this site in Safari, tap Share, then Add to Home Screen.</span><strong>Android</strong><span>Open this site in Chrome and use Install app or Add to Home screen from the browser menu.</span></div></section>`;
 }
 
 window.addEventListener('beforeinstallprompt', event => {
@@ -329,7 +329,7 @@ function renderStatsDashboard(key) {
   if(key==='safety-dashboard')key=['accident-dashboard','red-tag-dashboard','hiyari-dashboard'].find(canAccessRoute);
   if(SHEMonitoring.configs[key]){SHEMonitoring.mount(key);return;}
   if(key==='co2-dashboard'){
-    content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('environment','CO2 Tracking','Carbon emission tracking for the SHE programme.','co2-dashboard')+'<div class="placeholder-panel"><div class="placeholder-graphic"><span class="placeholder-ring"></span><span class="placeholder-symbol">'+icon('leaf',72)+'</span></div><h2>CO2 tracking dashboard</h2><p>Emission figures, monthly trends and reduction targets will appear here once the CO2 data source is connected.</p></div></div>';
+    content.innerHTML='<div class="page inner-page focused-dashboard-page">'+dashboardHeader('environment','CO2 Tracking','Carbon emission tracking for the SHE programme.','co2-dashboard')+'<div class="placeholder-panel"><div class="placeholder-graphic"><span class="placeholder-ring"></span><span class="placeholder-symbol">'+icon('leaf',72)+'</span></div><h2>CO2 tracking dashboard</h2><p>Available once the CO2 data source is connected.</p></div></div>';
     bindDashboardHeader();return;
   }
   if(key==='health-dashboard'){
@@ -410,7 +410,7 @@ function renderSafetyHome() {
 }
 
 function renderHealth() {
-  return `<div class="page inner-page category-page"><div class="page-heading"><h1>Health</h1></div><section class="category-banner health-banner"><div><h2>Care for people.<br />Build healthy days.</h2><p>Health features and their activity will appear here as they are added.</p></div><span class="category-banner-icon" aria-hidden="true">${icon('heart', 76)}</span></section><div class="content-heading"><div><h2>Health modules</h2></div></div><div class="category-empty">No health modules have been added yet.</div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><h1>Health</h1></div><section class="category-banner health-banner"><div><h2>Care for people.<br />Build healthy days.</h2></div><span class="category-banner-icon" aria-hidden="true">${icon('heart', 76)}</span></section><div class="content-heading"><div><h2>Health modules</h2></div></div><div class="category-empty">No health modules have been added yet.</div></div>`;
 }
 
 async function loadSafetyPulse(targetId) {
@@ -432,7 +432,7 @@ async function loadSafetyPulse(targetId) {
 }
 
 function renderEnvironmental() {
-  return `<div class="page inner-page category-page"><div class="page-heading"><h1>Environmental</h1></div><section class="environment-banner"><div><h2>See it. Report it.<br />Improve it.</h2><p>Environmental features and their activity will appear here as they are added.</p></div><span class="banner-icon" aria-hidden="true">${icon('leaf', 88)}</span></section><div class="content-heading"><div><h2>Environmental modules</h2></div></div><div class="module-grid">${envItems.map((key, index) => moduleCard(key, index + 1)).join('')}</div><div class="quiet-note">These pages are placeholders. Reporting forms, workflows and live data will be added in a later phase.</div></div>`;
+  return `<div class="page inner-page category-page"><div class="page-heading"><h1>Environmental</h1></div><section class="environment-banner"><div><h2>See it. Report it.<br />Improve it.</h2></div><span class="banner-icon" aria-hidden="true">${icon('leaf', 88)}</span></section><div class="content-heading"><div><h2>Environmental modules</h2></div></div><div class="module-grid">${envItems.map((key, index) => moduleCard(key, index + 1)).join('')}</div><div class="quiet-note">These pages are placeholders. Reporting forms, workflows and live data will be added in a later phase.</div></div>`;
 }
 
 function renderPlaceholder(key) {
@@ -445,7 +445,7 @@ function renderPlaceholder(key) {
 function roleLabel(role) { return role === 'admin' ? 'Administrator' : role === 'executive' ? 'Executive' : role === 'safety_committee' ? 'Safety Committee' : 'User'; }
 
 function renderAccount() {
-  return `<div class="page inner-page narrow-page"><div class="page-heading"><h1>My Account</h1></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${roleLabel(currentUser.role)}</span></div></div><h2>Change password</h2><p>Use at least 12 characters. You will need to sign in again after changing it.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
+  return `<div class="page inner-page narrow-page"><div class="page-heading"><h1>My Account</h1></div><section class="settings-card"><div class="account-identity"><span class="account-avatar">${escapeHtml(currentUser.display_name.charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(currentUser.display_name)}</strong><span>@${escapeHtml(currentUser.username)} · ${roleLabel(currentUser.role)}</span></div></div><h2>Change password</h2><p>Use at least 12 characters.</p><form id="passwordForm" class="stacked-form"><label for="currentPassword">Current password</label><input id="currentPassword" name="current_password" type="password" autocomplete="current-password" required /><label for="newPassword">New password</label><input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" required /><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="12" required /><div class="form-error" id="accountError" role="alert" hidden></div><button class="primary-button" type="submit">Update password</button></form></section></div>`;
 }
 
 function renderUserRow(user) {
@@ -459,7 +459,7 @@ async function renderUsers() {
     const result = await api('/api/users');
     if (currentRoute() !== 'users') return;
     managedUsers = result.users;
-    content.innerHTML = `<div class="page inner-page"><div class="page-heading page-heading-actions"><div><h1>User Management</h1></div><button class="primary-button" type="button" data-create-user>+ Add user</button></div><div class="users-summary"><span class="users-summary-icon">${icon('users', 23)}</span><div><strong>${managedUsers.length} ${managedUsers.length === 1 ? 'account' : 'accounts'}</strong><span>${managedUsers.filter(user => user.active).length} active in this workspace</span></div></div><section class="users-list"><div class="users-list-heading"><span>TEAM MEMBERS</span><span>ACCESS & STATUS</span></div>${managedUsers.map(renderUserRow).join('')}</section><p class="users-help">New users sign in with the password you set. Share it with them through your approved internal channel. Password resets sign the user out of all sessions.</p></div>`;
+    content.innerHTML = `<div class="page inner-page"><div class="page-heading page-heading-actions"><div><h1>User Management</h1></div><button class="primary-button" type="button" data-create-user>+ Add user</button></div><div class="users-summary"><span class="users-summary-icon">${icon('users', 23)}</span><div><strong>${managedUsers.length} ${managedUsers.length === 1 ? 'account' : 'accounts'}</strong><span>${managedUsers.filter(user => user.active).length} active in this workspace</span></div></div><section class="users-list"><div class="users-list-heading"><span>TEAM MEMBERS</span><span>ACCESS & STATUS</span></div>${managedUsers.map(renderUserRow).join('')}</section><p class="users-help">Share passwords through an approved internal channel. Resetting a password signs the user out everywhere.</p></div>`;
   } catch (error) {
     content.innerHTML = `<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div></div>`;
   }

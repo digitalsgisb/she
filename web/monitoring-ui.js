@@ -63,7 +63,7 @@ const SHEMonitoring = (() => {
       if(register){drawAccidentEditor();return;}
       if(config.kind==='accident'){drawAccident();return;}
       if(config.kind==='hiyari'){drawHiyari();return;}
-      body.innerHTML=`<section class="report-detail-card"><h2>Monthly register</h2><p>Select a month to enter or correct its statistics. Changes retain the editor and history.</p><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
+      body.innerHTML=`<section class="report-detail-card"><h2>Monthly register</h2><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{selected=b.dataset.month;editor();body.querySelector('#monitorEditor').scrollIntoView({behavior:'smooth',block:'start'});});
       selected=selected||data.months.find(r=>!r.complete)?.month||data.months[0].month;editor();
     }
@@ -84,7 +84,7 @@ const SHEMonitoring = (() => {
     }
     function drawAccidentEditor() {
       selected=selected||data.months.find(row=>!row.complete)?.month||data.months[0].month;
-      body.innerHTML=`<section class="report-detail-card"><label for="accidentMonth">Reporting month</label><select id="accidentMonth">${data.months.map(row=>`<option value="${row.month}"${row.month===selected?' selected':''}>${names(row.month)} ${year}</option>`).join('')}</select><p>Enter 0 for a confirmed zero, NA if it does not apply, or leave it blank if unreported.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
+      body.innerHTML=`<section class="report-detail-card"><label for="accidentMonth">Reporting month</label><select id="accidentMonth">${data.months.map(row=>`<option value="${row.month}"${row.month===selected?' selected':''}>${names(row.month)} ${year}</option>`).join('')}</select><p>0 = confirmed zero · NA = not applicable · blank = not reported.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
       body.querySelector('#accidentMonth').onchange=event=>{selected=event.target.value;editor();};
       editor();
     }

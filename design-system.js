@@ -186,5 +186,33 @@
   const navReady = () => { initNavBox(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navReady); else navReady();
 
+  // Mobile tab bar: one box slides to the active tab (transition-driven, so interruptible).
+  function initTabBox() {
+    const bar = document.getElementById('mobileTabbar');
+    if (!bar || bar.dataset.dsBox) return;
+    bar.dataset.dsBox = '1';
+    const box = document.createElement('span');
+    box.className = 'ds-tab-box';
+    box.setAttribute('aria-hidden', 'true');
+    let first = true;
+    function sync() {
+      if (box.parentNode !== bar) bar.prepend(box);
+      const tab = bar.querySelector('.mobile-tab.active');
+      if (!tab || !tab.offsetWidth) { box.style.opacity = '0'; if (bar.classList.contains('has-box')) bar.classList.remove('has-box'); return; }
+      if (!bar.classList.contains('has-box')) bar.classList.add('has-box');
+      box.style.transition = first ? 'none' : '';
+      box.style.opacity = '1';
+      box.style.width = tab.offsetWidth + 'px';
+      box.style.height = tab.offsetHeight + 'px';
+      box.style.transform = `translate(${tab.offsetLeft}px, ${tab.offsetTop}px)`;
+      if (first) { void box.offsetWidth; first = false; }
+    }
+    new MutationObserver(sync).observe(bar, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('resize', () => { first = true; sync(); });
+    sync();
+  }
+  const tabsReady = () => initTabBox();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tabsReady); else tabsReady();
+
   window.SHEUI = { skeleton, pulse, optimistic, confirm, begin, stagger };
 })();

@@ -174,34 +174,38 @@ body { padding-left: var(--sa-left); padding-right: var(--sa-right); background:
 .sidebar .nav-link.active, .sidebar .subnav-link:hover { background: transparent !important; box-shadow: none !important; transform: none !important; }
 #nav .nav-link, #nav .subnav-link { position: relative; }
 
+/* ---------- Mobile tab bar moving box ---------- */
+.mobile-tabbar { position: fixed; }
+.ds-tab-box {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; border-radius: 13px;
+  background: oklch(0.86 0.13 128 / .2); box-shadow: inset 0 2px var(--ds-accent); opacity: 0;
+  transition: transform var(--dur-base) var(--ease-out), width var(--dur-base) var(--ease-out), height var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.mobile-tabbar .mobile-tab { position: relative; z-index: 1; }
+.mobile-tabbar.has-box .mobile-tab.active { background: transparent !important; box-shadow: none !important; }
+.committee-app .ds-tab-box { background: oklch(0.93 0.03 130); box-shadow: none; }
+
 /* ---------- Drop redundant labels and filler ---------- */
-.eyebrow, .dark-eyebrow, .banner-kicker, .placeholder-kicker, .login-kicker, .exec-kicker, .committee-kicker, .report-kicker,
-.exec-hero-footnote, .exec-home-note, .exec-welcome-symbol, .exec-welcome-copy > p, .exec-stats small, .exec-tools small,
-.module-copy small, .exec-next small, .exec-incoming small, .nav-label, .breadcrumb-root, .breadcrumb-chevron, .profile-label, .patrol-home-emblem, .login-card-icon,
-.exec-section-heading > span { display: none !important; }
+.page:not(.executive-home) :is(.eyebrow, .dark-eyebrow, .banner-kicker, .placeholder-kicker, .committee-kicker, .report-kicker, .module-copy small, .patrol-home-emblem),
+.login-kicker, .login-card-icon, .nav-label, .profile-label { display: none !important; }
 .nav-parent:has(a[href="#/safety"]), .nav-link[href="#/work-orders"] { margin-top: 14px; }
 
 /* ---------- Balanced headlines ---------- */
-h1, h2, h3, .exec-welcome h1, .page-heading h1, .hero h1 { text-wrap: balance; }
+h1, h2, h3, .page-heading h1, .hero h1 { text-wrap: balance; }
 p, li, .page-heading p { text-wrap: pretty; }
 
 /* ---------- Enlarge the main feature ---------- */
-.exec-welcome { min-height: 360px; }
-.exec-welcome h1 { font-size: clamp(44px, 5vw, 72px); line-height: 1.05; letter-spacing: -.04em; max-width: 14ch; }
-.exec-hero-actions a { padding: 16px 24px; font-size: 14px; border-radius: 12px; }
-.exec-stats strong { font-size: clamp(40px, 4vw, 60px); line-height: 1; }
-.exec-stats > a { padding: 26px 28px; }
 .page-heading h1 { font-size: clamp(36px, 3.6vw, 56px); }
 .primary-button { padding: 14px 22px; font-size: 13px; border-radius: 11px; }
 .dashboard-hero h1, .dashboard-hero h2, .patrol-home-hero h1 { font-size: clamp(32px, 3.6vw, 52px); }
 
 /* ---------- Flat surfaces: no ornamental shadows, gradients or rings ---------- */
-.page :not(.ds-pulse):not(.she-chart-tooltip) { box-shadow: none !important; }
-.exec-welcome, .dashboard-hero, .patrol-home-hero, .hero { background: var(--ds-brand-900) !important; background-image: none !important; }
-.exec-welcome::before, .exec-welcome::after, .dashboard-hero::before, .dashboard-hero::after,
+.page:not(.executive-home) :not(.ds-pulse):not(.she-chart-tooltip) { box-shadow: none !important; }
+.dashboard-hero, .patrol-home-hero, .hero { background: var(--ds-brand-900) !important; background-image: none !important; }
+.dashboard-hero::before, .dashboard-hero::after,
 .patrol-home-hero::before, .patrol-home-hero::after, .login-story::after { display: none !important; }
 .environment-banner { background: var(--ds-brand-100); }
-.hero-action:hover, .section-card:hover, .module-card:hover { transform: none; }
+.page:not(.executive-home) :is(.hero-action, .section-card, .module-card):hover { transform: none; }
 
 /* ---------- Keyframes ---------- */
 @keyframes ds-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

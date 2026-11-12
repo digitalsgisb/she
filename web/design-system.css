@@ -223,3 +223,6 @@ p, li, .page-heading p { text-wrap: pretty; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .ds-skel { animation: none; }
 }
+
+/* ---------- No colored accent bars on top of cards ---------- */
+.she-summary-page .she-overview-card, .she-metric-1, .she-metric-2, .she-metric-3 { border-top: 1px solid var(--ds-border); }

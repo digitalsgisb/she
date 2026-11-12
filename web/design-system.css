@@ -358,27 +358,16 @@ input[type="checkbox"], input[type="radio"] { transition: none; }
   animation: ds-side-breathe 6s ease-in-out infinite;
 }
 .sidebar .brand-mark img { animation: ds-side-float 5s ease-in-out infinite !important; }
-/* items glide in once, staggered */
-#nav > * { animation: ds-side-in .5s var(--ease-out) both; }
-#nav > *:nth-child(1) { animation-delay: 60ms; }
-#nav > *:nth-child(2) { animation-delay: 110ms; }
-#nav > *:nth-child(3) { animation-delay: 160ms; }
-#nav > *:nth-child(4) { animation-delay: 210ms; }
-#nav > *:nth-child(5) { animation-delay: 260ms; }
-#nav > *:nth-child(6) { animation-delay: 310ms; }
-#nav > *:nth-child(n+7) { animation-delay: 360ms; }
 /* icons react on hover; active accent bar pulses */
 .nav-link svg:first-child { transition: transform var(--dur-base) var(--ease-out); }
 .nav-link:hover svg:first-child { transform: scale(1.18) rotate(-6deg); }
-.nav-link:hover { transform: translateX(3px) !important; }
 .ds-nav-box::before { animation: ds-side-pulse 2.6s ease-in-out infinite; }
 
 @keyframes ds-side-flow { 0%,100% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } }
 @keyframes ds-side-sweep { 0%,100% { transform: translateX(-55%) rotate(-11deg); } 50% { transform: translateX(55%) rotate(-11deg); } }
 @keyframes ds-side-breathe { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.12); } }
 @keyframes ds-side-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@keyframes ds-side-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes ds-side-pulse { 0%,100% { box-shadow: 0 0 0 0 oklch(0.86 0.13 128 / .5); } 50% { box-shadow: 0 0 10px 1px oklch(0.86 0.13 128 / .55); } }
 @media (prefers-reduced-motion: reduce) {
-  .sidebar, .sidebar::before, .sidebar::after, .sidebar .brand-mark img, #nav > *, .ds-nav-box::before { animation: none !important; }
+  .sidebar, .sidebar::before, .sidebar::after, .sidebar .brand-mark img, .ds-nav-box::before { animation: none !important; }
 }

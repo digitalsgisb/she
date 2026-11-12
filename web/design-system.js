@@ -216,3 +216,23 @@
 
   window.SHEUI = { skeleton, pulse, optimistic, confirm, begin, stagger };
 })();
+
+/* Rendering performance: lazy-load and async-decode images that are off screen, pre-decode the brand logo. */
+(function () {
+  const eager = img => img.closest('header, .login-screen, .brand-mark, .report-header, .modal-card');
+  function tune(img) {
+    if (!(img instanceof HTMLImageElement) || img.dataset.perf) return;
+    img.dataset.perf = '1';
+    if (!img.hasAttribute('decoding')) img.decoding = 'async';
+    // Lazy images are only fetched/decoded once they approach the viewport; data: previews are already in memory.
+    if (!img.hasAttribute('loading') && !eager(img) && !/^data:/.test(img.getAttribute('src') || '')) img.loading = 'lazy';
+  }
+  const scan = root => { if (root.nodeType !== 1) return; if (root.tagName === 'IMG') tune(root); else root.querySelectorAll && root.querySelectorAll('img').forEach(tune); };
+  const start = () => {
+    document.querySelectorAll('img').forEach(tune);
+    new MutationObserver(list => list.forEach(m => m.addedNodes.forEach(scan))).observe(document.body, { childList: true, subtree: true });
+    // Pre-render: decode the shared logo + icon once so later screens paint instantly from cache.
+    ['/brand/1.png', '/icons/icon-192.png'].forEach(src => { const i = new Image(); i.decoding = 'async'; i.src = src; i.decode && i.decode().catch(() => {}); });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

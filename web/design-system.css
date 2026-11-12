@@ -228,3 +228,10 @@ p, li, .page-heading p { text-wrap: pretty; }
 .she-summary-page .she-overview-card, .she-metric-1, .she-metric-2, .she-metric-3 { border-top: 1px solid var(--ds-border); }
 
 .mobile-tabbar .mobile-tab.active { box-shadow: none !important; }
+
+/* Rendering performance: skip layout/paint of off-screen cards and photo grids until they scroll into view. */
+.patrol-photo-gallery, .patrol-summary-photos, .report-evidence, .she-evidence, .exec-recent-row, .module-home-record, .patrol-home-record, .genba-record, .patrol-report-record {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+img { content-visibility: auto; }

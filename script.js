@@ -472,8 +472,11 @@ async function api(path, method = 'GET', body = null) {
     options.body = JSON.stringify(body);
   }
   if (method !== 'GET' && path !== '/api/login') options.headers['X-CSRF-Token'] = csrfToken;
-  const response = await fetch(path, options);
+  const finish = method !== 'GET' ? window.SHEUI?.begin() : null;
+  let response;
+  try { response = await fetch(path, options); } catch (networkError) { finish?.(false); throw networkError; }
   const data = await response.json().catch(() => ({}));
+  finish?.(response.ok);
   if (!response.ok) {
     if (response.status === 401 && path !== '/api/login' && path !== '/api/session') showLogin();
     const error = new Error(data.error || `Request failed (${response.status}).`);

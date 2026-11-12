@@ -50,9 +50,23 @@
   let lastPressed = null;
   document.addEventListener('pointerdown', e => { lastPressed = e.target.closest && e.target.closest('button,.primary-button,.secondary-button,summary'); }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Enter') lastPressed = document.activeElement; }, true);
+  let pressedAt = 0;
+  document.addEventListener('pointerdown', () => { pressedAt = Date.now(); }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') pressedAt = Date.now(); }, true);
+  // Mark the control that triggered a write as busy; pulse on success, shake on failure.
+  function begin() {
+    const el = lastPressed && document.contains(lastPressed) && Date.now() - pressedAt < 3000 ? lastPressed : null;
+    if (!el || el.classList.contains('ds-pending')) return null;
+    el.classList.add('ds-busy');
+    el.setAttribute('aria-busy', 'true');
+    return ok => {
+      el.classList.remove('ds-busy');
+      el.removeAttribute('aria-busy');
+      if (ok) pulse(el);
+      else if (!reduceMotion()) { el.classList.add('ds-rollback'); el.addEventListener('animationend', () => el.classList.remove('ds-rollback'), { once: true }); }
+    };
+  }
   function confirm() {
-    const target = lastPressed && document.contains(lastPressed) ? lastPressed : null;
-    pulse(target);
     const toast = document.getElementById('toast');
     if (toast) pulse(toast);
   }
@@ -79,5 +93,18 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchStagger); else watchStagger();
 
-  window.SHEUI = { skeleton, pulse, optimistic, confirm, stagger };
+  // Route change: only content that mounts within this short window animates in,
+  // so background refreshes never replay entrances (that was the flicker).
+  let routeKey = (location.hash.split('?')[0].split('/')[1] || '');
+  let routingTimer;
+  window.addEventListener('hashchange', () => {
+    const next = location.hash.split('?')[0].split('/')[1] || '';
+    if (next === routeKey) return;
+    routeKey = next;
+    document.body.classList.add('ds-routing');
+    clearTimeout(routingTimer);
+    routingTimer = setTimeout(() => document.body.classList.remove('ds-routing'), 600);
+  });
+
+  window.SHEUI = { skeleton, pulse, optimistic, confirm, begin, stagger };
 })();

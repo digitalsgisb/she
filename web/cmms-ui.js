@@ -8,7 +8,7 @@ const cmmsQuery = () => `?plant=${encodeURIComponent(cmmsState.plant)}`;
 const cmmsPath = () => location.hash.replace(/^#\/?/, '').split('/');
 
 function cmmsShell(title, action = '') {
-  return `<div class="page inner-page cmms-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / CMMS</span><h1>${title}</h1><p>Issue, follow up, and verify SHE work orders.</p></div><div class="cmms-actions">${action}</div></div><div id="cmmsBody" class="loading-panel">${SHEUI.skeleton('list',4,'Loading work orders')}</div></div>`;
+  return `<div class="page inner-page cmms-page"><div class="page-heading page-heading-actions"><div><h1>${title}</h1></div><div class="cmms-actions">${action}</div></div><div id="cmmsBody" class="loading-panel">${SHEUI.skeleton('list',4,'Loading work orders')}</div></div>`;
 }
 
 async function cmmsEnsureConfig() {

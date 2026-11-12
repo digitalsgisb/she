@@ -260,7 +260,7 @@ const SHEStats = (() => {
     const label=query.get('label')||'All records';
     const selection={period:query.get('period')||'month',month:query.get('month')||month(),...(kind==='environment'?{group:query.get('group')||'environment'}:{})};
     const saved=views.get(kind);if(!saved)views.set(kind,{selection,tab:'overview'});
-    content.innerHTML='<div class="page inner-page dashboard-records-page"><a class="back-link" href="#/'+back[kind]+'">← Back to '+names[kind]+' Dashboard</a><div class="page-heading"><span class="eyebrow dark-eyebrow">DASHBOARD / FILTERED RECORDS</span><h1>'+names[kind]+' · matching records</h1><p>Open a record to review its details and follow-up.</p></div><div class="she-record-filter"><strong>'+esc(label)+'</strong><span data-record-period></span><a class="secondary-button" href="'+recordHash(kind,selection,{label:'All records'})+'">Clear chart filter</a></div><div data-record-results aria-live="polite"></div></div>';
+    content.innerHTML='<div class="page inner-page dashboard-records-page"><a class="back-link" href="#/'+back[kind]+'">← Back to '+names[kind]+' Dashboard</a><div class="page-heading"><h1>'+names[kind]+' · matching records</h1></div><div class="she-record-filter"><strong>'+esc(label)+'</strong><span data-record-period></span><a class="secondary-button" href="'+recordHash(kind,selection,{label:'All records'})+'">Clear chart filter</a></div><div data-record-results aria-live="polite"></div></div>';
     const target=content.querySelector('[data-record-results]');
     mountRecordResults(target,kind,query,data=>{
       content.querySelector('[data-record-period]').textContent=data.selection.label+(query.get('section')?' · '+query.get('section'):'');

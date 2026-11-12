@@ -39,7 +39,7 @@ const {chromium}=require(process.env.SHE_QA_PLAYWRIGHT||'playwright');
   assert(await page.evaluate(()=>window.savedPatrolTabs===document.querySelector('.module-tabs')));
   assert.equal(await page.locator('.module-tabs').evaluate(el=>getComputedStyle(el).opacity),'1');
   await page.locator('#patrolForm').waitFor();
-  assert.equal(await page.locator('.page-heading>p').textContent(),'Check conditions, record findings and submit your patrol.');
+  assert.equal(await page.locator('.page-heading>p').count(),0);
   await page.locator('#patrolRemarks').fill('Keep my checklist draft');
   await page.locator('.module-tabs a[href="#/patrol-overview"]').click();await page.getByRole('heading',{name:'Patrol History',exact:true}).waitFor();
   assert(await page.evaluate(()=>window.savedPatrolTabs===document.querySelector('.module-tabs')&&window.savedMobileTabs===document.querySelector('.mobile-tabbar').firstElementChild));

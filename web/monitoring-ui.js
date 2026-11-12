@@ -40,9 +40,9 @@ const SHEMonitoring = (() => {
     const bodyMarkup='<div id="monitorBody" aria-live="polite"></div>';
     const exportButton='<button class="secondary-button" id="monitorExport">Export CSV</button>';
     if(config.area==='environment'){
-      root.innerHTML=`<div class="page inner-page environmental-register-page"><a class="back-link" href="#/environmental">← Environmental</a><div class="page-heading"><h1>${config.title}</h1><p>${config.detail}</p></div><div class="she-stat-controls">${yearControl}${refresh}${exportButton}</div>${bodyMarkup}</div>`;
+      root.innerHTML=`<div class="page inner-page environmental-register-page"><a class="back-link" href="#/environmental">← Environmental</a><div class="page-heading"><h1>${config.title}</h1></div><div class="she-stat-controls">${yearControl}${refresh}${exportButton}</div>${bodyMarkup}</div>`;
     }else if(register){
-      root.innerHTML=`<div class="page inner-page accident-register-page"><a class="back-link" href="#/safety">← Safety</a><div class="page-heading"><h1>Accident Register</h1><p>Update monthly accident counts and man-hours.</p></div><div class="she-stat-controls">${yearControl}${refresh}<a class="secondary-button" href="#/accident-dashboard">View dashboard</a></div>${bodyMarkup}</div>`;
+      root.innerHTML=`<div class="page inner-page accident-register-page"><a class="back-link" href="#/safety">← Safety</a><div class="page-heading"><h1>Accident Register</h1></div><div class="she-stat-controls">${yearControl}${refresh}<a class="secondary-button" href="#/accident-dashboard">View dashboard</a></div>${bodyMarkup}</div>`;
     }else{
       root.innerHTML=`<div class="page inner-page focused-dashboard-page ${config.kind==='accident'?'accident-dashboard-page':''}">${dashboardHeader(config.area,config.title,config.detail,key)}${bodyMarkup}</div>`;
       root.querySelector('[data-dashboard-controls]').innerHTML=yearControl+refresh+exportButton;

@@ -47,7 +47,7 @@ const SHEReporting = (() => {
     if (target) { target.textContent=error.message; target.hidden=false; target.scrollIntoView({block:'nearest'}); }
   }
   function hero(title, detail, kicker='SMALL ACTIONS. BETTER TOMORROWS.') {
-    return `<section class="report-hero"><div><span class="report-kicker">${esc(kicker)}</span><h1>${title}</h1><p>${esc(detail)}</p></div><div class="report-hero-art" aria-hidden="true">${svg('leaf',100)}<span>SEE IT · REPORT IT · IMPROVE IT</span></div></section>`;
+    return `<section class="report-hero"><div><h1>${title}</h1></div><div class="report-hero-art" aria-hidden="true">${svg('leaf',100)}</div></section>`;
   }
   function choices() {
     const nearMissForms=publicData.forms.filter(f=>f.group==='hiyari-hatto');
@@ -206,7 +206,7 @@ const SHEReporting = (() => {
   }
   const date = value => new Date(value*1000).toLocaleString('en-MY');
   const stateLabel = state => ({none:'SHE review',pending:'Work order pending',sending:'Check CMMS before linking',failed:'Work order needs retry',uncertain:'Check CMMS before linking',issued:'Work order issued'}[state] || state);
-  const heading = (title,detail,actions='') => `<div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / REPORTING</span><h1>${esc(title)}</h1><p>${esc(detail)}</p></div>${actions}</div>`;
+  const heading = (title,detail,actions='') => `<div class="page-heading page-heading-actions"><div><h1>${esc(title)}</h1><p>${esc(detail)}</p></div>${actions}</div>`;
   async function renderStaff(key) {
     const root=document.getElementById('content'), version=++renderVersion;
     const elevated=currentUser && ['admin','executive'].includes(currentUser.role);
@@ -232,7 +232,7 @@ const SHEReporting = (() => {
         inbox(root,result.reports,undefined,area);return;
       }
       if (key==='environmental') {
-        root.innerHTML=`<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / ENVIRONMENT</span><h1>Environment</h1><p>Reporting and environmental tools.</p></div><div class="module-grid">${envItems.filter(canAccessRoute).map(route=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><strong>${routes[route].title}</strong><span>${route==='co2'?'CO2 tracking · Coming soon':'Open '+routes[route].title}</span></span>${icon('arrow',18)}</a>`).join('')}</div><section id="environmentReportingQr" class="report-detail-card"><h2>Report to SHE</h2>${SHEUI.skeleton('block',1,'Loading reporting QR')}</section>${SHEReportAlerts.controls()}</div>`;
+        root.innerHTML=`<div class="page inner-page"><div class="page-heading"><h1>Environment</h1></div><div class="module-grid">${envItems.filter(canAccessRoute).map(route=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><strong>${routes[route].title}</strong><span>${route==='co2'?'CO2 tracking · Coming soon':'Open '+routes[route].title}</span></span>${icon('arrow',18)}</a>`).join('')}</div><section id="environmentReportingQr" class="report-detail-card"><h2>Report to SHE</h2>${SHEUI.skeleton('block',1,'Loading reporting QR')}</section>${SHEReportAlerts.controls()}</div>`;
         SHEReportAlerts.bind(root);
         const qr=await api('/api/reporting/qr');
         if(version!==renderVersion || currentRoute()!==key)return;

@@ -178,7 +178,7 @@ body { padding-left: var(--sa-left); padding-right: var(--sa-right); background:
 .mobile-tabbar { position: fixed; }
 .ds-tab-box {
   position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; border-radius: 13px;
-  background: oklch(0.86 0.13 128 / .2); box-shadow: inset 0 2px var(--ds-accent); opacity: 0;
+  background: oklch(0.86 0.13 128 / .2); box-shadow: none; opacity: 0;
   transition: transform var(--dur-base) var(--ease-out), width var(--dur-base) var(--ease-out), height var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 .mobile-tabbar .mobile-tab { position: relative; z-index: 1; }
@@ -226,3 +226,5 @@ p, li, .page-heading p { text-wrap: pretty; }
 
 /* ---------- No colored accent bars on top of cards ---------- */
 .she-summary-page .she-overview-card, .she-metric-1, .she-metric-2, .she-metric-3 { border-top: 1px solid var(--ds-border); }
+
+.mobile-tabbar .mobile-tab.active { box-shadow: none !important; }

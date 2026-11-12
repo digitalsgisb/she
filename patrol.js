@@ -504,7 +504,7 @@ async function renderPatrolOverview(){
   const hash=location.hash;
   if(patrolView.routeHash!==hash){patrolView.status=new URLSearchParams(hash.split('?')[1]||'').get('attention')==='1'?'attention':patrolView.status==='attention'?'all':patrolView.status;patrolView.routeHash=hash;}
   const url=patrolHistoryUrl();
-  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="loading-panel">Loading patrols…</div></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="loading-panel">${SHEUI.skeleton('list',4,'Loading patrols')}</div></div>`);
   try{
     const result=await api(url);
     if(currentRoute()!=='patrol-overview'||location.hash!==hash||patrolHistoryUrl()!==url)return;
@@ -514,7 +514,7 @@ async function renderPatrolOverview(){
 }
 
 async function renderPatrolDetail(id) {
-  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="loading-panel">Loading patrol…</div></div>`);
+  renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="loading-panel">${SHEUI.skeleton('text',5,'Loading patrol')}</div></div>`);
   try {
     const {patrol} = await api(`/api/patrols/${id}`);
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('?')[0].split('/')[2] !== String(id)) return;
@@ -611,9 +611,15 @@ function initPatrolEvents() {
     }
     const complete = event.target.closest('[data-complete-patrol]');
     if (complete) {
-      complete.disabled = true;
-      try { await api(`/api/patrols/${complete.dataset.completePatrol}/complete`, 'POST', {}); notify('Patrol submitted.'); await renderPatrolDetail(complete.dataset.completePatrol); }
-      catch (error) { notify(error.message); complete.disabled = false; }
+      const label = complete.textContent;
+      try {
+        await SHEUI.optimistic(complete, {
+          apply: () => { complete.disabled = true; complete.textContent = 'Submitted'; return () => { complete.disabled = false; complete.textContent = label; }; },
+          commit: () => api(`/api/patrols/${complete.dataset.completePatrol}/complete`, 'POST', {})
+        });
+        notify('Patrol submitted.');
+        await renderPatrolDetail(complete.dataset.completePatrol);
+      } catch (error) { notify(error.message); }
     }
   });
   content.addEventListener('submit', async event => {

@@ -41,7 +41,7 @@ async function refreshGenbaSource(){
 let genbaRenderSequence=0;
 async function renderGenba(quiet=false){
   const sequence=++genbaRenderSequence,route=currentRoute(),hash=location.hash;
-  if(!quiet)renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">Loading findings…</div></div>');
+  if(!quiet)renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">'+SHEUI.skeleton('cards',3,'Loading findings')+'</div></div>');
   try{
     const [config,result]=await Promise.all([api('/api/red-tags/settings'),api(genbaInbox()?'/api/red-tags?inbox=1':'/api/red-tags?view='+(moduleView()==='history'?'history':'active'))]);
     if(!genbaRouteActive()||currentRoute()!==route||location.hash!==hash||sequence!==genbaRenderSequence)return;

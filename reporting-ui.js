@@ -210,7 +210,7 @@ const SHEReporting = (() => {
   async function renderStaff(key) {
     const root=document.getElementById('content'), version=++renderVersion;
     const elevated=currentUser && ['admin','executive'].includes(currentUser.role);
-    renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">Loading reporting…</div></div>');
+    renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">'+SHEUI.skeleton('list',4,'Loading reporting')+'</div></div>');
     try {
       if (key==='reporting-forms' && !elevated) {
         root.innerHTML='<div class="page inner-page">Executive access required.</div>';return;
@@ -232,7 +232,7 @@ const SHEReporting = (() => {
         inbox(root,result.reports,undefined,area);return;
       }
       if (key==='environmental') {
-        root.innerHTML=`<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / ENVIRONMENT</span><h1>Environment</h1><p>Reporting and environmental tools.</p></div><div class="module-grid">${envItems.filter(canAccessRoute).map(route=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><strong>${routes[route].title}</strong><span>${route==='co2'?'CO2 tracking · Coming soon':'Open '+routes[route].title}</span></span>${icon('arrow',18)}</a>`).join('')}</div><section id="environmentReportingQr" class="report-detail-card"><h2>Report to SHE</h2><p>Loading reporting QR…</p></section>${SHEReportAlerts.controls()}</div>`;
+        root.innerHTML=`<div class="page inner-page"><div class="page-heading"><span class="eyebrow dark-eyebrow">SHE / ENVIRONMENT</span><h1>Environment</h1><p>Reporting and environmental tools.</p></div><div class="module-grid">${envItems.filter(canAccessRoute).map(route=>`<a class="module-card" href="#/${route}"><span class="module-icon">${icon(routes[route].icon,23)}</span><span class="module-copy"><strong>${routes[route].title}</strong><span>${route==='co2'?'CO2 tracking · Coming soon':'Open '+routes[route].title}</span></span>${icon('arrow',18)}</a>`).join('')}</div><section id="environmentReportingQr" class="report-detail-card"><h2>Report to SHE</h2>${SHEUI.skeleton('block',1,'Loading reporting QR')}</section>${SHEReportAlerts.controls()}</div>`;
         SHEReportAlerts.bind(root);
         const qr=await api('/api/reporting/qr');
         if(version!==renderVersion || currentRoute()!==key)return;

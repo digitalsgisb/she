@@ -155,7 +155,7 @@ const SHEStats = (() => {
     const load=async(quiet=false)=>{
       if(!target.isConnected||!allowed())return;
       const current=++version;inflight=true;
-      if(!quiet&&!lastData)body.innerHTML='<p class="she-chart-empty" role="status">Loading statistics…</p>';body.setAttribute('aria-busy','true');controlsRoot.querySelector('[data-stat-refresh-status]').textContent=lastData?'Updating…':'';
+      if(!quiet&&!lastData)body.innerHTML=''+SHEUI.skeleton('cards',4,'Loading statistics')+'';body.setAttribute('aria-busy','true');controlsRoot.querySelector('[data-stat-refresh-status]').textContent=lastData?'Updating…':'';
       try{const data=await api(endpoint(kind,selection));if(current===version&&target.isConnected&&allowed()){const serialized=JSON.stringify(data);if(!quiet||serialized!==lastData){target.statsData=data;const focused=document.activeElement?.dataset.statHit;hideTooltip();body.innerHTML=focus(data);prepareInlineRecords(body,target.statsData,selection);bindTabs(body,target);bindInteractive(body,target,data,selection);rememberView(kind,target,selection);lastData=serialized;if(quiet&&focused)body.querySelector('[data-stat-hit="'+focused+'"]')?.focus();}}}
       catch(error){if(current===version&&target.isConnected)body.innerHTML='<p role="alert" class="form-error">'+esc(error.message)+'</p>';}
       finally{if(current===version){inflight=false;body.setAttribute('aria-busy','false');controlsRoot.querySelector('[data-stat-refresh-status]').textContent='';}}
@@ -272,7 +272,7 @@ const SHEStats = (() => {
     const autoEvidence=kind==='environment'&&(query.get('group')||'environment')==='environment';
     bindEvidence(target);
     const load=async()=>{
-      const current=++version;target.innerHTML='<p role="status" class="she-chart-empty">Loading matching records…</p>';
+      const current=++version;target.innerHTML=''+SHEUI.skeleton('list',4,'Loading matching records')+'';
       const params=new URLSearchParams(query);params.delete('label');params.set('page',String(page));
       try{
         const data=await api(endpoint(kind,{}).split('?')[0]+'/records?'+params);
@@ -296,7 +296,7 @@ const SHEStats = (() => {
     if(!allowed()||!target)return;
     const red=kind==='red-tag',patrol=kind==='patrol',link=patrol?'patrol-dashboard':red?'red-tag-dashboard':'environment-dashboard';
     target.className='she-summary-card';
-    target.innerHTML='<div class="she-summary-title"><span>'+(patrol?'Safety Patrol':red?'Red Tag':'Environmental')+'</span><a href="#/'+link+'">Full statistics →</a></div><div data-summary-body role="status">Loading summary…</div>';
+    target.innerHTML='<div class="she-summary-title"><span>'+(patrol?'Safety Patrol':red?'Red Tag':'Environmental')+'</span><a href="#/'+link+'">Full statistics →</a></div><div data-summary-body role="status">'+SHEUI.skeleton('text',3,'Loading summary')+'</div>';
     let version=0;
     const load=async()=>{const current=++version;try{
       const d=await api(endpoint(kind,{period:'month',month:month(),...(kind==='environment'?{group:'environment'}:{})}));

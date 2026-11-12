@@ -6,7 +6,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py cmms_bridge.py index.html styles.css script.js patrol.js patrol-default.json cmms-ui.js favicon.svg manifest.webmanifest sw.js ./
 COPY public ./public
 COPY she_statistics.py statistics-ui.js statistics.css ./
-COPY air-leak-ui.js ./
+COPY air-leak-ui.js design-system.css design-system.js ./
 COPY module-home-ui.js ./
 COPY she_monitoring.py monitoring-ui.js monitoring.css ./
 COPY access.py redtag.py redtag-ui.js redtag.css ./

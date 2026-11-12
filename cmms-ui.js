@@ -8,7 +8,7 @@ const cmmsQuery = () => `?plant=${encodeURIComponent(cmmsState.plant)}`;
 const cmmsPath = () => location.hash.replace(/^#\/?/, '').split('/');
 
 function cmmsShell(title, action = '') {
-  return `<div class="page inner-page cmms-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / CMMS</span><h1>${title}</h1><p>Issue, follow up, and verify SHE work orders.</p></div><div class="cmms-actions">${action}</div></div><div id="cmmsBody" class="loading-panel">Loading work orders…</div></div>`;
+  return `<div class="page inner-page cmms-page"><div class="page-heading page-heading-actions"><div><span class="eyebrow dark-eyebrow">SHE / CMMS</span><h1>${title}</h1><p>Issue, follow up, and verify SHE work orders.</p></div><div class="cmms-actions">${action}</div></div><div id="cmmsBody" class="loading-panel">${SHEUI.skeleton('list',4,'Loading work orders')}</div></div>`;
 }
 
 async function cmmsEnsureConfig() {
@@ -157,7 +157,7 @@ function cmmsOpenPhoto(url, label, trigger) {
   const viewer=document.createElement('dialog');
   viewer.className='cmms-photo-viewer';
   viewer.setAttribute('aria-label','Work order photo');
-  viewer.innerHTML='<div class="cmms-viewer-toolbar"><strong>Photo</strong><button type="button" data-zoom="out" aria-label="Zoom out" disabled>−</button><output aria-live="polite">100%</output><button type="button" data-zoom="in" aria-label="Zoom in" disabled>+</button><button type="button" data-zoom="fit" disabled>Fit</button><button type="button" data-close autofocus aria-label="Close photo">× Close</button></div><div class="cmms-viewer-stage" tabindex="0" aria-label="Photo; scroll to move around when zoomed"><div class="cmms-viewer-canvas"><img alt=""><p role="status">Loading photo…</p></div></div>';
+  viewer.innerHTML='<div class="cmms-viewer-toolbar"><strong>Photo</strong><button type="button" data-zoom="out" aria-label="Zoom out" disabled>−</button><output aria-live="polite">100%</output><button type="button" data-zoom="in" aria-label="Zoom in" disabled>+</button><button type="button" data-zoom="fit" disabled>Fit</button><button type="button" data-close autofocus aria-label="Close photo">× Close</button></div><div class="cmms-viewer-stage" tabindex="0" aria-label="Photo; scroll to move around when zoomed"><div class="cmms-viewer-canvas"><img alt=""><p role="status" class="ds-sr-only">Loading photo…</p><span class="ds-skel ds-skel-block"></span></div></div>';
   const image=viewer.querySelector('img'), stage=viewer.querySelector('.cmms-viewer-stage');
   const status=viewer.querySelector('[role=status]'), output=viewer.querySelector('output');
   const controls=[...viewer.querySelectorAll('[data-zoom]')];
@@ -224,7 +224,8 @@ async function cmmsRenderDetail(id) {
 
 async function cmmsAction(action, id) {
   const error = document.getElementById('cmmsDetailError');
-  try { await action(); notify('CMMS work order updated.'); await cmmsRenderDetail(id); }
+  const body = document.getElementById('cmmsBody');
+  try { await SHEUI.optimistic(body, { commit: action }); notify('CMMS work order updated.'); await cmmsRenderDetail(id); }
   catch (failure) { if (error) { error.textContent = failure.message; error.hidden = false; } }
 }
 

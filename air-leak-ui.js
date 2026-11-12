@@ -2,7 +2,7 @@
 let airLeakPending = null;
 async function renderAirLeak() {
   const hash=location.hash, view=moduleView();
-  renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">Loading Air Leak…</div></div>');
+  renderSafetyModuleContent('<div class="page inner-page"><div class="loading-panel">'+SHEUI.skeleton('cards',3,'Loading Air Leak')+'</div></div>');
   try {
     const [data,settings]=await Promise.all([api('/api/reporting/air-leak'),api('/api/red-tags/settings')]);
     if(currentRoute()!=='air-leak'||location.hash!==hash)return;

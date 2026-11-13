@@ -140,6 +140,7 @@ def init_db() -> None:
                    ((BACKEND / 'patrol-default.json').read_text(encoding='utf-8'),))
         reporting.init(db)
         reporting.init_air_leak(db)
+        reporting.init_water_leak(db)
         reporting.init_stagnant_water(db)
         reporting.reporting_alerts.init(db)
         she_monitoring.init(db)

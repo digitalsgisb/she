@@ -101,6 +101,20 @@ class ReportingTests(unittest.TestCase):
             self.request('/api/reporting/submit', 'POST', self.payload(2))
             self.assertEqual(call.call_count, 1)
 
+    def test_existing_water_leak_form_is_reset_to_kaizen(self):
+        with server.database() as db:
+            form = json.loads(db.execute('SELECT definition_json FROM reporting_forms WHERE id=1').fetchone()[0])
+            self.assertEqual(form['workflow'], 'kaizen')
+            form['workflow'] = 'she'
+            db.execute('UPDATE reporting_forms SET definition_json=? WHERE id=1', (json.dumps(form),))
+            db.execute("DELETE FROM reporting_migrations WHERE name='water-leak-kaizen-v1'")
+            reporting.init_water_leak(db)
+            row = db.execute('SELECT definition_json,revision FROM reporting_forms WHERE id=1').fetchone()
+            self.assertEqual(json.loads(row[0])['workflow'], 'kaizen')
+            self.assertEqual(row[1], 2)
+            with self.assertRaises(ValueError):
+                reporting.definition({**form, 'workflow': 'maintenance'})
+
     def test_signed_in_user_can_submit_hiyari_in_app(self):
         cookie, csrf = self.elevated('user')
         data = self.payload(9)

@@ -92,6 +92,19 @@ def init_air_leak(db):
     db.execute("INSERT INTO reporting_migrations VALUES('air-leak-v1')")
 
 
+def init_water_leak(db):
+    """Water leaks always auto-issue Kaizen work orders."""
+    db.execute('CREATE TABLE IF NOT EXISTS reporting_migrations (name TEXT PRIMARY KEY)')
+    if db.execute("SELECT 1 FROM reporting_migrations WHERE name='water-leak-kaizen-v1'").fetchone():
+        return
+    for row in db.execute('SELECT id,definition_json FROM reporting_forms WHERE deleted=0').fetchall():
+        form = json.loads(row['definition_json'])
+        if form.get('title') == 'Water leakage' and form.get('workflow') != 'kaizen':
+            form['workflow'] = 'kaizen'
+            db.execute('UPDATE reporting_forms SET definition_json=?,revision=revision+1 WHERE id=?', (json.dumps(form), row['id']))
+    db.execute("INSERT INTO reporting_migrations VALUES('water-leak-kaizen-v1')")
+
+
 def init_stagnant_water(db):
     db.execute('CREATE TABLE IF NOT EXISTS reporting_migrations (name TEXT PRIMARY KEY)')
     if db.execute("SELECT 1 FROM reporting_migrations WHERE name='stagnant-water-v1'").fetchone():
@@ -135,6 +148,8 @@ def definition(data):
         raise ValueError('Choose a reporting area and workflow.')
     if data['group'] == 'air-leak' and data['workflow'] != 'maintenance':
         raise ValueError('Air Leak reports must issue maintenance work orders.')
+    if title == 'Water leakage' and data['workflow'] != 'kaizen':
+        raise ValueError('Water leakage reports must issue Kaizen work orders.')
     questions = data.get('questions')
     if not isinstance(questions, list) or not 1 <= len(questions) <= 30:
         raise ValueError('Add between 1 and 30 questions.')

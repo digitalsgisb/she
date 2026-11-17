@@ -188,6 +188,7 @@ def patrol_environment(db, year):
                 photo = db.execute('SELECT id FROM patrol_attachments WHERE patrol_id=? AND question_id=? AND update_id IS NULL '
                                    "AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at,id LIMIT 1", (row['id'], qid)).fetchone()
                 records.append(dict(id=row['id'], reference=f"Patrol #{row['id']}", date=day, category=category,
+                                    question_id=qid, created_at=row['created_at'],
                                     inspector=row['inspector_name'], item=labels.get(qid, ''),
                                     remark=str(remarks.get(qid, '') or ''), status=PATROL_STATUS.get(row['followup_status'], 'Open'),
                                     photo_url=f"/api/patrols/{row['id']}/attachments/{photo['id']}" if photo else ''))

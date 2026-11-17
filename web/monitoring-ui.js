@@ -136,6 +136,7 @@ const SHEMonitoring = (() => {
         body.querySelector('#hiyariFilterLabel').textContent=rows.length+(rows.length===1?' report':' reports');
         target.innerHTML=SHEStats.reportTable(rows.map(r=>({...r,title:'Hiyari Hatto',location:r.section==='Unspecified'?r.location:r.section,description:[r.description,'Rank '+r.rank,'STOP '+r.stop,'PIC '+r.pic].filter(Boolean).join(' · ')})));
         SHEStats.bindEvidence(target,true);
+        SHEFinding.bind(target,rows.map(r=>({...r,title:'Hiyari Hatto',area:'Hiyari Hatto',category:r.category})),'report');
       }
       filter.onchange=()=>{records();markMonth(filter.value.startsWith('month:')?filter.value.slice(6):'');};
       body.querySelectorAll('.monitor-month-chart [data-month]').forEach(button=>button.onclick=()=>{
@@ -197,57 +198,8 @@ const SHEMonitoring = (() => {
       const target=body.querySelector('#envRows');
       target.innerHTML=SHEStats.recordsTable(rows.map(r=>({...r,title:r.category,context:r.inspector,description:r.remark||'No remark',detail_url:'#/daily-safety-patrol/'+r.id,statusTone:r.status==='Resolved'?'is-complete':''})),0,'Inspector');
       SHEStats.bindEvidence(target);
-      // Open a clear finding view in place instead of the full patrol page.
-      target.querySelectorAll('tbody tr').forEach((tr,index)=>{
-        tr.classList.add('env-finding-row');
-        tr.onclick=e=>{if(e.target.closest('.she-evidence'))return;e.preventDefault();openFinding(rows,index);};
-      });
+      SHEFinding.bind(target,rows,'patrol-item');
     }
-    let findingOpen=false, findingHistory=false;
-    const findingDate=value=>new Date(value*1000).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
-    const isImage=a=>/^image\//.test(a.mime_type);
-    async function openFinding(rows,index) {
-      const record=rows[index];
-      if(!findingOpen){findingOpen=true;try{history.pushState({envFinding:true},'',location.href);findingHistory=true;}catch{findingHistory=false;}}
-      const series=envSeries[record.category]||'';
-      const [english,malay]=String(record.item||'').replace(/^\d+\)\s*/,'').split(/\s*\|\s*/);
-      const nav=`<div class="env-finding-nav"><button type="button" class="primary-button env-finding-back" data-finding-back>← Back to dashboard</button><div class="env-finding-step"><button type="button" class="secondary-button" data-finding-step="-1" ${index===0?'disabled':''} aria-label="Previous finding">‹ Previous</button><span>Finding ${index+1} of ${rows.length}</span><button type="button" class="secondary-button" data-finding-step="1" ${index===rows.length-1?'disabled':''} aria-label="Next finding">Next ›</button></div></div>`;
-      body.innerHTML=`<article class="env-finding" aria-labelledby="envFindingTitle">${nav}
-        <header class="env-finding-head report-detail-card"><span class="env-finding-chip ${series}"><i aria-hidden="true"></i>${esc(record.category)}</span>
-          <h2 id="envFindingTitle">${esc(record.remark||'No location or remark recorded')}</h2>
-          <dl class="env-finding-meta"><div><dt>Date</dt><dd>${esc(record.created_at?findingDate(record.created_at):record.date)}</dd></div><div><dt>Inspector</dt><dd>${esc(record.inspector)}</dd></div><div><dt>Patrol</dt><dd>${esc(record.reference)}</dd></div><div><dt>Status</dt><dd><span class="she-record-badge ${record.status==='Resolved'?'is-complete':''}">${esc(record.status)}</span></dd></div></dl></header>
-        <section class="report-detail-card"><h3>What was checked</h3><p class="env-finding-item">${esc(english||'Checklist item')}</p>${malay?`<p class="env-finding-item-ms">${esc(malay)}</p>`:''}<p class="env-finding-answer"><span>NOT OK</span> Marked by ${esc(record.inspector)}</p></section>
-        <section class="report-detail-card"><h3>Photos</h3><div data-finding-photos>${SHEUI.skeleton('block',1,'Loading photos')}</div></section>
-        <section class="report-detail-card"><h3>Follow-up</h3><div data-finding-updates>${SHEUI.skeleton('list',2,'Loading follow-up')}</div></section>
-        <p class="env-finding-more"><a class="secondary-button" href="#/daily-safety-patrol/${record.id}">Open full patrol record →</a></p>
-        ${nav}</article>`;
-      body.querySelectorAll('[data-finding-back]').forEach(b=>b.onclick=closeFinding);
-      body.querySelectorAll('[data-finding-step]').forEach(b=>b.onclick=()=>openFinding(rows,index+Number(b.dataset.findingStep)));
-      body.closest('.page')?.scrollIntoView({block:'start'});window.scrollTo({top:0});
-      body.querySelector('[data-finding-back]').focus({preventScroll:true});
-      try{
-        const {patrol}=await api('/api/patrols/'+record.id);
-        if(!body.querySelector('#envFindingTitle')||body.querySelector('#envFindingTitle').textContent!==(record.remark||'No location or remark recorded'))return;
-        const photos=patrol.attachments.filter(a=>a.question_id===record.question_id&&isImage(a));
-        const src=a=>'/api/patrols/'+record.id+'/attachments/'+a.id;
-        body.querySelector('[data-finding-photos]').innerHTML=photos.length?`<div class="env-finding-photos">${photos.map(a=>`<a href="${src(a)}" target="_blank" rel="noopener"><img src="${src(a)}" alt="Photo of ${esc(record.category)} finding" loading="lazy"></a>`).join('')}</div>`:'<p class="env-finding-empty">No photo was taken for this item.</p>';
-        const labels={open:'Open',action_taken:'Awaiting verification',resolved:'Resolved'};
-        body.querySelector('[data-finding-updates]').innerHTML=patrol.updates.length?`<ol class="env-finding-timeline">${patrol.updates.map(u=>`<li><div><strong>${esc(u.author)}</strong><span class="she-record-badge ${u.status==='resolved'?'is-complete':''}">${esc(labels[u.status]||u.status)}</span><small>${esc(findingDate(u.created_at))}</small></div><p>${esc(u.message)}</p>${u.attachments.filter(isImage).length?`<div class="env-finding-photos">${u.attachments.filter(isImage).map(a=>`<a href="${src(a)}" target="_blank" rel="noopener"><img src="${src(a)}" alt="After photo" loading="lazy"></a>`).join('')}</div>`:''}</li>`).join('')}</ol>`:'<p class="env-finding-empty">No follow-up yet. Open the full patrol record to update it or issue a work order.</p>';
-      }catch(error){const box=body.querySelector('[data-finding-photos]');if(box)box.innerHTML=`<p class="form-error" role="alert">${esc(error.message)}</p>`;body.querySelector('[data-finding-updates]')?.replaceChildren();}
-    }
-    function closeFinding() {
-      if(findingHistory){findingHistory=false;history.back();return;}
-      showDashboard();
-    }
-    function showDashboard() {
-      findingOpen=false;
-      drawPatrolEnvironment();
-      body.querySelector('.env-records')?.scrollIntoView({block:'start'});
-    }
-    window.addEventListener('popstate',function onPop(){
-      if(!body.isConnected){window.removeEventListener('popstate',onPop);return;}
-      if(findingOpen){findingHistory=false;showDashboard();}
-    });
     root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;accidentMonth='';sessionStorage.setItem('she-monitor-year',year);load();}};
     root.querySelector('#monitorRefresh').onclick=load;
     if(!register)root.querySelector('#monitorExport').onclick=()=>{

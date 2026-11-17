@@ -444,6 +444,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         assets = {"/": WEB / "index.html", "/index.html": WEB / "index.html", "/styles.css": WEB / "styles.css", "/script.js": WEB / "script.js", "/patrol.js": WEB / "patrol.js", "/cmms-ui.js": WEB / "cmms-ui.js", "/favicon.svg": WEB / "favicon.svg", "/manifest.webmanifest": WEB / "manifest.webmanifest", "/sw.js": WEB / "sw.js"}
         assets.update({"/statistics-ui.js": WEB / "statistics-ui.js", "/statistics.css": WEB / "statistics.css"})
+        assets["/finding-detail.js"] = WEB / "finding-detail.js"
         assets.update({"/design-system.css": WEB / "design-system.css", "/design-system.js": WEB / "design-system.js"})
         assets["/air-leak-ui.js"] = WEB / "air-leak-ui.js"
         assets['/module-home-ui.js'] = WEB / 'module-home-ui.js'

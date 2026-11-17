@@ -36,13 +36,21 @@
 .env-legend-item{display:inline-flex;align-items:center;gap:7px;border:1px solid oklch(0.907 0.017 162.7);border-radius:999px;background:white;padding:6px 12px;font:inherit;font-size:13px;color:oklch(0.41 0.063 165.5);cursor:pointer}
 .env-legend-item b{font-weight:700}
 .env-legend-item[aria-pressed="true"]{border-color:oklch(0.504 0.086 168.2);background:oklch(0.967 0.009 161.4)}
-.env-month-chart rect.is-spillage{fill:#b8741a}.env-month-chart rect.is-aedes{fill:#0f8a6c}
-.env-month-chart button:hover rect{fill-opacity:.82}
-.env-month-chart[data-category="is-spillage"] rect.is-aedes,.env-month-chart[data-category="is-aedes"] rect.is-spillage{fill-opacity:.18}
-.env-month{border-radius:8px;transition:opacity .16s ease-out,background .16s ease-out}
-.env-month.is-dimmed{opacity:.35}
-.env-month[aria-pressed="true"]{background:oklch(0.967 0.009 161.4)}
-.env-month[aria-pressed="true"]>span:last-child{font-weight:800}
+.env-month-chart{display:grid;grid-template-columns:repeat(12,minmax(52px,1fr));gap:6px;min-width:680px;margin-top:24px}
+.env-month-group{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0}
+.env-bar-pair{display:grid;grid-template-columns:1fr 1fr;gap:3px;border-bottom:1px solid oklch(0.907 0.017 162.7)}
+.env-bar{display:grid;grid-template-rows:auto 150px;gap:4px;justify-items:center;padding:4px 0 0;border:0;border-radius:6px 6px 0 0;background:none;color:oklch(0.413 0.055 172.4);font:inherit;font-size:12px;cursor:pointer;transition:opacity .16s ease-out,background .16s ease-out}
+.env-bar strong{font-weight:700}
+.env-bar-track{display:flex;align-items:flex-end;justify-content:center;width:100%}
+.env-bar-track svg{display:block;width:78%;max-width:26px;height:100%}
+.env-bar.is-spillage rect{fill:#b8741a}.env-bar.is-aedes rect{fill:#0f8a6c}
+.env-bar:hover{background:oklch(0.975 0.008 161.4)}.env-bar:hover rect{fill-opacity:.82}
+.env-bar.is-dimmed{opacity:.28}
+.env-bar[aria-pressed="true"]{background:oklch(0.958 0.014 162)}
+.env-bar:focus-visible,.env-month-label:focus-visible{outline:3px solid oklch(0.624 0.097 168.1);outline-offset:2px}
+.env-month-label{border:0;border-radius:6px;background:none;padding:4px 0;color:oklch(0.413 0.055 172.4);font:inherit;font-size:13px;cursor:pointer}
+.env-month-label:hover{background:oklch(0.975 0.008 161.4)}
+.env-month-label[aria-pressed="true"]{background:oklch(0.958 0.014 162);font-weight:800}
 .env-table-view{margin-top:16px}.env-table-view summary{cursor:pointer;font-weight:600;color:oklch(0.444 0.078 162.9)}
 #monitorBody{position:relative}
 .env-tooltip{position:absolute;z-index:5;pointer-events:none;max-width:260px;padding:8px 10px;border-radius:8px;background:oklch(0.3 0.04 170);color:white;font-size:12px;line-height:1.5;box-shadow:0 8px 20px oklch(0.2 0.03 170 / .2)}

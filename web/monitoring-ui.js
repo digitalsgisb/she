@@ -147,26 +147,33 @@ const SHEMonitoring = (() => {
     }
     let envFilter={month:'',category:''};
     function drawPatrolEnvironment() {
-      const months=data.months, max=Math.max(1,...months.map(m=>m.total));
+      const months=data.months;
       const tile=(label,value,category='')=>`<button type="button" class="env-kpi ${category?envSeries[category]:''}" ${category?`data-env-category="${esc(category)}"`:'data-env-clear'} aria-pressed="false"><strong>${display(value)}</strong><span>${category?'<i aria-hidden="true"></i>':''}${esc(label)}</span></button>`;
       const legend=data.categories.map(c=>`<button type="button" class="env-legend-item ${envSeries[c]}" data-env-category="${esc(c)}" aria-pressed="false"><i aria-hidden="true"></i>${esc(c)} <b>${data.totals[c]}</b></button>`).join('');
+      const max=Math.max(1,...months.flatMap(m=>data.categories.map(c=>m.counts[c])));
+      // Grouped bars: one bar per category per month, each its own month + category filter.
       const bars=months.map(m=>{
-        let y=154;
-        const segments=data.categories.map(c=>{const v=m.counts[c];if(!v)return '';const h=v/max*150;y-=h;return `<rect class="${envSeries[c]}" x="0" y="${y.toFixed(2)}" width="100" height="${Math.max(h-2,1).toFixed(2)}"/>`;}).join('');
-        const tip=names(m.month)+' '+year+': '+data.categories.map(c=>c+' '+m.counts[c]).join(', ');
-        return `<button type="button" class="monitor-month-point env-month" data-env-month="${m.month}" aria-pressed="false" aria-label="${esc(tip)}. Select to filter records." data-tip="${esc(tip)}"><strong>${m.total||'–'}</strong><span class="monitor-track">${m.total?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true">${segments}</svg>`:''}</span><span>${names(m.month)}</span></button>`;
+        const pair=data.categories.map(c=>{
+          const v=m.counts[c],h=v/max*100,tip=names(m.month)+' '+year+' · '+c+': '+v;
+          return `<button type="button" class="env-bar ${envSeries[c]}" data-env-bar data-month="${m.month}" data-category="${esc(c)}" aria-pressed="false" aria-label="${esc(tip)}. Select to filter records." data-tip="${esc(tip)}"><strong>${v||'–'}</strong><span class="env-bar-track">${v?`<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${(100-h).toFixed(2)}" width="100" height="${h.toFixed(2)}"/></svg>`:''}</span></button>`;
+        }).join('');
+        return `<div class="env-month-group"><div class="env-bar-pair">${pair}</div><button type="button" class="env-month-label" data-env-month="${m.month}" aria-pressed="false" aria-label="${esc(names(m.month)+' '+year+': '+m.total+' findings')}. Select to filter records by month." data-tip="${esc(names(m.month)+' '+year+': '+data.categories.map(c=>c+' '+m.counts[c]).join(', '))}">${names(m.month)}</button></div>`;
       }).join('');
       const rows=[...data.categories.map(c=>[c,m=>m.counts[c]]),['Total findings',m=>m.total],...data.categories.map(c=>[c+' · items checked',m=>m.checked[c]])];
       body.innerHTML=`<div class="report-stats env-kpis">${tile('Total findings',data.total)}${data.categories.map(c=>tile(c,data.totals[c],c)).join('')}<div><strong>${display(data.open)}</strong><span>Awaiting follow-up</span></div></div>
         <section class="report-detail-card env-trend"><div class="env-trend-heading"><div><h2>Findings by month · ${year}</h2><p>NOT OK answers on patrol items 17 and 21. Select a month or category to filter.</p></div><div class="env-legend" aria-label="Legend">${legend}</div></div>
-          ${data.total?`<div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly findings chart"><div class="monitor-month-chart env-month-chart">${bars}</div></div>`:'<p class="she-chart-empty">No spillage or Aedes findings recorded in '+year+'.</p>'}
+          ${data.total?`<div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly findings chart"><div class="env-month-chart">${bars}</div></div>`:'<p class="she-chart-empty">No spillage or Aedes findings recorded in '+year+'.</p>'}
           <details class="env-table-view"><summary>Show as table</summary><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${months.map(m=>`<th scope="col">${names(m.month)}</th>`).join('')}<th scope="col">Total</th></tr></thead><tbody>${rows.map(([label,value],i)=>`<tr ${i===data.categories.length?'class="monitor-total"':''}><th scope="row">${esc(label)}</th>${months.map(m=>`<td>${value(m)}</td>`).join('')}<td>${months.reduce((sum,m)=>sum+value(m),0)}</td></tr>`).join('')}</tbody></table></div></details>
         </section>
         <section class="report-detail-card env-records"><div class="hiyari-dashboard-toolbar"><div><h2>Patrol findings</h2><p id="envFilterLabel" role="status"></p></div><button type="button" class="secondary-button" data-env-clear hidden>Clear filter</button></div><div id="envRows"></div></section>
         <div class="env-tooltip" role="tooltip" hidden></div>`;
       const tooltip=body.querySelector('.env-tooltip');
-      body.querySelectorAll('[data-env-month]').forEach(button=>{
-        button.onclick=()=>{envFilter.month=envFilter.month===button.dataset.envMonth?'':button.dataset.envMonth;applyEnvFilter();};
+      body.querySelectorAll('[data-env-month]').forEach(button=>button.onclick=()=>{envFilter.month=envFilter.month===button.dataset.envMonth?'':button.dataset.envMonth;applyEnvFilter();});
+      body.querySelectorAll('[data-env-bar]').forEach(button=>button.onclick=()=>{
+        const {month,category}=button.dataset,same=envFilter.month===month&&envFilter.category===category;
+        envFilter=same?{month:'',category:''}:{month,category};applyEnvFilter();
+      });
+      body.querySelectorAll('[data-env-bar],[data-env-month]').forEach(button=>{
         button.onpointermove=e=>{tooltip.hidden=false;tooltip.textContent=button.dataset.tip;const box=body.getBoundingClientRect();tooltip.style.left=(e.clientX-box.left+14)+'px';tooltip.style.top=(e.clientY-box.top+14)+'px';};
         button.onpointerleave=()=>{tooltip.hidden=true;};
       });
@@ -177,9 +184,12 @@ const SHEMonitoring = (() => {
     function applyEnvFilter() {
       if(envFilter.month&&!data.months.some(m=>m.month===envFilter.month))envFilter.month='';
       const {month,category}=envFilter;
-      body.querySelectorAll('[data-env-month]').forEach(b=>{const on=b.dataset.envMonth===month;b.setAttribute('aria-pressed',on);b.classList.toggle('is-dimmed',Boolean(month)&&!on);});
+      body.querySelectorAll('[data-env-month]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.envMonth===month));
+      body.querySelectorAll('[data-env-bar]').forEach(b=>{
+        b.setAttribute('aria-pressed',b.dataset.month===month&&b.dataset.category===category);
+        b.classList.toggle('is-dimmed',Boolean(month&&b.dataset.month!==month)||Boolean(category&&b.dataset.category!==category));
+      });
       body.querySelectorAll('[data-env-category]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.envCategory===category));
-      body.querySelector('.env-month-chart')?.setAttribute('data-category',category?envSeries[category]:'');
       const rows=data.records.filter(r=>(!month||r.date.startsWith(month))&&(!category||r.category===category));
       const parts=[month?names(month)+' '+year:'All of '+year,category].filter(Boolean);
       body.querySelector('#envFilterLabel').textContent=rows.length+(rows.length===1?' finding':' findings')+' · '+parts.join(' · ');

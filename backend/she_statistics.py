@@ -60,7 +60,8 @@ def build(rows, selection, kind):
     statuses = ('Open', 'In progress', REVIEW, 'Resolved', 'Closed') if kind=='red-tag' else ('Open','In progress','Resolved','Closed')
     totals = Counter(r['status'] for r in selected)
     result = dict(kind=kind, selection=selection, summary=summary(selected), backlog=summary(rows),
-                  statuses=[dict(label=s,count=totals[s]) for s in statuses], trend=trend(selected,selection))
+                  statuses=[dict(label=s,count=totals[s]) for s in statuses], trend=trend(selected,selection),
+                  monthly_trend=trend(rows,dict(selection,mode='year')))
     if kind=='red-tag':
         result.update(sections=counts(selected,'section'), ranks=counts(selected,'rank'), stops=counts(selected,'stop'))
         workload=defaultdict(list)
@@ -105,7 +106,6 @@ def reports(db, selection, group):
     rows=report_rows(db,group)
     labels={'environment':'Environment','hiyari-hatto':'Hiyari Hatto','kaizen':'Kaizen','air-leak':'Air Leak'}
     result=build(rows,selection,'environment')
-    result['monthly_trend']=trend(rows,dict(selection,mode='year'))
     selected=rows if selection['mode']=='all' else [r for r in rows if selection['start']<=r['date']<selection['end']]
     reporters=defaultdict(set)
     for r in selected:
@@ -159,12 +159,14 @@ def patrols(db, selection):
     state_counts=Counter(r['status'] for r in selected)
     activity=trend(selected,selection)
     activity['unit']='patrols'
+    monthly=trend(rows,dict(selection,mode='year'))
+    monthly['note']='Completed patrols by month · select a month to filter the dashboard'
     activity['note']=activity['note'].replace('Findings','Completed patrols')
     return dict(kind='patrol',selection=selection,summary=patrol_summary(selected),backlog=patrol_summary(rows),
                 statuses=[dict(label=label,count=state_counts[label]) for label in ('No findings','Open',REVIEW,'Resolved')],
                 answers=[dict(label=label,count=sum(r[key] for r in selected)) for label,key in [('OK','ok'),('NOT OK','not_ok'),('N/A','na')]],
                 sections=[dict(label=label,count=count) for label,count in sorted(section_counts.items(),key=lambda x:(-x[1],x[0]))],
-                inspectors=counts(selected,'inspector'),checklists=counts(selected,'checklist'),ratings=counts(selected,'rating'),trend=activity)
+                inspectors=counts(selected,'inspector'),checklists=counts(selected,'checklist'),ratings=counts(selected,'rating'),trend=activity,monthly_trend=monthly)
 
 FIELDS={
     'red-tag':{'status','section','rank','stop','pic','date','unassigned'},

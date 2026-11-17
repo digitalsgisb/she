@@ -12,7 +12,22 @@ const SHEStats = (() => {
   const fields={'Status distribution':'status','Follow-up distribution':'status','Findings by section':'section','NOT OK items by section':'section','Reports by topic':'category','Reports by category':'category','People reporting by category':'category','Rank distribution':'rank','Types of stop':'stop','Checklist results':'answer','Overall ratings':'rating','Patrols by inspector':'inspector','Checklist use':'checklist','Reports by factory':'plant','Reported locations':'location','Stagnant water locations':'location','Stagnant water by factory':'plant','Work order follow-up':'order'};
   function hit(field,row,count,detail='',extra={}) {
     const id=points.length;points.push({field,values:[row.label],...(row.other?{exclude:row.exclude,values:undefined}:{}),count,label:row.label,detail,...extra});
-    return ' data-stat-hit="'+id+'" tabindex="0" role="button" aria-label="'+esc(row.label+': '+number(count)+(detail?' · '+detail:'')+'. View matching records')+'"';
+    return ' data-stat-hit="'+id+'" tabindex="0" role="button" aria-label="'+esc((extra.name||row.label)+': '+number(count)+(detail?' · '+detail:'')+'. '+(extra.action||'View matching records'))+'"';
+  }
+  const isMonthKey=value=>/^\d{4}-(0[1-9]|1[0-2])$/.test(String(value||''));
+  function monthStrip(data) {
+    const trend=data.monthly_trend;
+    if(!trend?.points?.length)return '';
+    const selected=data.selection.mode==='month'?data.selection.month:'';
+    const max=Math.max(1,...trend.points.map(p=>p.count));
+    const unit=data.kind==='patrol'?'patrols':'findings';
+    const year=trend.points[trend.points.length-1].key.slice(0,4);
+    const bars=trend.points.map(p=>{
+      const height=p.count/max*100;
+      return '<button type="button" class="month-filter-point"'+hit('date',{label:p.key},p.count,unit,{name:new Date(p.key+'-01T12:00:00+08:00').toLocaleDateString('en-MY',{month:'long',year:'numeric',timeZone:'Asia/Kuala_Lumpur'}),action:p.key===selected?'Select again to show the full year':'Select to filter the dashboard to this month'})+' aria-pressed="'+(p.key===selected)+'"><strong>'+number(p.count)+'</strong><span class="month-filter-track">'+(height?'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="'+(100-height)+'" width="100" height="'+height+'" rx="3"/></svg>':'')+'</span><span>'+esc(p.label)+'</span></button>';
+    }).join('');
+    const state=selected?'Showing '+esc(data.selection.label)+' · <button type="button" class="month-filter-clear" data-month-clear>Show all of '+esc(selected.slice(0,4))+'</button>':'Select a month to filter every chart below';
+    return '<section class="she-chart-card month-filter-card" aria-label="Monthly filter"><div class="month-filter-heading"><div><h3>'+(data.kind==='patrol'?'Patrols':'Findings')+' by month · '+esc(year)+'</h3><p>'+state+'</p></div></div><div class="month-filter-scroll" tabindex="0" role="region" aria-label="Monthly totals"><div class="month-filter-chart'+(selected?' has-selection':'')+'">'+bars+'</div></div></section>';
   }
   function bucket(items,limit=8) {
     const nonzero=items.filter(x=>x.count>0);
@@ -80,7 +95,6 @@ const SHEStats = (() => {
       return [
         {id:'overview',label:'Overview',charts:status+distribution+activity(data.trend)},
         {id:'categories',label:'Issue categories',charts:columns(bucket(data.categories,12),'Reports by category','Topics reported in this period','category')+columns(bucket(data.reporter_categories||[],12),'People reporting by category','Distinct reporter names per topic'+(data.reporter_total?' · '+number(data.reporter_total)+' people in total':''),'category')},
-        ...(data.monthly_trend?[{id:'monthly',label:'Monthly activity',charts:columns(data.monthly_trend.points,'Reports by month',data.monthly_trend.note,'date')}]:[]),
         ...(['environment','all'].includes(data.group)?[{id:'stagnant',label:'Mosquito Breeding Risk',charts:stagnantIntro+bars(st.locations,'Stagnant water locations','Where stagnant water was reported in this period')+pie(st.plants,'Stagnant water by factory','')+'<div class="she-inline-records" data-inline-records="stagnant"></div>'}]:[]),
         {id:'locations',label:'Factories & locations',charts:pie(data.plants,'Reports by factory','Distribution across factories')+bars(data.locations,'Reported locations','Leading locations; remaining entries grouped')},
         {id:'orders',label:'Work order follow-up',charts:bars(data.work_orders,'Work order follow-up','SHE workflow; separate from CMMS job status')}
@@ -88,10 +102,11 @@ const SHEStats = (() => {
     })();
     sections.splice(1,0,{id:'records',label:'Overview table',charts:'<div class="she-inline-records" data-inline-records="all"></div>'});
     const summary='<p class="she-stat-period">'+esc(patrol?'Safety patrol':red?'Red Tag':(data.group==='environment'?'Green Eyes':data.group_label))+' · '+esc(data.selection.label)+'</p>'+metrics(data)+'<div'+hit('status',{label:'Outstanding across all dates'},s.outstanding,'All dates',{values:['Open','In progress','Awaiting verification'],allDates:true})+' class="she-backlog"><span>'+(patrol?'Patrols needing follow-up':'Outstanding')+' · all dates</span><strong>'+number(s.outstanding)+'</strong><small>'+number(s.to_do)+(patrol?' open':' to do')+(red||patrol?' · '+number(s.awaiting_review)+' awaiting verification':'')+'</small></div>';
-    if(!red)return summary+'<div class="she-stacked-sections'+(patrol?' she-patrol-sections':'')+'">'+sections.map(section=>
+    const strip=monthStrip(data);
+    if(!red)return summary+strip+'<div class="she-stacked-sections'+(patrol?' she-patrol-sections':'')+'">'+sections.map(section=>
       '<section aria-labelledby="'+kind+'-heading-'+section.id+'"><h2 id="'+kind+'-heading-'+section.id+'">'+section.label+'</h2><div class="she-charts-grid" data-stat-panel="'+section.id+'">'+section.charts+'</div></section>'
     ).join('')+'</div>';
-    return summary+'<div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
+    return summary+strip+'<div class="she-chart-tabs" role="tablist" aria-label="Dashboard views">'+sections.map((section,index)=>'<button type="button" id="'+kind+'-tab-'+section.id+'" data-stat-tab="'+section.id+'" role="tab" aria-selected="'+(index===0)+'" aria-controls="'+kind+'-panel-'+section.id+'" tabindex="'+(index===0?'0':'-1')+'">'+section.label+'</button>').join('')+'</div><div class="she-chart-panels">'+sections.map((section,index)=>'<div id="'+kind+'-panel-'+section.id+'" class="she-charts-grid" data-stat-panel="'+section.id+'" role="tabpanel" aria-labelledby="'+kind+'-tab-'+section.id+'" tabindex="0" '+(index===0?'':'hidden')+'>'+section.charts+'</div>').join('')+'</div>';
   }
   function recordHash(kind,selection,point) {
     const query={...selection};
@@ -110,14 +125,14 @@ const SHEStats = (() => {
     if(!tooltip){tooltip=document.createElement('div');tooltip.className='she-chart-tooltip';tooltip.setAttribute('role','tooltip');tooltip.id='dashboardChartTooltip';tooltip.hidden=true;document.body.append(tooltip);}
     const position=(x,y)=>{const rect=tooltip.getBoundingClientRect();tooltip.style.left=Math.max(8,Math.min(x+14,innerWidth-rect.width-8))+'px';tooltip.style.top=Math.max(8,Math.min(y+14,innerHeight-rect.height-8))+'px';};
     const show=(node,point,e)=>{
-      tooltip.replaceChildren();const title=document.createElement('strong');title.textContent=point.label;const amount=document.createElement('span');amount.textContent=number(point.count)+(point.detail?' · '+point.detail:'');const hint=document.createElement('small');hint.textContent='Click to view matching records';tooltip.append(title,amount,hint);tooltip.hidden=false;node.setAttribute('aria-describedby',tooltip.id);const box=node.getBoundingClientRect();position(e?.clientX??box.left+box.width/2,e?.clientY??box.top+box.height/2);
+      tooltip.replaceChildren();const title=document.createElement('strong');title.textContent=point.name||point.label;const amount=document.createElement('span');amount.textContent=number(point.count)+(point.detail?' · '+point.detail:'');const hint=document.createElement('small');hint.textContent=point.action||(point.field==='date'&&isMonthKey(point.label)&&target.applyMonth?'Click to filter the dashboard to this month':'Click to view matching records');tooltip.append(title,amount,hint);tooltip.hidden=false;node.setAttribute('aria-describedby',tooltip.id);const box=node.getBoundingClientRect();position(e?.clientX??box.left+box.width/2,e?.clientY??box.top+box.height/2);
     };
     body.querySelectorAll('[data-stat-hit]').forEach(node=>{
       const point=registry[Number(node.dataset.statHit)];if(!point)return;
       node.classList.add('she-chart-hit');node.querySelector('title')?.remove();node.querySelectorAll('[title]').forEach(n=>n.removeAttribute('title'));
       node.onpointerenter=e=>show(node,point,e);node.onpointermove=e=>{if(!tooltip.hidden)position(e.clientX,e.clientY);};node.onpointerleave=hideTooltip;
       node.onfocus=()=>show(node,point);node.onblur=hideTooltip;
-      const open=()=>{hideTooltip();target.dataset.activeStatisticsTab=target.dataset.activeStatisticsTab||'overview';rememberView(data.kind,target,selection);location.hash=recordHash(data.kind,selection,point);};
+      const open=()=>{hideTooltip();if(point.field==='date'&&isMonthKey(point.label)&&target.applyMonth){target.applyMonth(point.label);return;}target.dataset.activeStatisticsTab=target.dataset.activeStatisticsTab||'overview';rememberView(data.kind,target,selection);location.hash=recordHash(data.kind,selection,point);};
       node.onclick=open;node.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}if(e.key==='Escape')hideTooltip();};
     });
   }
@@ -168,6 +183,14 @@ const SHEStats = (() => {
     controlsRoot.querySelector('[data-stat-month]').onchange=e=>{if(e.target.value&&e.target.checkValidity()){selection.month=selection.period==='year'?e.target.value+'-'+selection.month.slice(5):e.target.value;load();}};
     controlsRoot.querySelector('[data-stat-group]')?.addEventListener('change',e=>{selection.group=e.target.value;load();});
     controlsRoot.querySelector('[data-stat-refresh]').onclick=()=>load();
+    // Power BI style cross-filter: a month click narrows every chart; the same month again restores the year.
+    const syncControls=()=>{const period=controlsRoot.querySelector('[data-stat-period]'),label=controlsRoot.querySelector('[data-stat-month-label]'),input=controlsRoot.querySelector('[data-stat-month]');period.value=selection.period;label.firstChild.textContent=selection.period==='year'?'Year':selection.period==='all'?'Trend ending':'Month';input.type=selection.period==='year'?'number':'month';input.min=selection.period==='year'?'2000':'2000-01';input.max=selection.period==='year'?'2099':'2099-12';input.value=selection.period==='year'?selection.month.slice(0,4):selection.month;};
+    target.applyMonth=key=>{
+      if(selection.period==='month'&&selection.month===key)selection.period='year';
+      else{selection.period='month';selection.month=key;}
+      syncControls();load();
+    };
+    body.addEventListener('click',e=>{if(e.target.closest('[data-month-clear]')){selection.period='year';syncControls();load();}});
     const refresh=()=>{if(target.isConnected&&!document.hidden&&!inflight)load(true);};
     target.refreshStatistics=refresh;
     load();

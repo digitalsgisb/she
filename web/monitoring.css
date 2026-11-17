@@ -47,3 +47,10 @@
 #monitorBody{position:relative}
 .env-tooltip{position:absolute;z-index:5;pointer-events:none;max-width:260px;padding:8px 10px;border-radius:8px;background:oklch(0.3 0.04 170);color:white;font-size:12px;line-height:1.5;box-shadow:0 8px 20px oklch(0.2 0.03 170 / .2)}
 @media(max-width:680px){.env-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Month cross-filter on monitoring charts (accident, Hiyari). */
+.monitor-month-chart.has-selection .monitor-month-point:not([aria-pressed="true"]){opacity:.38}
+.monitor-month-chart .monitor-month-point{border-radius:8px;transition:opacity .16s ease-out,background .16s ease-out}
+.monitor-month-chart .monitor-month-point[aria-pressed="true"]{background:oklch(0.967 0.009 161.4)}
+.monitor-month-chart .monitor-month-point[aria-pressed="true"]>span:last-child{font-weight:800}
+.monitor-table.has-month-focus .is-month-focus{background:oklch(0.955 0.02 162);font-weight:700}

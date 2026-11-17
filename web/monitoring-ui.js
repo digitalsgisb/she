@@ -70,6 +70,12 @@ const SHEMonitoring = (() => {
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{selected=b.dataset.month;editor();body.querySelector('#monitorEditor').scrollIntoView({behavior:'smooth',block:'start'});});
       selected=selected||data.months.find(r=>!r.complete)?.month||data.months[0].month;editor();
     }
+    let accidentMonth='';
+    function markMonth(month) {
+      const chartNode=body.querySelector('.monitor-month-chart');
+      chartNode?.classList.toggle('has-selection',Boolean(month));
+      body.querySelectorAll('.monitor-month-chart [data-month]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.month===month)));
+    }
     function drawAccident() {
       const months=data.months;
       const recorded=months.filter(row=>row.total!==null);
@@ -77,13 +83,17 @@ const SHEMonitoring = (() => {
       const hours=recorded.length&&recorded.every(row=>row.complete&&row.payload.man_hours>0)?recorded.reduce((sum,row)=>sum+row.payload.man_hours,0):0;
       const ifr=hours?Number((data.total*1e6/hours).toFixed(2)):null;
       const offJob=months.map(row=>row.payload.off_job).filter(Number.isInteger);
-      const metrics=[['On-job accidents'+(partial?' (partial)':''),recorded.length?data.total:null],['Off-job accidents',offJob.length?offJob.reduce((sum,value)=>sum+value,0):null],['Complete months',data.reported_months+' / 12'],['IFR / million hours',ifr]];
+      const focusRow=accidentMonth&&months.find(row=>row.month===accidentMonth);
+      const metrics=focusRow?[['On-job accidents · '+names(focusRow.month)+(focusRow.total!==null&&!focusRow.complete?' (partial)':''),focusRow.total],['Off-job accidents · '+names(focusRow.month),Number.isInteger(focusRow.payload.off_job)?focusRow.payload.off_job:null],['Man-hours · '+names(focusRow.month),focusRow.payload.man_hours==null?null:Number(focusRow.payload.man_hours).toLocaleString('en-MY')],['IFR / million hours · '+names(focusRow.month),focusRow.ifr]]:[['On-job accidents'+(partial?' (partial)':''),recorded.length?data.total:null],['Off-job accidents',offJob.length?offJob.reduce((sum,value)=>sum+value,0):null],['Complete months',data.reported_months+' / 12'],['IFR / million hours',ifr]];
       const rows=[['On-job total',row=>row.total],...data.categories.map(category=>[category,row=>row.payload.counts[category]]),['Off-job accidents',row=>row.payload.off_job],['Man-hours',row=>row.payload.man_hours],['IFR / million hours',row=>row.ifr]];
       body.innerHTML=`<div class="report-stats">${metrics.map(([label,value],i)=>`<div><strong>${accidentValue(value,i<2)}</strong><span>${esc(label)}</span></div>`).join('')}</div>
-        <section class="report-detail-card"><h2>On-job accidents by month · ${year}</h2><div class="monitor-table-wrap">${chart(months,true)}</div></section>
+        <section class="report-detail-card"><h2>On-job accidents by month · ${year}</h2><p id="accidentFilterLabel" role="status">${accidentMonth?'Showing '+names(accidentMonth)+' '+year+' · <button type="button" class="month-filter-clear" data-accident-clear>Show all of '+year+'</button>':'Select a month to filter the figures.'}</p><div class="monitor-table-wrap">${chart(months)}</div></section>
         <section class="report-detail-card"><div class="accident-register-heading"><h2>Monthly register</h2><a class="secondary-button" href="#/accident-register">Update accident data →</a></div>
         <p>– Confirmed zero · NR Not reported · NA Not applicable · * Partial total</p>
-        <div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly accident figures"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${months.map(row=>`<th scope="col">${names(row.month)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label,value],i)=>`<tr ${i===0?'class="monitor-total"':''}><th scope="row">${esc(label)}</th>${months.map(row=>`<td>${accidentValue(value(row),i<rows.length-2)}${i===0&&row.total!==null&&!row.complete?' *':''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
+        <div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly accident figures"><table class="monitor-table${accidentMonth?' has-month-focus':''}"><thead><tr><th scope="col">Category</th>${months.map(row=>`<th scope="col" ${row.month===accidentMonth?'class="is-month-focus"':''}>${names(row.month)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label,value],i)=>`<tr ${i===0?'class="monitor-total"':''}><th scope="row">${esc(label)}</th>${months.map(row=>`<td ${row.month===accidentMonth?'class="is-month-focus"':''}>${accidentValue(value(row),i<rows.length-2)}${i===0&&row.total!==null&&!row.complete?' *':''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
+      markMonth(accidentMonth);
+      body.querySelectorAll('.monitor-month-chart [data-month]').forEach(button=>button.onclick=()=>{accidentMonth=accidentMonth===button.dataset.month?'':button.dataset.month;drawAccident();body.querySelector(`.monitor-month-chart [data-month="${accidentMonth||button.dataset.month}"]`)?.focus();});
+      body.querySelector('[data-accident-clear]')?.addEventListener('click',()=>{accidentMonth='';drawAccident();});
     }
     function drawAccidentEditor() {
       selected=selected||data.months.find(row=>!row.complete)?.month||data.months[0].month;
@@ -127,11 +137,11 @@ const SHEMonitoring = (() => {
         target.innerHTML=SHEStats.reportTable(rows.map(r=>({...r,title:'Hiyari Hatto',location:r.section==='Unspecified'?r.location:r.section,description:[r.description,'Rank '+r.rank,'STOP '+r.stop,'PIC '+r.pic].filter(Boolean).join(' · ')})));
         SHEStats.bindEvidence(target,true);
       }
-      filter.onchange=records;
-      body.querySelectorAll('[data-month]').forEach(button=>button.onclick=()=>{
-        filter.value='month:'+button.dataset.month;
-        records();
-        filter.focus();
+      filter.onchange=()=>{records();markMonth(filter.value.startsWith('month:')?filter.value.slice(6):'');};
+      body.querySelectorAll('.monitor-month-chart [data-month]').forEach(button=>button.onclick=()=>{
+        filter.value=filter.value==='month:'+button.dataset.month?'':'month:'+button.dataset.month;
+        records();markMonth(filter.value.slice(6));
+        body.querySelector('.hiyari-dashboard-reports').scrollIntoView({behavior:'smooth',block:'start'});
       });
       records();
     }
@@ -178,7 +188,7 @@ const SHEMonitoring = (() => {
       target.innerHTML=SHEStats.recordsTable(rows.map(r=>({...r,title:r.category,context:r.inspector,description:[r.remark||'No remark',r.item].filter(Boolean).join(' · '),detail_url:'#/daily-safety-patrol/'+r.id,statusTone:r.status==='Resolved'?'is-complete':''})),0,'Inspector');
       SHEStats.bindEvidence(target);
     }
-    root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;sessionStorage.setItem('she-monitor-year',year);load();}};
+    root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;accidentMonth='';sessionStorage.setItem('she-monitor-year',year);load();}};
     root.querySelector('#monitorRefresh').onclick=load;
     if(!register)root.querySelector('#monitorExport').onclick=()=>{
       if(!data)return;

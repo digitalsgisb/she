@@ -22,3 +22,28 @@
 .accident-dashboard-page .monitor-table :is(th,td){padding:8px 10px}
 .accident-dashboard-page .monitor-table th:first-child{min-width:140px}
 .accident-register-page #accidentMonth{max-width:240px}
+
+/* Number of Environment: patrol items 17 (spillage) and 21 (Aedes / stagnant water). */
+.env-kpis .env-kpi{padding:22px;border:1px solid oklch(0.913 0.024 133.5);border-radius:14px;background:white;display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;cursor:pointer;transition:border-color .16s ease-out,box-shadow .16s ease-out}
+.env-kpis .env-kpi:hover{border-color:oklch(0.82 0.04 160)}
+.env-kpis .env-kpi[aria-pressed="true"]{border-color:oklch(0.504 0.086 168.2);box-shadow:0 0 0 2px oklch(0.504 0.086 168.2 / .18)}
+.env-kpis .env-kpi span{display:flex;align-items:center;gap:7px}
+.env-kpi i,.env-legend-item i{display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.is-spillage i{background:#b8741a}.is-aedes i{background:#0f8a6c}
+.env-trend-heading{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
+.env-trend-heading h2{margin:0 0 4px}.env-trend-heading p{margin:0;color:oklch(0.537 0.036 171)}
+.env-legend{display:flex;flex-wrap:wrap;gap:8px}
+.env-legend-item{display:inline-flex;align-items:center;gap:7px;border:1px solid oklch(0.907 0.017 162.7);border-radius:999px;background:white;padding:6px 12px;font:inherit;font-size:13px;color:oklch(0.41 0.063 165.5);cursor:pointer}
+.env-legend-item b{font-weight:700}
+.env-legend-item[aria-pressed="true"]{border-color:oklch(0.504 0.086 168.2);background:oklch(0.967 0.009 161.4)}
+.env-month-chart rect.is-spillage{fill:#b8741a}.env-month-chart rect.is-aedes{fill:#0f8a6c}
+.env-month-chart button:hover rect{fill-opacity:.82}
+.env-month-chart[data-category="is-spillage"] rect.is-aedes,.env-month-chart[data-category="is-aedes"] rect.is-spillage{fill-opacity:.18}
+.env-month{border-radius:8px;transition:opacity .16s ease-out,background .16s ease-out}
+.env-month.is-dimmed{opacity:.35}
+.env-month[aria-pressed="true"]{background:oklch(0.967 0.009 161.4)}
+.env-month[aria-pressed="true"]>span:last-child{font-weight:800}
+.env-table-view{margin-top:16px}.env-table-view summary{cursor:pointer;font-weight:600;color:oklch(0.444 0.078 162.9)}
+#monitorBody{position:relative}
+.env-tooltip{position:absolute;z-index:5;pointer-events:none;max-width:260px;padding:8px 10px;border-radius:8px;background:oklch(0.3 0.04 170);color:white;font-size:12px;line-height:1.5;box-shadow:0 8px 20px oklch(0.2 0.03 170 / .2)}
+@media(max-width:680px){.env-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}

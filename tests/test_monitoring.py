@@ -55,6 +55,37 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(result['reported_months'],1)
             self.assertEqual(result['months'][7]['total'],sum(counts.values()))
 
+    def test_patrol_environment_counts_items_17_and_21_by_month(self):
+        cookie,csrf=self.admin()
+        from datetime import datetime
+        default=json.loads((server.BACKEND/'patrol-default.json').read_text(encoding='utf-8'))
+        renamed=json.loads(json.dumps(default))
+        for q in renamed['questions']:
+            if q['id']=='q_others_0': q['id']='q_custom_9'; q['label']='Kawasan bersih dan tiada air bertakung (nyamuk)'
+        stamp=lambda m,d:int(datetime(2026,m,d,10,tzinfo=monitoring.stats.TZ).timestamp())
+        with server.database() as db:
+            uid=db.execute("SELECT id FROM users WHERE username='admin'").fetchone()['id']
+            rows=[(default,{'q_hazards_5':'not_ok','q_others_0':'ok'},stamp(3,4),1,'open',{'q_hazards_5':'Oil near press'}),
+                  (renamed,{'q_hazards_5':'ok','q_custom_9':'not_ok'},stamp(3,20),1,'resolved',{}),
+                  (default,{'q_hazards_5':'not_ok','q_others_0':'not_ok'},stamp(7,1),1,'open',{}),
+                  (default,{'q_hazards_5':'not_ok'},stamp(7,2),0,'open',{}),
+                  (default,{'q_hazards_5':'not_ok'},int(datetime(2025,7,2,tzinfo=monitoring.stats.TZ).timestamp()),1,'open',{})]
+            for template,answers,created,completed,status,remarks in rows:
+                db.execute('INSERT INTO patrols(user_id,inspector_name,answers_json,rating,created_at,template_json,completed,followup_status,item_remarks_json) VALUES(?,?,?,?,?,?,?,?,?)',
+                           (uid,'Aina',json.dumps(answers),2,created,json.dumps(template),completed,status,json.dumps(remarks)))
+        status,result=self.request('/api/she-monitoring/patrol-environment?year=2026',cookie=cookie)[:2]
+        self.assertEqual(status,200)
+        self.assertEqual(result['totals'],{'Spillage':2,'Aedes / stagnant water':2})
+        self.assertEqual(result['months'][2]['counts'],{'Spillage':1,'Aedes / stagnant water':1})
+        self.assertEqual(result['months'][2]['checked'],{'Spillage':2,'Aedes / stagnant water':2})
+        self.assertEqual(result['months'][6]['total'],2)
+        self.assertEqual((result['open'],result['resolved']),(3,1))
+        spill=[r for r in result['records'] if r['date']=='2026-03-04'][0]
+        self.assertEqual((spill['remark'],spill['status']),('Oil near press','Open'))
+        self.assertEqual(self.request('/api/she-monitoring/patrol-environment','POST',{},cookie,csrf)[0],403)
+        with server.database() as db:db.execute("UPDATE users SET role='user' WHERE username='admin'")
+        self.assertEqual(self.request('/api/she-monitoring/patrol-environment?year=2026',cookie=cookie)[0],403)
+
     def test_hiyari_template_review_rank_a_closure_and_summary(self):
         cookie,csrf=self.admin()
         public=self.request('/api/reporting/public')[1]

@@ -8,10 +8,19 @@ from urllib.parse import parse_qs, urlsplit
 import access
 import she_statistics as stats
 
-KINDS = {'accident': 'patrol', 'compound': 'reporting', 'environmental-findings': 'reporting', 'hiyari': 'reporting'}
+KINDS = {'accident': 'patrol', 'compound': 'reporting', 'environmental-findings': 'reporting', 'hiyari': 'reporting',
+         'patrol-environment': 'patrol'}
 SECTIONS = ['Store', 'Accessories', 'Office', 'Mini forming', 'Floor Carpet L1&L2',
             'Floor Carpet L3&L4', 'PE, Pattern, Latex', 'Needle Punch', 'Maintenance', 'Macro']
 ENV_CATEGORIES = ['Spillage', 'Aedes Larvae', 'Stagnant Water (as potential mosquito breeding)', 'Others']
+# Safety patrol checklist items that feed the environment dashboard: item 17 (spills/leaks)
+# and item 21 (stagnant water / mosquito breeding). Matched by question id first, then by
+# wording so renamed or re-created checklist items still count.
+PATROL_ENV_ITEMS = (
+    ('Spillage', {'q_hazards_5', 'hazards_5'}, re.compile(r'spill|leak|tumpah', re.I)),
+    ('Aedes / stagnant water', {'q_others_0', 'others_0'}, re.compile(r'aedes|mosquito|nyamuk|stagnant|bertakung|breeding|pembiakan', re.I)),
+)
+PATROL_STATUS = {'open': 'Open', 'action_taken': 'Awaiting verification', 'resolved': 'Resolved'}
 
 
 def question(key, label, kind='text', required=True, options=None):
@@ -149,6 +158,53 @@ def hiyari(db, year):
                 categories={field: dict(Counter(r[field] for r in records)) for field in ('category','rank','stop','section','pic')}, records=records)
 
 
+def patrol_env_items(template, answers):
+    """Map each environment category to the status-question ids that represent it."""
+    questions = [q for q in template['questions'] if q['type'] == 'status'] if template else [dict(id=k, label='') for k in answers]
+    found = {}
+    for label, ids, pattern in PATROL_ENV_ITEMS:
+        match = [q['id'] for q in questions if q['id'] in ids] or [q['id'] for q in questions if pattern.search(q['label'])]
+        found[label] = (match[:1], {q['id']: q['label'] for q in questions})
+    return found
+
+
+def patrol_environment(db, year):
+    categories = [label for label, _, _ in PATROL_ENV_ITEMS]
+    records, checked = [], Counter()
+    start = int(datetime(year, 1, 1, tzinfo=stats.TZ).timestamp())
+    end = int(datetime(year + 1, 1, 1, tzinfo=stats.TZ).timestamp())
+    for row in db.execute('SELECT id,inspector_name,answers_json,item_remarks_json,template_json,followup_status,created_at '
+                          'FROM patrols WHERE completed=1 AND created_at>=? AND created_at<? ORDER BY created_at DESC,id DESC', (start, end)):
+        answers, template = json.loads(row['answers_json']), json.loads(row['template_json'])
+        remarks = json.loads(row['item_remarks_json'] or '{}')
+        day = datetime.fromtimestamp(row['created_at'], stats.TZ).date().isoformat()
+        for category, (ids, labels) in patrol_env_items(template, answers).items():
+            for qid in ids:
+                if answers.get(qid) not in ('ok', 'not_ok'):
+                    continue
+                checked[(day[:7], category)] += 1
+                if answers[qid] != 'not_ok':
+                    continue
+                photo = db.execute('SELECT id FROM patrol_attachments WHERE patrol_id=? AND question_id=? AND update_id IS NULL '
+                                   "AND mime_type IN ('image/jpeg','image/png','image/gif','image/webp') ORDER BY created_at,id LIMIT 1", (row['id'], qid)).fetchone()
+                records.append(dict(id=row['id'], reference=f"Patrol #{row['id']}", date=day, category=category,
+                                    inspector=row['inspector_name'], item=labels.get(qid, ''),
+                                    remark=str(remarks.get(qid, '') or ''), status=PATROL_STATUS.get(row['followup_status'], 'Open'),
+                                    photo_url=f"/api/patrols/{row['id']}/attachments/{photo['id']}" if photo else ''))
+    months = []
+    for number in range(1, 13):
+        month = f'{year}-{number:02d}'
+        items = [r for r in records if r['date'].startswith(month)]
+        counts = {c: sum(r['category'] == c for r in items) for c in categories}
+        months.append(dict(month=month, total=len(items), counts=counts,
+                           checked={c: checked[(month, c)] for c in categories}))
+    open_count = sum(r['status'] != 'Resolved' for r in records)
+    return dict(kind='patrol-environment', year=year, categories=categories, months=months, records=records,
+                total=len(records), open=open_count, resolved=len(records) - open_count,
+                totals={c: sum(m['counts'][c] for m in months) for c in categories},
+                checks=sum(checked.values()))
+
+
 def get(h, db, path, user):
     kind = path.rsplit('/',1)[-1]
     if not authorized(user, kind):
@@ -157,9 +213,9 @@ def get(h, db, path, user):
         year = parse_qs(urlsplit(h.path).query).get('year', [str(datetime.now(stats.TZ).year)])[0]
         if not re.fullmatch(r'20\d{2}', year):
             raise ValueError('Choose a year from 2000 to 2099.')
-        result = hiyari(db, int(year)) if kind=='hiyari' else monthly(db, kind, int(year))
+        result = hiyari(db, int(year)) if kind=='hiyari' else patrol_environment(db, int(year)) if kind=='patrol-environment' else monthly(db, kind, int(year))
         history = parse_qs(urlsplit(h.path).query).get('history', [''])[0]
-        if history and kind!='hiyari':
+        if history and kind not in ('hiyari', 'patrol-environment'):
             clean_month(history)
             result['history'] = [dict(actor=r['actor'], created_at=r['created_at'], payload=json.loads(r['payload_json']))
                                  for r in db.execute('SELECT * FROM she_monthly_history WHERE kind=? AND month=? ORDER BY id DESC', (kind,history))]
@@ -170,7 +226,7 @@ def get(h, db, path, user):
 
 def change(h, db, path, method, data, user):
     kind = path.rsplit('/',1)[-1]
-    if kind=='hiyari' or not authorized(user, kind):
+    if kind in ('hiyari', 'patrol-environment') or not authorized(user, kind):
         h.error_json(403, 'Executive access and module permission required.'); return
     try:
         if method != 'POST':

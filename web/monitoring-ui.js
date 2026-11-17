@@ -5,8 +5,10 @@ const SHEMonitoring = (() => {
     'accident-dashboard':{kind:'accident',area:'safety',title:'Monthly accident statistic',detail:'On-job accidents by section, off-job accidents and injury frequency rate.'},
     'environmental-enforcement-register':{kind:'compound',area:'environment',title:'Environmental Enforcement Register',detail:'Monthly counts of compound notices for environmental offences.'},
     'environmental-inspection-register':{kind:'environmental-findings',area:'environment',title:'Environmental Inspection Register',detail:'Spillage, Aedes larvae, stagnant water and other inspection findings.'},
-    'hiyari-dashboard':{kind:'hiyari',area:'safety',title:'Hiyari Hatto Summary',detail:'Progress, categories, rank, STOP 6 and section follow-up.'}
+    'hiyari-dashboard':{kind:'hiyari',area:'safety',title:'Hiyari Hatto Summary',detail:'Progress, categories, rank, STOP 6 and section follow-up.'},
+    'environment-count-dashboard':{kind:'patrol-environment',area:'environment',dashboard:true,title:'Number of Environment',detail:'Spillage (patrol item 17) and Aedes / stagnant water (item 21) findings from the safety patrol.'}
   };
+  const envSeries = {'Spillage':'is-spillage','Aedes / stagnant water':'is-aedes'};
   const names = month => new Date(month+'-01T12:00:00+08:00').toLocaleDateString('en-MY',{month:'short',timeZone:'Asia/Kuala_Lumpur'});
   const now = () => new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',timeZone:'Asia/Kuala_Lumpur'}).format(new Date()).match(/\d{4}/)?.[0] || '2026';
   const display = value => value===null || value===undefined ? '—' : String(value);
@@ -39,7 +41,7 @@ const SHEMonitoring = (() => {
     const refresh='<button class="secondary-button" id="monitorRefresh">Refresh</button>';
     const bodyMarkup='<div id="monitorBody" aria-live="polite"></div>';
     const exportButton='<button class="secondary-button" id="monitorExport">Export CSV</button>';
-    if(config.area==='environment'){
+    if(config.area==='environment'&&!config.dashboard){
       root.innerHTML=`<div class="page inner-page environmental-register-page"><a class="back-link" href="#/environmental">← Environmental</a><div class="page-heading"><h1>${config.title}</h1></div><div class="she-stat-controls">${yearControl}${refresh}${exportButton}</div>${bodyMarkup}</div>`;
     }else if(register){
       root.innerHTML=`<div class="page inner-page accident-register-page"><a class="back-link" href="#/safety">← Safety</a><div class="page-heading"><h1>Accident Register</h1></div><div class="she-stat-controls">${yearControl}${refresh}<a class="secondary-button" href="#/accident-dashboard">View dashboard</a></div>${bodyMarkup}</div>`;
@@ -63,6 +65,7 @@ const SHEMonitoring = (() => {
       if(register){drawAccidentEditor();return;}
       if(config.kind==='accident'){drawAccident();return;}
       if(config.kind==='hiyari'){drawHiyari();return;}
+      if(config.kind==='patrol-environment'){drawPatrolEnvironment();return;}
       body.innerHTML=`<section class="report-detail-card"><h2>Monthly register</h2><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${data.months.map(r=>`<th scope="col"><button class="monitor-month-link" data-month="${r.month}">${names(r.month)}</button></th>`).join('')}</tr></thead><tbody>${data.categories.map(c=>`<tr><th scope="row">${esc(c)}</th>${data.months.map(r=>`<td>${display(r.payload.counts[c])}</td>`).join('')}</tr>`).join('')}<tr class="monitor-total"><th scope="row">Total</th>${data.months.map(r=>`<td>${display(r.total)}${r.total!==null&&!r.complete?' *':''}</td>`).join('')}</tr></tbody></table></div><p class="field-hint">* Partial total.</p></section><section id="monitorEditor" class="report-detail-card"></section>`;
       body.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{selected=b.dataset.month;editor();body.querySelector('#monitorEditor').scrollIntoView({behavior:'smooth',block:'start'});});
       selected=selected||data.months.find(r=>!r.complete)?.month||data.months[0].month;editor();
@@ -132,11 +135,54 @@ const SHEMonitoring = (() => {
       });
       records();
     }
+    let envFilter={month:'',category:''};
+    function drawPatrolEnvironment() {
+      const months=data.months, max=Math.max(1,...months.map(m=>m.total));
+      const tile=(label,value,category='')=>`<button type="button" class="env-kpi ${category?envSeries[category]:''}" ${category?`data-env-category="${esc(category)}"`:'data-env-clear'} aria-pressed="false"><strong>${display(value)}</strong><span>${category?'<i aria-hidden="true"></i>':''}${esc(label)}</span></button>`;
+      const legend=data.categories.map(c=>`<button type="button" class="env-legend-item ${envSeries[c]}" data-env-category="${esc(c)}" aria-pressed="false"><i aria-hidden="true"></i>${esc(c)} <b>${data.totals[c]}</b></button>`).join('');
+      const bars=months.map(m=>{
+        let y=154;
+        const segments=data.categories.map(c=>{const v=m.counts[c];if(!v)return '';const h=v/max*150;y-=h;return `<rect class="${envSeries[c]}" x="0" y="${y.toFixed(2)}" width="100" height="${Math.max(h-2,1).toFixed(2)}"/>`;}).join('');
+        const tip=names(m.month)+' '+year+': '+data.categories.map(c=>c+' '+m.counts[c]).join(', ');
+        return `<button type="button" class="monitor-month-point env-month" data-env-month="${m.month}" aria-pressed="false" aria-label="${esc(tip)}. Select to filter records." data-tip="${esc(tip)}"><strong>${m.total||'–'}</strong><span class="monitor-track">${m.total?`<svg viewBox="0 0 100 154" preserveAspectRatio="none" aria-hidden="true">${segments}</svg>`:''}</span><span>${names(m.month)}</span></button>`;
+      }).join('');
+      const rows=[...data.categories.map(c=>[c,m=>m.counts[c]]),['Total findings',m=>m.total],...data.categories.map(c=>[c+' · items checked',m=>m.checked[c]])];
+      body.innerHTML=`<div class="report-stats env-kpis">${tile('Total findings',data.total)}${data.categories.map(c=>tile(c,data.totals[c],c)).join('')}<div><strong>${display(data.open)}</strong><span>Awaiting follow-up</span></div></div>
+        <section class="report-detail-card env-trend"><div class="env-trend-heading"><div><h2>Findings by month · ${year}</h2><p>NOT OK answers on patrol items 17 and 21. Select a month or category to filter.</p></div><div class="env-legend" aria-label="Legend">${legend}</div></div>
+          ${data.total?`<div class="monitor-table-wrap" tabindex="0" role="region" aria-label="Monthly findings chart"><div class="monitor-month-chart env-month-chart">${bars}</div></div>`:'<p class="she-chart-empty">No spillage or Aedes findings recorded in '+year+'.</p>'}
+          <details class="env-table-view"><summary>Show as table</summary><div class="monitor-table-wrap"><table class="monitor-table"><thead><tr><th scope="col">Category</th>${months.map(m=>`<th scope="col">${names(m.month)}</th>`).join('')}<th scope="col">Total</th></tr></thead><tbody>${rows.map(([label,value],i)=>`<tr ${i===data.categories.length?'class="monitor-total"':''}><th scope="row">${esc(label)}</th>${months.map(m=>`<td>${value(m)}</td>`).join('')}<td>${months.reduce((sum,m)=>sum+value(m),0)}</td></tr>`).join('')}</tbody></table></div></details>
+        </section>
+        <section class="report-detail-card env-records"><div class="hiyari-dashboard-toolbar"><div><h2>Patrol findings</h2><p id="envFilterLabel" role="status"></p></div><button type="button" class="secondary-button" data-env-clear hidden>Clear filter</button></div><div id="envRows"></div></section>
+        <div class="env-tooltip" role="tooltip" hidden></div>`;
+      const tooltip=body.querySelector('.env-tooltip');
+      body.querySelectorAll('[data-env-month]').forEach(button=>{
+        button.onclick=()=>{envFilter.month=envFilter.month===button.dataset.envMonth?'':button.dataset.envMonth;applyEnvFilter();};
+        button.onpointermove=e=>{tooltip.hidden=false;tooltip.textContent=button.dataset.tip;const box=body.getBoundingClientRect();tooltip.style.left=(e.clientX-box.left+14)+'px';tooltip.style.top=(e.clientY-box.top+14)+'px';};
+        button.onpointerleave=()=>{tooltip.hidden=true;};
+      });
+      body.querySelectorAll('[data-env-category]').forEach(button=>button.onclick=()=>{envFilter.category=envFilter.category===button.dataset.envCategory?'':button.dataset.envCategory;applyEnvFilter();});
+      body.querySelectorAll('[data-env-clear]').forEach(button=>button.onclick=()=>{envFilter={month:'',category:''};applyEnvFilter();});
+      applyEnvFilter();
+    }
+    function applyEnvFilter() {
+      if(envFilter.month&&!data.months.some(m=>m.month===envFilter.month))envFilter.month='';
+      const {month,category}=envFilter;
+      body.querySelectorAll('[data-env-month]').forEach(b=>{const on=b.dataset.envMonth===month;b.setAttribute('aria-pressed',on);b.classList.toggle('is-dimmed',Boolean(month)&&!on);});
+      body.querySelectorAll('[data-env-category]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.envCategory===category));
+      body.querySelector('.env-month-chart')?.setAttribute('data-category',category?envSeries[category]:'');
+      const rows=data.records.filter(r=>(!month||r.date.startsWith(month))&&(!category||r.category===category));
+      const parts=[month?names(month)+' '+year:'All of '+year,category].filter(Boolean);
+      body.querySelector('#envFilterLabel').textContent=rows.length+(rows.length===1?' finding':' findings')+' · '+parts.join(' · ');
+      body.querySelector('.env-records [data-env-clear]').hidden=!month&&!category;
+      const target=body.querySelector('#envRows');
+      target.innerHTML=SHEStats.recordsTable(rows.map(r=>({...r,title:r.category,context:r.inspector,description:[r.remark||'No remark',r.item].filter(Boolean).join(' · '),detail_url:'#/daily-safety-patrol/'+r.id,statusTone:r.status==='Resolved'?'is-complete':''})),0,'Inspector');
+      SHEStats.bindEvidence(target);
+    }
     root.querySelector('#monitorYear').onchange=e=>{if(e.target.checkValidity()&&/^20\d{2}$/.test(e.target.value)){year=e.target.value;selected=null;sessionStorage.setItem('she-monitor-year',year);load();}};
     root.querySelector('#monitorRefresh').onclick=load;
     if(!register)root.querySelector('#monitorExport').onclick=()=>{
       if(!data)return;
-      const rows=config.kind==='hiyari'?[['Reference','Date','Reporter','Section','Category','Rank','STOP','PIC','Status','Description'],...data.records.map(r=>['reference','date','reporter','section','category','rank','stop','pic','status','description'].map(k=>r[k]))]:[['Category',...data.months.map(r=>r.month)],...data.categories.map(c=>[c,...data.months.map(r=>r.payload.counts[c])]),['Total',...data.months.map(r=>r.total)],...(config.kind==='accident'?['off_job','man_hours','ifr'].map(f=>[f,...data.months.map(r=>f==='ifr'?r.ifr:r.payload[f])]):[])];
+      const rows=config.kind==='patrol-environment'?[['Patrol','Date','Category','Checklist item','Inspector','Remark','Status'],...data.records.map(r=>[r.reference,r.date,r.category,r.item,r.inspector,r.remark,r.status])]:config.kind==='hiyari'?[['Reference','Date','Reporter','Section','Category','Rank','STOP','PIC','Status','Description'],...data.records.map(r=>['reference','date','reporter','section','category','rank','stop','pic','status','description'].map(k=>r[k]))]:[['Category',...data.months.map(r=>r.month)],...data.categories.map(c=>[c,...data.months.map(r=>r.payload.counts[c])]),['Total',...data.months.map(r=>r.total)],...(config.kind==='accident'?['off_job','man_hours','ifr'].map(f=>[f,...data.months.map(r=>f==='ifr'?r.ifr:r.payload[f])]):[])];
       download(rows,config.kind+'-'+year+'.csv');
     };
     await load();

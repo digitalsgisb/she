@@ -51,6 +51,7 @@ const routes = {
   'environmental-enforcement-register': { title: 'Environmental Enforcement Register', icon: 'leaf' },
   'environmental-inspection-register': { title: 'Environmental Inspection Register', icon: 'leaf' },
   'environment-dashboard': { title: 'Environmental Dashboard', icon: 'leaf' },
+  'environment-count-dashboard': { title: 'Number of Environment', icon: 'leaf' },
   environmental: { title: 'Environmental', icon: 'leaf' },
   'red-tag': { title: 'Red Tag', icon: 'tag' },
   'red-tag-pic': { title: 'Assigned to me', icon: 'tag' },
@@ -392,8 +393,8 @@ async function renderSheSummary() {
 
 function dashboardHeader(area,title,detail,key='') {
   const areas=[['safety','safety-dashboard','Safety'],['health','health-dashboard','Health'],['environment','environment-dashboard','Environment']];
-  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','co2-dashboard']:[];
-  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes'};
+  const modules=area==='safety'?['accident-dashboard','red-tag-dashboard','hiyari-dashboard','patrol-dashboard']:area==='environment'?['environment-dashboard','environment-count-dashboard','co2-dashboard']:[];
+  const labels={'accident-dashboard':'Monthly accident statistic','red-tag-dashboard':'SSFM (Redtag) Gemba summary','hiyari-dashboard':'Hiyari Hatto Summary','patrol-dashboard':'Safety Patrol','co2-dashboard':'CO2 tracking','environment-dashboard':'Green Eyes','environment-count-dashboard':'Number of Environment'};
   return '<section class="dashboard-hero"><div class="dashboard-area-tabs" aria-label="Dashboard areas">'+areas.filter(([,route])=>canAccessRoute(route)).map(([id,route,label])=>'<a href="#/'+route+'" '+(id===area?'aria-current="page"':'')+'>'+label+'</a>').join('')+'</div><h1>'+title+'</h1>'+(detail?'<p>'+detail+'</p>':'')+'<div class="dashboard-hero-controls">'+(modules.length?'<label>'+ (area==='safety'?'Safety':'Environment')+' module<select data-dashboard-module>'+modules.filter(canAccessRoute).map(route=>'<option value="'+route+'" '+(route===key?'selected':'')+'>'+labels[route]+'</option>').join('')+'</select></label>':'')+'<div data-dashboard-controls></div></div></section>';
 }
 function bindDashboardHeader(){content.querySelector('[data-dashboard-module]')?.addEventListener('change',e=>{location.hash='#/'+e.target.value;});}
@@ -646,7 +647,7 @@ function render() {
   if(!currentUser)return;
   if(!modalBackdrop.hidden)dismissModal();
   const hash=location.hash;
-  const dashboardRoute=value=>/^#\/(?:dashboard(?:$|[/?])|(?:patrol|red-tag|environment|co2)-dashboard|dashboard-records|she-summary)/.test(value);
+  const dashboardRoute=value=>/^#\/(?:dashboard(?:$|[/?])|(?:patrol|red-tag|environment|environment-count|co2)-dashboard|dashboard-records|she-summary)/.test(value);
   const changing=lastRenderedHash&&lastRenderedHash!==hash&&(dashboardRoute(hash)||dashboardRoute(lastRenderedHash));
   lastRenderedHash=hash;SHEStats.hideTooltip();
   if(dashboardTransition)dashboardTransition.skipTransition();

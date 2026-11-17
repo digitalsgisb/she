@@ -1,6 +1,7 @@
 """Focused integration checks for SHE Digital accounts and authorization."""
 
 import json
+from datetime import datetime, timedelta, timezone
 import sqlite3
 import tempfile
 import threading
@@ -219,10 +220,13 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)[0], 400)
         request = Request(self.base + f'/api/patrols/{patrol_id}/attachments', data=b'\x89PNG\r\n\x1a\n', headers={'Cookie': cookie, 'X-CSRF-Token': csrf, 'X-File-Name': 'finding.png', 'X-Question-Id': 'q_photo', 'Content-Type': 'application/octet-stream'}, method='POST')
         attachment_id = json.loads(urlopen(request).read())['id']
+        # The NOT OK item still needs its own photo.
+        self.assertIn('Walkways clear?', self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)[1]['error'])
+        urlopen(Request(self.base + f'/api/patrols/{patrol_id}/attachments', data=b'\x89PNG\r\n\x1a\n', headers={'Cookie': cookie, 'X-CSRF-Token': csrf, 'X-File-Name': 'walkway.png', 'X-Question-Id': 'q_check', 'Content-Type': 'application/octet-stream'}, method='POST')).read()
         self.assertEqual(self.request(f'/api/patrols/{patrol_id}/complete', 'POST', {}, cookie, csrf)[0], 200)
         row = self.request('/api/patrols', cookie=other_cookie)[1]['patrols'][0]
         self.assertEqual(row['counts']['not_ok'], 1)
-        self.assertEqual(row['attachments'][0]['question_id'], 'q_photo')
+        self.assertEqual({a['question_id'] for a in row['attachments']}, {'q_photo', 'q_check'})
         photo = urlopen(Request(self.base + f'/api/patrols/{patrol_id}/attachments/{attachment_id}', headers={'Cookie': other_cookie}))
         self.assertTrue(photo.headers['Content-Disposition'].startswith('inline;'))
         photo.close()
@@ -232,6 +236,26 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.request('/api/patrols', 'POST', payload, cookie, csrf)[0], 409)
         snapshot = self.request(f'/api/patrols/{patrol_id}', cookie=other_cookie)[1]['patrol']['template']
         self.assertEqual(snapshot['title'], 'Warehouse patrol')
+
+    def test_past_patrol_date_is_for_executives_and_never_future(self):
+        self.first_admin()
+        cookie, csrf = self.login('admin', 'AdminPassword123!')
+        self.request('/api/users', 'POST', {'username': 'operator', 'display_name': 'operator', 'password': 'TestingPassword123!', 'role': 'user'}, cookie, csrf)
+        user_cookie, user_csrf = self.login('operator', 'TestingPassword123!')
+        template = self.request('/api/patrol-templates', cookie=cookie)[1]['templates'][0]
+        payload = {'template_id': 0, 'template_revision': template['revision'], 'inspector_name': 'Sara', 'rating': 3,
+                   'answers': {q['id']: 'ok' for q in template['questions']}, 'patrol_date': '2026-03-04T09:30'}
+        self.assertEqual(self.request('/api/patrols', 'POST', payload, user_cookie, user_csrf)[0], 400)
+        self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, patrol_date='2099-01-01T09:00'), cookie, csrf)[0], 400)
+        self.assertEqual(self.request('/api/patrols', 'POST', dict(payload, patrol_date='04/03/2026'), cookie, csrf)[0], 400)
+        patrol_id = self.request('/api/patrols', 'POST', payload, cookie, csrf)[1]['id']
+        patrol = self.request(f'/api/patrols/{patrol_id}', cookie=cookie)[1]['patrol']
+        moment = datetime.fromtimestamp(patrol['created_at'], timezone(timedelta(hours=8)))
+        self.assertEqual(moment.strftime('%Y-%m-%dT%H:%M'), '2026-03-04T09:30')
+        self.assertIsNotNone(patrol['entered_at'])
+        today = {k: v for k, v in payload.items() if k != 'patrol_date'}
+        today_id = self.request('/api/patrols', 'POST', today, user_cookie, user_csrf)[1]['id']
+        self.assertIsNone(self.request(f'/api/patrols/{today_id}', cookie=cookie)[1]['patrol']['entered_at'])
 
     def test_default_checklist_item_edits_require_executive_or_admin(self):
         self.first_admin()

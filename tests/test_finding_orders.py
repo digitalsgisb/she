@@ -108,3 +108,45 @@ class FindingOrderTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CmmsVerificationClosesSheRecords(unittest.TestCase):
+    """A work order verified (closed) in CMMS closes the linked patrol, Red Tag and report."""
+    setUp = AccountFlowTests.setUp
+    tearDown = AccountFlowTests.tearDown
+    first_admin = AccountFlowTests.first_admin
+
+    def test_closed_order_closes_patrol_redtag_and_report_but_not_hiyari(self):
+        import reporting
+        self.first_admin()
+        with server.database() as db:
+            uid = db.execute("SELECT id FROM users WHERE username='admin'").fetchone()['id']
+            patrol = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,created_at,template_json,completed,followup_status) VALUES(?,?,?,?,?,?,1,'open')",
+                                (uid, 'Aman', '{}', 2, 1, 'null')).lastrowid
+            finding = db.execute("INSERT INTO redtag_findings(red_tag_id,user_id,finding_date,section,pic,machine,hazard,type_of_stop,rank,recommendation,status,issued_by,photo,photo_mime,request_key,request_json,created_at) VALUES('RT-1',?,'2026-11-01','Macro','PIC','Press','Guard','2','A','Fix','Open','SHE',x'00','image/png','k1','{}',1)", (uid,)).lastrowid
+            for kind, source in (('patrol', patrol), ('red-tag', finding)):
+                db.execute("INSERT INTO source_orders(source_kind,source_id,snapshot_json,answers_json,reporter,plant,location,photos_json,order_state,order_id) VALUES(?,?,'{}','{}','r','sendayan','l','[]','issued',?)", (kind, source, 'wo-' + kind))
+            report = db.execute("INSERT INTO finding_reports(request_key,request_hash,snapshot_json,answers_json,reporter,contact,plant,location,photos_json,status,created_at,order_state,order_id) VALUES('a','h',?,'{}','r','','sendayan','l','[]','in_progress',1,'issued','wo-report')", (json.dumps({'group': 'environment', 'title': 'Spill'}),)).lastrowid
+            hiyari = db.execute("INSERT INTO finding_reports(request_key,request_hash,snapshot_json,answers_json,reporter,contact,plant,location,photos_json,status,created_at,order_state,order_id) VALUES('b','h',?,'{}','r','','sendayan','l','[]','open',1,'issued','wo-hiyari')", (json.dumps({'group': 'hiyari-hatto', 'title': 'Hiyari Hatto'}),)).lastrowid
+            db.commit()
+        orders = [{'id': 'wo-patrol', 'number': 'WO-1', 'status': 'closed', 'responsibleDepartment': 'SHE'},
+                  {'id': 'wo-red-tag', 'number': 'WO-2', 'status': 'resolved', 'responsibleDepartment': 'SHE'},
+                  {'id': 'wo-report', 'number': 'WO-3', 'status': 'closed', 'responsibleDepartment': 'SHE'},
+                  {'id': 'wo-hiyari', 'number': 'WO-4', 'status': 'closed', 'responsibleDepartment': 'SHE'}]
+        original = reporting.bridge.call
+        reporting.bridge.call = lambda path, *args, **kwargs: orders
+        try:
+            self.assertEqual(reporting.sync_order_statuses(server.database), 2)
+            with server.database() as db:
+                self.assertEqual(db.execute('SELECT followup_status FROM patrols WHERE id=?', (patrol,)).fetchone()[0], 'resolved')
+                self.assertIn('WO-1', db.execute('SELECT message FROM patrol_updates WHERE patrol_id=?', (patrol,)).fetchone()[0])
+                self.assertEqual(db.execute('SELECT status FROM redtag_findings WHERE id=?', (finding,)).fetchone()[0], 'Open')
+                self.assertEqual(db.execute('SELECT status FROM finding_reports WHERE id=?', (report,)).fetchone()[0], 'closed')
+                self.assertEqual(db.execute('SELECT status FROM finding_reports WHERE id=?', (hiyari,)).fetchone()[0], 'open')
+            orders[1]['status'] = 'closed'
+            self.assertEqual(reporting.sync_order_statuses(server.database), 1)
+            self.assertEqual(reporting.sync_order_statuses(server.database), 0)
+            with server.database() as db:
+                self.assertEqual(db.execute('SELECT status FROM redtag_findings WHERE id=?', (finding,)).fetchone()[0], 'Closed')
+        finally:
+            reporting.bridge.call = original

@@ -62,7 +62,7 @@ const SHEFinding = (() => {
           return `<li>${splitLabel(q.label)}<p class="finding-answer"><span>NOT OK</span>${remark ? esc(remark) : 'No remark'}</p>${pics.length ? photos(pics, '') : ''}</li>`;
         }).join('')}</ol>` : '<p class="finding-empty">No NOT OK items in this patrol.</p>');
         const rating = patrol.rating ? patrol.rating + ' star' + (patrol.rating === 1 ? '' : 's') : '';
-        fill(view, '[data-finding-remarks]', `${patrol.remarks ? `<p class="finding-text">${esc(patrol.remarks)}</p>` : '<p class="finding-empty">No overall remarks.</p>'}${rating ? `<p class="finding-empty">Overall rating: ${esc(rating)} · Submitted by ${esc(patrol.submitted_by)}</p>` : ''}`);
+        fill(view, '[data-finding-remarks]', `${patrol.remarks ? `<p class="finding-text">${esc(patrol.remarks)}</p>` : '<p class="finding-empty">No overall remarks.</p>'}${rating ? `<p class="finding-empty">Overall rating: ${esc(rating)} · Submitted by ${esc(patrol.submitted_by)}</p>` : ''}${patrol.entered_at ? `<p class="finding-empty">Past patrol · entered into SHE Digital on ${esc(when(patrol.entered_at))}</p>` : ''}`);
         fill(view, '[data-finding-updates]', patrolUpdates(patrol, src));
       }
     }),
@@ -122,7 +122,9 @@ const SHEFinding = (() => {
       page.hidden = true;
     }
     state.view?.remove();
-    const nav = `<div class="finding-nav"><button type="button" class="primary-button finding-back" data-finding-back>← ${esc(backLabels[kind])}</button>${rows.length > 1 ? `<div class="finding-step"><button type="button" class="secondary-button" data-finding-step="-1" ${index === 0 ? 'disabled' : ''}>‹ Previous</button><span>Finding ${index + 1} of ${rows.length}</span><button type="button" class="secondary-button" data-finding-step="1" ${index === rows.length - 1 ? 'disabled' : ''}>Next ›</button></div>` : ''}</div>`;
+    const route = location.hash.slice(2).split(/[/?]/)[0];
+    const backTo = route === 'reporting-inbox' ? 'Back to inbox' : route === 'patrol-overview' ? 'Back to patrol history' : backLabels[kind];
+    const nav = `<div class="finding-nav"><button type="button" class="primary-button finding-back" data-finding-back>← ${esc(backTo)}</button>${rows.length > 1 ? `<div class="finding-step"><button type="button" class="secondary-button" data-finding-step="-1" ${index === 0 ? 'disabled' : ''}>‹ Previous</button><span>Finding ${index + 1} of ${rows.length}</span><button type="button" class="secondary-button" data-finding-step="1" ${index === rows.length - 1 ? 'disabled' : ''}>Next ›</button></div>` : ''}</div>`;
     const view = document.createElement('div');
     view.className = 'page inner-page finding-page';
     view.innerHTML = `${nav}<article class="finding" aria-labelledby="findingTitle"><header class="report-detail-card finding-head"><span class="finding-chip ${esc(spec.chipClass || '')}"><i aria-hidden="true"></i>${esc(spec.chip)}</span><h1 id="findingTitle">${esc(spec.title)}</h1>${facts(spec.facts)}</header>${spec.body}<p class="finding-more"><a class="secondary-button" href="${esc(spec.link[0])}">${esc(spec.link[1])}</a></p></article>${nav}`;

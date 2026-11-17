@@ -220,8 +220,51 @@ function patrolAnswerButtons(question) {
   return `<div id="${question.id}" class="patrol-answer-buttons" role="radiogroup" aria-label="${escapeHtml(question.label)}">${options.map(([value, label]) => `<label class="patrol-answer-button"><input type="radio" name="${question.id}" value="${escapeHtml(value)}" ${question.required ? 'required' : ''} /><span data-answer-status="${question.type === 'status' ? value : 'choice'}">${escapeHtml(label)}</span></label>`).join('')}</div>${question.required ? '' : `<button type="button" class="patrol-clear-answer" data-clear-answer="${question.id}">Clear answer</button>`}`;
 }
 
+/* NOT OK needs proof: each NOT OK item opens its own required photo box. */
+function patrolNotOkPhoto(question) {
+  return `<div class="patrol-notok-photo" data-notok-photo="${question.id}" hidden><div class="patrol-notok-head"><span class="patrol-notok-badge">Photo required</span><strong>Take a photo of this NOT OK item</strong></div><label class="patrol-notok-pick"><input type="file" accept="image/*" capture="environment" multiple data-notok-input="${question.id}" aria-label="Photo for NOT OK item: ${escapeHtml(question.label)}" /><span class="patrol-notok-pick-label">${icon('camera', 20)}<span>Take or choose photo</span></span></label><div class="patrol-notok-preview" data-notok-preview="${question.id}"></div></div>`;
+}
+function syncNotOkPhotos(root = document) {
+  root.querySelectorAll('[data-notok-photo]').forEach(box => {
+    const notOk = root.querySelector(`input[name="${CSS.escape(box.dataset.notokPhoto)}"][value="not_ok"]`)?.checked;
+    box.hidden = !notOk;
+    box.closest('.patrol-field')?.classList.toggle('patrol-field-notok', Boolean(notOk));
+    // Checked on submit with a clear red message (a native "required" bubble is easy to miss on a hidden file input).
+    const input = box.querySelector('[data-notok-input]');
+    box.classList.toggle('has-photo', Boolean(input.files.length));
+  });
+}
+function missingNotOkPhotos(form) {
+  return [...form.querySelectorAll('[data-notok-photo]')].filter(box => !box.hidden && !box.querySelector('[data-notok-input]').files.length);
+}
+function previewNotOkPhoto(input) {
+  const preview = document.querySelector(`[data-notok-preview="${CSS.escape(input.dataset.notokInput)}"]`);
+  if (!preview) return;
+  preview.replaceChildren();
+  [...input.files].forEach(file => {
+    const card = document.createElement('span');
+    preview.append(card);
+    // data: URLs match the page's image policy (blob: previews are blocked).
+    if (file.size > 15_000_000) { card.append(icon('camera', 28)); return; }
+    const reader = new FileReader();
+    reader.onload = () => { if (!card.isConnected) return; const img = document.createElement('img'); img.alt = 'Photo for this NOT OK item'; img.src = reader.result; card.append(img); };
+    reader.readAsDataURL(file);
+  });
+  if (input.files.length) { const ok = document.createElement('strong'); ok.innerHTML = `${icon('check', 16)}<span>${input.files.length} photo${input.files.length === 1 ? '' : 's'} added</span>`; preview.append(ok); }
+  const box = input.closest('[data-notok-photo]');
+  box.classList.toggle('has-photo', Boolean(input.files.length));
+  box.classList.remove('is-missing');
+  box.querySelector('.patrol-notok-badge').textContent = input.files.length ? 'Photo added' : 'Photo required';
+  box.querySelector('.patrol-notok-pick-label > span').textContent = input.files.length ? 'Change photo' : 'Take or choose photo';
+}
+function patrolWhenMarkup() {
+  if (!['admin', 'executive'].includes(currentUser.role)) return '';
+  const now = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 16);
+  return `<fieldset class="patrol-section patrol-when"><legend>When was this patrol done?</legend><div class="patrol-when-options"><label><input type="radio" name="patrol_when" value="now" checked /> Today (now)</label><label><input type="radio" name="patrol_when" value="past" /> Past patrol · enter old record</label></div><div class="patrol-when-past" data-patrol-past hidden><label for="patrolPastDate">Date and time of the patrol <span class="required">*</span></label><input id="patrolPastDate" name="patrol_date" type="datetime-local" max="${now}" /><small>Use this to bring paper or past patrols into SHE Digital. It is saved on that date and counted in that month's dashboards.</small></div></fieldset>`;
+}
+
 function customPatrolQuestions(template, answers = null, attachments = [], patrolId = null, itemRemarks = {}) {
-  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : patrolAnswerButtons(q)}${patrolItemRemark(q.id, q.label, answers ? itemRemarks : null)}</div>`).join('');
+  return template.questions.map(q => `<div class="patrol-field"><label for="${q.id}">${escapeHtml(q.label)} ${q.required ? '<span class="required">*</span>' : ''}</label>${answers ? q.type === 'photo' ? patrolPhotoMarkup(patrolId, attachments.filter(f => f.question_id === q.id), q.label) || 'No photos' : `<p class="patrol-answer">${escapeHtml(q.type === 'status' ? ({ok: 'OK', not_ok: 'NOT OK', na: 'N/A'}[answers[q.id]] || 'No answer') : answers[q.id] || 'No answer')}</p>` : q.type === 'photo' ? `<input id="${q.id}" type="file" data-photo-question="${q.id}" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.heic" ${q.required ? 'required' : ''} /><small>Upload photos or take a picture on your phone.</small>` : q.type === 'text' ? `<textarea id="${q.id}" name="${q.id}" rows="3" maxlength="5000" ${q.required ? 'required' : ''}></textarea>` : patrolAnswerButtons(q) + (q.type === 'status' ? patrolNotOkPhoto(q) : '')}${patrolItemRemark(q.id, q.label, answers ? itemRemarks : null)}</div>`).join('');
 }
 
 async function renderChecklistBuilder() {
@@ -424,8 +467,30 @@ async function loadOlderPatrols(){
   finally{patrolView.loadingOlder=false;}
 }
 function renderPatrolOverviewPage(){
+  queueMicrotask(bindPatrolHistoryDetails);
   renderPatrolContent(`<div class="page inner-page patrol-page patrol-history-page">${patrolNavigation()}<header class="patrol-history-header"><h1>Patrol History</h1><a class="secondary-button" href="#/daily-safety-patrol">New checklist</a></header><div class="patrol-history-toolbar"><label class="patrol-compact-period">Period<select id="patrolPeriodFilter">${[['all','All patrols'],['week','Week'],['month','Month']].map(([value,label])=>`<option value="${value}" ${patrolView.mode===value?'selected':''}>${label}</option>`).join('')}</select></label>${patrolView.mode!=='all'?`<input id="patrolDate" type="${patrolView.mode==='month'?'month':'date'}" aria-label="${patrolView.mode==='month'?'Month':'Week containing'}" value="${patrolLocalDate(patrolView.anchor).slice(0,patrolView.mode==='month'?7:10)}">`:''}<details class="patrol-small-filters"><summary>Filters</summary><div><input id="patrolSearch" type="search" value="${escapeHtml(patrolView.search)}" placeholder="Inspector, checklist or ID" aria-label="Search patrol history"><select id="patrolStatusFilter" aria-label="Follow-up status">${[['all','All statuses'],['attention','Needs attention'],['open','Open'],['action_taken','Awaiting review'],['resolved','Resolved']].map(([value,label])=>`<option value="${value}" ${patrolView.status===value?'selected':''}>${label}</option>`).join('')}</select><label><input id="patrolFindingsOnly" type="checkbox" ${patrolView.findingsOnly?'checked':''}> With findings</label></div></details><small id="patrolSyncStatus" role="status">Live</small></div>${patrolSummaryTableMarkup(patrolView.rows)}${patrolDailyReportMarkup(patrolView.rows)}${patrolView.nextCursor?'<button class="secondary-button" type="button" data-patrol-older>Load older patrols</button>':''}<p class="form-error" data-patrol-history-error role="alert" hidden></p></div>`);
   bindIssueThumbnails(content);
+}
+
+function bindPatrolHistoryDetails() {
+  const page = content.querySelector('.patrol-history-page');
+  if (!page || page.dataset.findingBound) return;
+  page.dataset.findingBound = 'true';
+  page.addEventListener('click', event => {
+    const item = event.target.closest('#patrolSummaryTable tbody tr, .patrol-report-record');
+    if (!item || event.target.closest('.patrol-summary-photos a, [href*="followup=1"], img')) return;
+    if (event.ctrlKey || event.metaKey) return;
+    const scope = item.closest('#patrolSummaryTable, #patrolDailyReports');
+    const ids = [...scope.querySelectorAll('a.patrol-report-open')].map(a => Number(a.getAttribute('href').split('/').pop()));
+    const id = Number(item.querySelector('a.patrol-report-open')?.getAttribute('href').split('/').pop());
+    const byId = new Map(patrolView.rows.map(row => [row.id, row]));
+    const rows = ids.map(rowId => byId.get(rowId)).filter(Boolean).map(row => ({id: row.id, reference: 'Patrol #' + row.id, title: row.title, checklist: row.title,
+      date: patrolLocalDate(new Date(row.created_at * 1000)), inspector: row.inspector_name, not_ok: row.counts.not_ok, status: patrolStatusLabels[row.followup_status || 'open']}));
+    const index = rows.findIndex(row => row.id === id);
+    if (index < 0) return;
+    event.preventDefault();
+    SHEFinding.open(rows, index, 'patrol');
+  });
 }
 
 function patrolGrid(group, title, items, answers = null, itemRemarks = {}) {
@@ -491,6 +556,8 @@ async function renderPatrolForm() {
   activePatrolTemplate = patrolTemplates.find(t => String(t.id) === location.hash.split('?')[0].split('/')[2]?.replace('template-', '')) || patrolTemplates.find(t => t.is_default) || null;
   renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}${activePatrolTemplate ? `<div class="page-heading"><h1>${escapeHtml(activePatrolTemplate.title)}</h1><p>${escapeHtml(activePatrolTemplate.is_default?patrolIntro:activePatrolTemplate.description)}</p></div>` : patrolHeading('<a class="secondary-button" href="#/patrol-overview">Patrol history</a>')}<div class="patrol-checklist-bar"><label>Checklist<select id="patrolTemplateSelect">${patrolTemplates.map(t => `<option value="${t.id}" ${activePatrolTemplate?.id === t.id ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('')}</select></label><a class="secondary-button" href="#/checklist-builder">+ Create checklist</a>${activePatrolTemplate && (activePatrolTemplate.user_id === currentUser.id || ['admin','executive'].includes(currentUser.role)) ? `<a class="secondary-button" href="#/checklist-builder/${activePatrolTemplate.id}">Edit checklist</a>` : ''}</div><form id="patrolForm" class="patrol-card">
     <fieldset class="patrol-section patrol-inspector"><legend>Inspector's Name <span class="required">*</span></legend><div class="patrol-inspector-options"><label><input type="radio" name="inspector" value="Sara" required /> Sara</label><label><input type="radio" name="inspector" value="Aman" /> Aman</label><label><input type="radio" name="inspector" value="Other" /> Other</label><input id="patrolOtherName" name="other_name" type="text" maxlength="80" placeholder="Enter inspector name" disabled /></div></fieldset>
+    ${patrolWhenMarkup()}
+    <p class="patrol-notok-rule">Every item marked <strong>NOT OK</strong> needs a photo before you can submit.</p>
     ${activePatrolTemplate ? customPatrolQuestions(activePatrolTemplate) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items)).join('')}
     <fieldset class="patrol-section"><legend>Overall Rating <span class="required">*</span></legend><div class="patrol-stars" role="radiogroup" aria-label="Overall rating">${[1, 2, 3].map(value => `<label><input type="radio" name="rating" value="${value}" required /><span aria-hidden="true">☆</span><span class="sr-only">${value} ${value === 1 ? 'star' : 'stars'}</span></label>`).join('')}</div></fieldset>
     <div class="patrol-field"><label for="patrolRemarks">Overall remarks <small>(optional)</small></label><textarea id="patrolRemarks" name="remarks" rows="4" maxlength="5000" placeholder="Add findings or follow-up notes"></textarea></div>
@@ -498,6 +565,7 @@ async function renderPatrolForm() {
     <p class="patrol-draft-note" id="patrolDraftNote">Answers save on this device. Submitting needs internet.</p><div class="form-error" id="patrolError" role="alert" hidden></div><div class="patrol-actions"><a class="secondary-button" href="#/safety">Cancel</a><button class="primary-button" type="submit">Submit patrol</button></div>
   </form></div>`);
   restorePatrolDraft();
+  syncNotOkPhotos(content);
 }
 
 async function renderPatrolOverview(){
@@ -520,7 +588,7 @@ async function renderPatrolDetail(id) {
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('?')[0].split('/')[2] !== String(id)) return;
     content.dataset.patrolSnapshot = JSON.stringify(patrol);
     if (patrol.completed) { renderCompletedPatrol(patrol); return; }
-    renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="page-heading"><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${patrol.completed ? 'Submitted' : 'Saved pending photos'} ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${!patrol.completed ? '<p class="form-error">Required photos are missing. Add them below to finish.</p>' : ''}${patrol.template ? customPatrolQuestions(patrol.template, patrol.answers, patrol.attachments, id, patrol.item_remarks || {}) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers, patrol.item_remarks || {})).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrolPhotoMarkup(id, patrol.attachments)}</div>${!patrol.completed ? `<label>Photo question<select id="patrolUploadQuestion"><option value="">General attachment</option>${patrol.template.questions.filter(q => q.type === 'photo').map(q => `<option value="${q.id}">${escapeHtml(q.label)}</option>`).join('')}</select></label><button type="button" class="primary-button" data-complete-patrol="${id}">Finish submission</button>` : ''}<label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`);
+    renderPatrolContent(`<div class="page inner-page patrol-page">${patrolNavigation()}<div class="page-heading"><h1>${escapeHtml(patrol.template?.title || 'Daily Safety Patrol Checklist')}</h1><p>${patrol.completed ? 'Submitted' : 'Saved pending photos'} ${new Date(patrol.created_at * 1000).toLocaleString()} by ${escapeHtml(patrol.submitted_by)}</p></div><div class="patrol-card"><div class="patrol-summary"><div><small>INSPECTOR</small><strong>${escapeHtml(patrol.inspector_name)}</strong></div><div><small>OVERALL RATING</small><strong>${'★'.repeat(patrol.rating)}${'☆'.repeat(3 - patrol.rating)}</strong></div></div>${!patrol.completed ? `<p class="form-error">Photos are missing. Every NOT OK item needs a photo. Choose the item below, add its photo, then select Finish submission.</p>` : ''}${patrol.template ? customPatrolQuestions(patrol.template, patrol.answers, patrol.attachments, id, patrol.item_remarks || {}) : patrolSections.map(([group, title, items]) => patrolGrid(group, title, items, patrol.answers, patrol.item_remarks || {})).join('')}<div class="patrol-field"><strong>Remarks</strong><p>${escapeHtml(patrol.remarks || 'No remarks')}</p></div><div class="patrol-field"><strong>Attachments</strong><div class="patrol-attachments">${patrolPhotoMarkup(id, patrol.attachments)}</div>${!patrol.completed ? `<label>Photo for<select id="patrolUploadQuestion">${patrol.template.questions.filter(q => q.type === 'status' && patrol.answers[q.id] === 'not_ok' && !patrol.attachments.some(a => a.question_id === q.id)).map(q => `<option value="${q.id}">NOT OK · ${escapeHtml(q.label)}</option>`).join('')}${patrol.template.questions.filter(q => q.type === 'photo').map(q => `<option value="${q.id}">${escapeHtml(q.label)}</option>`).join('')}<option value="">General attachment</option></select></label><button type="button" class="primary-button" data-complete-patrol="${id}">Finish submission</button>` : ''}<label for="patrolMoreFiles" class="secondary-button">Add attachments</label><input id="patrolMoreFiles" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,image/*,video/*,audio/*" /><div class="form-error" id="patrolUploadError" role="alert" hidden></div></div><a class="back-link" href="#/patrol-overview">${icon('arrow', 17)} Back to Patrol Overview</a></div></div>`);
   } catch (error) {
     if (currentRoute() !== 'daily-safety-patrol' || location.hash.split('?')[0].split('/')[2] !== String(id)) return;
     renderPatrolContent(`<div class="page inner-page"><div class="form-error">${escapeHtml(error.message)}</div><a class="back-link" href="#/patrol-overview">Back to Patrol Overview</a></div>`);
@@ -672,6 +740,12 @@ function initPatrolEvents() {
       patrolView.page = 0;
     updatePatrolResults();
     }
+    if (event.target.closest('#patrolForm') && event.target.type === 'radio' && event.target.closest('.patrol-answer-buttons')) syncNotOkPhotos(event.target.form);
+    if (event.target.matches?.('[data-notok-input]')) previewNotOkPhoto(event.target);
+    if (event.target.name === 'patrol_when') {
+      const past = event.target.value === 'past', box = event.target.form.querySelector('[data-patrol-past]'), input = box.querySelector('input');
+      box.hidden = !past; input.required = past; if (past) input.focus(); else input.value = '';
+    }
     if (event.target.name === 'inspector') {
       const other = document.getElementById('patrolOtherName');
       other.disabled = event.target.value !== 'Other';
@@ -685,7 +759,7 @@ function initPatrolEvents() {
       errorBox.hidden = true;
       try {
         const {patrol} = await api(`/api/patrols/${id}`);
-        if (patrol.attachments.length + event.target.files.length > 10) throw new Error('A patrol can have up to 10 attachments.');
+        if (patrol.attachments.length + event.target.files.length > 40) throw new Error('A patrol can have up to 40 attachments.');
         await uploadPatrolFiles(id, [...event.target.files], document.getElementById('patrolUploadQuestion')?.value || '');
         notify('Attachments added.');
         renderPatrolDetail(id);
@@ -709,15 +783,31 @@ function initPatrolEvents() {
       output.hidden = false;
       return;
     }
+    const missing = missingNotOkPhotos(form);
+    form.querySelectorAll('[data-notok-photo]').forEach(box => box.classList.toggle('is-missing', missing.includes(box)));
+    if (missing.length) {
+      output.textContent = `Add a photo for ${missing.length === 1 ? 'the NOT OK item' : `all ${missing.length} NOT OK items`} highlighted in red before submitting.`;
+      output.hidden = false;
+      missing[0].scrollIntoView({behavior: 'smooth', block: 'center'});
+      missing[0].querySelector('[data-notok-input]').focus({preventScroll: true});
+      return;
+    }
+    const past = data.get('patrol_when') === 'past' ? data.get('patrol_date') : '';
+    if (data.get('patrol_when') === 'past' && !past) { output.textContent = 'Choose the date and time of the past patrol.'; output.hidden = false; return; }
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
       const photoInputs = [...form.querySelectorAll('[data-photo-question]')];
-      validatePatrolFiles([...files, ...photoInputs.flatMap(input => [...input.files])]);
-      const {id} = await api('/api/patrols', 'POST', {template_id: activePatrolTemplate?.id, template_revision: activePatrolTemplate?.revision, inspector_name: data.get('inspector') === 'Other' ? data.get('other_name') : data.get('inspector'), answers, item_remarks: collectPatrolItemRemarks(form), rating: Number(data.get('rating')), remarks: data.get('remarks')});
+      const notOkInputs = [...form.querySelectorAll('[data-notok-input]')].filter(input => !input.closest('[data-notok-photo]').hidden && input.files.length);
+      if (files.length > 10) throw new Error('Choose up to 10 general attachments.');
+      if ([...photoInputs, ...notOkInputs].reduce((sum, input) => sum + input.files.length, files.length) > 40) throw new Error('A patrol can have up to 40 photos and files in total.');
+      const everyFile = [...files, ...photoInputs.flatMap(input => [...input.files]), ...notOkInputs.flatMap(input => [...input.files])];
+      for (let start = 0; start < everyFile.length; start += 10) validatePatrolFiles(everyFile.slice(start, start + 10));
+      const {id} = await api('/api/patrols', 'POST', {template_id: activePatrolTemplate?.id, template_revision: activePatrolTemplate?.revision, inspector_name: data.get('inspector') === 'Other' ? data.get('other_name') : data.get('inspector'), answers, item_remarks: collectPatrolItemRemarks(form), rating: Number(data.get('rating')), remarks: data.get('remarks'), ...(past ? {patrol_date: past} : {})});
       try {
         await uploadPatrolFiles(id, files);
         for (const input of photoInputs) await uploadPatrolFiles(id, [...input.files], input.dataset.photoQuestion);
+        for (const input of notOkInputs) await uploadPatrolFiles(id, [...input.files], input.dataset.notokInput);
         if (activePatrolTemplate) await api(`/api/patrols/${id}/complete`, 'POST', {});
         notify('Patrol submitted.');
       } catch (error) {

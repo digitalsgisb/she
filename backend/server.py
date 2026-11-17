@@ -58,6 +58,35 @@ LOGIN_LOCK = Lock()
 COOKIE_NAME = "safety_session"
 
 
+def attachment_limit(update_id):
+    return 10 if update_id else 40
+
+
+def not_ok_without_photo(db, patrol_id, template, answers):
+    """Labels of NOT OK status items that have no photo attached to that item."""
+    photographed = {r['question_id'] for r in db.execute(
+        "SELECT DISTINCT question_id FROM patrol_attachments WHERE patrol_id=? AND update_id IS NULL AND mime_type LIKE 'image/%'", (patrol_id,))}
+    return [q['label'] for q in template['questions'] if q['type'] == 'status' and answers.get(q['id']) == 'not_ok' and q['id'] not in photographed]
+
+
+def patrol_date(value, user, now):
+    """Executives may record a past patrol (YYYY-MM-DDTHH:MM, Malaysia time); others always use now."""
+    if value in (None, ''):
+        return now
+    if user['role'] not in ('admin', 'executive'):
+        raise ValueError('Only SHE executives can enter a past patrol date.')
+    if not isinstance(value, str) or not re.fullmatch(r'20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}', value):
+        raise ValueError('Choose a valid patrol date and time.')
+    try:
+        moment = datetime.strptime(value, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone(timedelta(hours=8)))
+    except ValueError as error:
+        raise ValueError('Choose a valid patrol date and time.') from error
+    stamp = int(moment.timestamp())
+    if stamp > now + 300:
+        raise ValueError('The patrol date cannot be in the future.')
+    return stamp
+
+
 @contextmanager
 def database():
     connection = sqlite3.connect(DB_PATH, timeout=15)
@@ -150,6 +179,7 @@ def init_db() -> None:
             ('patrols', 'completed', 'INTEGER NOT NULL DEFAULT 1'),
             ('patrols', 'item_remarks_json', "TEXT NOT NULL DEFAULT '{}'"),
             ('patrols', 'followup_status', "TEXT NOT NULL DEFAULT 'open'"),
+            ('patrols', 'entered_at', 'INTEGER'),
             ('patrol_attachments', 'question_id', "TEXT NOT NULL DEFAULT ''"),
             ('patrol_attachments', 'update_id', 'INTEGER REFERENCES patrol_updates(id)'),
         ]:
@@ -682,6 +712,10 @@ class Handler(BaseHTTPRequestHandler):
                 if q['type'] == 'photo' and q['required'] and not db.execute('SELECT 1 FROM patrol_attachments WHERE patrol_id=? AND question_id=?', (patrol_id, q['id'])).fetchone():
                     self.error_json(400, f"Upload a photo for: {q['label']}")
                     return
+            missing = not_ok_without_photo(db, patrol_id, template, json.loads(row['answers_json']))
+            if missing:
+                self.error_json(400, f"Add a photo for every NOT OK item. Missing: {missing[0]}" + (f" (+{len(missing)-1} more)" if len(missing) > 1 else ''))
+                return
         db.execute('UPDATE patrols SET completed=1 WHERE id=?', (patrol_id,))
         db.commit()
         self.send_json(200, {'ok': True})
@@ -840,7 +874,7 @@ class Handler(BaseHTTPRequestHandler):
                                       "answers": json.loads(row["answers_json"]), "rating": row["rating"],
                                       'item_remarks': json.loads(row['item_remarks_json']),
                                       "remarks": row["remarks"], "created_at": row["created_at"],
-                                      "submitted_by": row["submitted_by"],
+                                      "submitted_by": row["submitted_by"], 'entered_at': row['entered_at'],
                                       'template': json.loads(row['template_json']), 'completed': bool(row['completed']),
                                       'followup_status': row['followup_status'], 'updates': updates,'issues':issues,
                                       "attachments": [dict(item) for item in attachments]}})
@@ -903,8 +937,14 @@ class Handler(BaseHTTPRequestHandler):
         if type(rating) is not int or rating not in (1, 2, 3) or not isinstance(remarks, str) or len(remarks) > 5000:
             self.error_json(400, "Choose a 1–3 star rating and keep remarks below 5,000 characters.")
             return
-        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,completed,item_remarks_json) VALUES(?,?,?,?,?,?,?,?,?)",
-                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), int(time.time()), json.dumps(template), 0 if template else 1, json.dumps(item_remarks)))
+        now = int(time.time())
+        try:
+            created_at = patrol_date(data.get('patrol_date'), user, now)
+        except ValueError as error:
+            self.error_json(400, str(error))
+            return
+        cursor = db.execute("INSERT INTO patrols(user_id,inspector_name,answers_json,rating,remarks,created_at,template_json,completed,item_remarks_json,entered_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (user["id"], name, json.dumps(answers, separators=(",", ":")), rating, remarks.strip(), created_at, json.dumps(template), 0 if template else 1, json.dumps(item_remarks), now if created_at != now else None))
         db.commit()
         self.send_json(201, {"id": cursor.lastrowid})
 
@@ -923,7 +963,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             update_id = None
         count = db.execute("SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=? AND update_id IS ?", (patrol_id, update_id)).fetchone()[0]
-        if count >= 10:
+        if count >= attachment_limit(update_id):
             self.error_json(400, "Use up to 10 attachments per patrol or follow-up.")
             return
         try:
@@ -953,7 +993,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if question_id:
             template = json.loads(patrol['template_json'])
-            question = next((q for q in template['questions'] if q['id'] == question_id and q['type'] == 'photo'), None) if template else None
+            # Photo questions, and OK / NOT OK items (proof for a NOT OK answer), take item photos.
+            question = next((q for q in template['questions'] if q['id'] == question_id and q['type'] in ('photo', 'status')), None) if template else None
             if not question or Path(name).suffix.lower() not in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic'}:
                 self.error_json(400, 'Choose a photo for a valid photo question.')
                 return
@@ -970,7 +1011,7 @@ class Handler(BaseHTTPRequestHandler):
                     output.write(chunk)
                     remaining -= len(chunk)
             db.execute('BEGIN IMMEDIATE')
-            if db.execute('SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=? AND update_id IS ?', (patrol_id, update_id)).fetchone()[0] >= 10:
+            if db.execute('SELECT COUNT(*) FROM patrol_attachments WHERE patrol_id=? AND update_id IS ?', (patrol_id, update_id)).fetchone()[0] >= attachment_limit(update_id):
                 target.unlink(missing_ok=True)
                 self.error_json(400, 'A patrol can have up to 10 attachments.')
                 return
@@ -1022,7 +1063,11 @@ class Handler(BaseHTTPRequestHandler):
                     if data["status"] == "returned" and len(note) < 5:
                         raise CmmsError(400, "Explain why the job is being returned.")
                     payload = {"actorId": actor["id"], "status": data["status"], "note": f"{user['display_name']} (SHE Digital): {note}".strip()}
-                    self.send_json(200, bridge.call(endpoint + "/status", "PATCH", payload, plant))
+                    result = bridge.call(endpoint + "/status", "PATCH", payload, plant)
+                    if data["status"] == "closed":
+                        with database() as db:
+                            reporting.close_verified_sources(db, order_id, plant, current.get("number", ""), user)
+                    self.send_json(200, result)
                     return
                 if method == "POST" and action == "comments":
                     note = str(data.get("message", "")).strip()

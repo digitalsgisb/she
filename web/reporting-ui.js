@@ -274,6 +274,7 @@ const SHEReporting = (() => {
       const search=root.querySelector('#reportSearch').value.toLowerCase(), status=root.querySelector('#reportStatus').value, area=root.querySelector('#reportArea').value;
       const rows=reports.filter(r=>(!status || r.status===status) && (!area || r.group===area) && `${r.reference} ${r.title} ${r.reporter} ${r.location}`.toLowerCase().includes(search));
       root.querySelector('#reportRows').innerHTML=SHEStats.reportTable(rows.map(r=>({...r,title:publicTitle(r),description:r.description||groups[r.group]})));
+      SHEFinding.bind(root.querySelector('#reportRows'),rows.map(r=>({...r,title:publicTitle(r),area:groups[r.group]||r.group,date:r.created_at?new Date(r.created_at*1000).toISOString().slice(0,10):''})),'report');
     };
     root.querySelectorAll('.report-filter input,.report-filter select').forEach(el=>el.addEventListener('input',draw));
     root.querySelector('#refreshReports').addEventListener('click',onRefresh);draw();

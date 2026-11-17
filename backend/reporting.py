@@ -274,6 +274,81 @@ def sync_order_photos(db, row):
     db.commit()
 
 
+def close_verified_sources(db, order_id, plant, number='', user=None):
+    """A work order verified and closed in CMMS closes every SHE record linked to it.
+
+    Hiyari Hatto is left to its FR-SH-12 review, which is how SHE closes those reports."""
+    label = number or order_id
+    who = f" by {user['display_name']}" if user else ''
+    note = f'Work order {label} was verified and closed in CMMS{who}.'
+    now = int(time.time())
+    closed = 0
+    for row in db.execute("SELECT id,snapshot_json,status FROM finding_reports WHERE order_id=? AND plant=? AND order_state='issued'", (order_id, plant)).fetchall():
+        if row['status'] == 'closed' or json.loads(row['snapshot_json']).get('group') == 'hiyari-hatto':
+            continue
+        db.execute("UPDATE finding_reports SET status='closed',revision=revision+1 WHERE id=?", (row['id'],))
+        db.execute('INSERT INTO finding_updates(report_id,actor,note,status,created_at) VALUES(?,?,?,?,?)',
+                   (row['id'], user['display_name'] if user else 'CMMS', note, 'closed', now))
+        closed += 1
+    for row in db.execute("SELECT source_kind,source_id FROM source_orders WHERE order_id=? AND plant=? AND order_state='issued'", (order_id, plant)).fetchall():
+        if row['source_kind'] == 'patrol':
+            patrol = db.execute('SELECT id,user_id,followup_status FROM patrols WHERE id=?', (row['source_id'],)).fetchone()
+            if not patrol or patrol['followup_status'] == 'resolved':
+                continue
+            db.execute("UPDATE patrols SET followup_status='resolved' WHERE id=?", (patrol['id'],))
+            db.execute('INSERT INTO patrol_updates(patrol_id,user_id,message,status,created_at) VALUES(?,?,?,?,?)',
+                       (patrol['id'], user['id'] if user else patrol['user_id'], 'CMMS: ' + note, 'resolved', now))
+            closed += 1
+        else:
+            finding = db.execute('SELECT id,status FROM redtag_findings WHERE id=?', (row['source_id'],)).fetchone()
+            if not finding or finding['status'] in ('Resolved', 'Closed'):
+                continue
+            db.execute("UPDATE redtag_findings SET status='Closed',revision=revision+1 WHERE id=?", (finding['id'],))
+            db.execute('INSERT INTO redtag_updates(finding_id,actor,status,note,created_at) VALUES(?,?,?,?,?)',
+                       (finding['id'], user['display_name'] if user else 'CMMS', 'Closed', note, now))
+            closed += 1
+    db.commit()
+    return closed
+
+
+def open_linked_orders(db):
+    """Issued work orders whose SHE record is still open."""
+    return db.execute("""
+        SELECT order_id,plant FROM finding_reports
+         WHERE order_state='issued' AND order_id!='' AND status NOT IN ('resolved','closed')
+           AND COALESCE(json_extract(snapshot_json,'$.group'),'')!='hiyari-hatto'
+        UNION
+        SELECT o.order_id,o.plant FROM source_orders o
+          LEFT JOIN patrols p ON o.source_kind='patrol' AND p.id=o.source_id
+          LEFT JOIN redtag_findings f ON o.source_kind='red-tag' AND f.id=o.source_id
+         WHERE o.order_state='issued' AND o.order_id!=''
+           AND ((o.source_kind='patrol' AND p.followup_status!='resolved')
+             OR (o.source_kind='red-tag' AND f.status NOT IN ('Resolved','Closed')))""").fetchall()
+
+
+def sync_order_statuses(database):
+    """Catch orders verified directly in CMMS: one list call per plant, then close what CMMS closed."""
+    with database() as db:
+        pending = [(r['order_id'], r['plant']) for r in open_linked_orders(db)]
+    if not pending:
+        return 0
+    orders = {}
+    for plant in sorted({plant for _, plant in pending}):
+        try:
+            for order in bridge.call('/api/work-orders', plant=plant):
+                if order.get('responsibleDepartment') == 'SHE':
+                    orders[(str(order.get('id')), plant)] = order
+        except CmmsError as error:
+            LOG.warning('Could not read CMMS work orders for %s: %s', plant, error)
+    closed = 0
+    for order_id, plant in pending:
+        order = orders.get((order_id, plant))
+        if order and order.get('status') == 'closed':
+            with database() as db:
+                closed += close_verified_sources(db, order_id, plant, order.get('number', ''))
+    return closed
+
+
 def sync_pending_order_photos(database, stop=None):
     """Catch up old linked reports and retry failed/stalled photo transfers fairly."""
     for store, photo_store in (('finding_reports', 'finding_order_photos'), ('source_orders', 'source_order_photos')):
@@ -299,6 +374,7 @@ def run_order_photo_sync(database, stop):
         try:
             if bridge.configured:
                 sync_pending_order_photos(database, stop)
+                sync_order_statuses(database)
         except Exception:
             LOG.exception('Automatic CMMS report photo sync failed; it will retry.')
         if stop.wait(60):
